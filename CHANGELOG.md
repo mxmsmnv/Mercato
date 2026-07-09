@@ -7,6 +7,19 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ---
 
+## [1.1.0] - 2026-07-08
+
+### Added
+
+- Admin interface localization: ready-made translations for all 23 other
+  official EU languages (Bulgarian, Croatian, Czech, Danish, Dutch,
+  Estonian, Finnish, French, German, Greek, Hungarian, Irish, Italian,
+  Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak,
+  Slovenian, Spanish, Swedish), covering the dashboard, products, orders,
+  fulfilment, customers, discounts, webhooks, inventory, launch checklist,
+  and module configuration screens (`languages/*.csv`), installable via
+  ProcessWire's core Language Support module.
+
 ## [1.0.0] - 2026-06-30
 
 Initial public release.

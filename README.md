@@ -279,6 +279,26 @@ For ordinary storefront design work:
 For changes to the installable demo defaults, edit the module `templates/`,
 `assets/demo-products/`, and `install/install.php`.
 
+## Admin interface language
+
+The Mercato admin (dashboard, products, orders, fulfilment, customers,
+discounts, webhooks, inventory, launch checklist, and module settings — not
+the storefront templates, which are plain PHP and translated by editing the
+templates directly) ships with ready-made translations for all 23 other
+official EU languages: Bulgarian, Croatian, Czech, Danish, Dutch, Estonian,
+Finnish, French, German, Greek, Hungarian, Irish, Italian, Latvian,
+Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian,
+Spanish, and Swedish — following ProcessWire's standard module-translation
+mechanism (`Modules::getModuleLanguageFiles()` + `languages/*.csv`).
+
+To install one: **Setup > Modules > Mercato (or Mercato Dashboard) >
+"install translations"** (link appears once Language Support is installed
+and at least one non-default language page exists) → pick the CSV for each
+target language → Submit. Admins then see the Mercato interface in their own
+PW admin language automatically. Requires ProcessWire's core **Language
+Support** module — see
+[processwire.com/modules/language-support](https://processwire.com/modules/language-support/).
+
 ## AI Agent Notes
 
 `AGENTS.md` contains guidance for AI agents and Olivia-style tooling. It explains
