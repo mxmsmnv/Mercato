@@ -76,7 +76,8 @@ trait ProcessMercatoExports {
             'payment_status', 'payment_complete', 'payment_method', 'gateway_id', 'stripe_customer_id', 'payment_failure_reason',
             'subscription_id', 'subscription_status', 'subscription_current_period_end', 'subscription_cancel_at_period_end', 'subscription_canceled_at', 'subscription_cancel_details_json', 'subscription_details_json', 'subscription_renewal_details_json',
             'inventory_reserved', 'inventory_reserved_until', 'inventory_adjusted', 'inventory_details',
-            'fulfilment_method', 'fulfilment_label', 'fulfilment_details', 'fulfilment_status', 'fulfilment_tracking', 'fulfilment_tracking_url', 'fulfilment_notes', 'fulfilled_date',
+            'fulfilment_method', 'fulfilment_label', 'fulfilment_details', 'shipping_calculation_mode', 'actual_weight_kg', 'volume_cm3', 'dimensional_weight_kg', 'billable_weight_kg', 'shipping_rate_band',
+            'fulfilment_status', 'fulfilment_tracking', 'fulfilment_tracking_url', 'fulfilment_notes', 'fulfilled_date',
             'currency', 'subtotal', 'shipping', 'discount_code', 'discount_total',
             'total', 'items_count', 'items_json',
         ]];
@@ -85,6 +86,8 @@ trait ProcessMercatoExports {
             $gatewayId = $this->getOrderGatewayReference($order);
             $billingSnapshot = $order->hasField('mrc_billing_address') ? json_decode((string) $order->mrc_billing_address, true) : [];
             $billingSnapshot = is_array($billingSnapshot) ? $billingSnapshot : [];
+            $fulfilmentSnapshot = $order->hasField('mrc_fulfilment_details') ? json_decode((string) $order->mrc_fulfilment_details, true) : [];
+            $shippingCalculation = is_array($fulfilmentSnapshot['shipping_calculation'] ?? null) ? $fulfilmentSnapshot['shipping_calculation'] : [];
             $rows[] = [
                 (int) $order->id,
                 $this->orderDetailUrl($order),
@@ -119,6 +122,12 @@ trait ProcessMercatoExports {
                 $order->hasField('mrc_fulfilment_method') ? (string) $order->mrc_fulfilment_method : '',
                 $order->hasField('mrc_fulfilment_label') ? (string) $order->mrc_fulfilment_label : '',
                 $order->hasField('mrc_fulfilment_details') ? (string) $order->mrc_fulfilment_details : '',
+                (string) ($shippingCalculation['mode'] ?? 'flat'),
+                (string) ($shippingCalculation['actual_weight_kg'] ?? ''),
+                (string) ($shippingCalculation['volume_cm3'] ?? ''),
+                (string) ($shippingCalculation['dimensional_weight_kg'] ?? ''),
+                (string) ($shippingCalculation['billable_weight_kg'] ?? ''),
+                json_encode($shippingCalculation['rate_band'] ?? null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '',
                 $order->hasField('mrc_fulfilment_status') ? (string) $order->mrc_fulfilment_status : '',
                 $order->hasField('mrc_fulfilment_tracking') ? (string) $order->mrc_fulfilment_tracking : '',
                 $order->hasField('mrc_fulfilment_tracking_url') ? (string) $order->mrc_fulfilment_tracking_url : '',

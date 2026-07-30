@@ -91,6 +91,7 @@ class MercatoPaymentService extends Wire {
         $addresses = $this->commerce->buildAddressSnapshots($data, $fulfilment);
         $subtotal = $cart->getSubtotal();
         $shipping = (float) $fulfilment['amount'];
+        $discount = $this->commerce->discountService()->applyFinalShippingAmount($discount, $shipping);
         $discountAmount = round((float) ($discount['amount'] ?? 0), 2);
         $total = round(max(0, $subtotal + $shipping - $discountAmount), 2);
 

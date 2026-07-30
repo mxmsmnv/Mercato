@@ -125,7 +125,19 @@ final class MercatoFulfilmentService extends Wire {
             $this->assertDeliveryAddress($customerData);
             $this->assertDeliveryCountryAllowed($customerData);
         }
-        $originalAmount = round(max(0, (float) $cart->getShipping()), 2);
+        $flatAmount = round(max(0, (float) $cart->getShipping()), 2);
+        $calculation = MercatoShippingRateCalculator::calculate($cart->toArray(), [
+            'mode' => !empty($this->commerce->shipping_dimensions_enabled)
+                ? (string) ($this->commerce->shipping_calculation_mode ?? 'flat')
+                : 'flat',
+            'missing_policy' => (string) ($this->commerce->shipping_missing_measurements ?? 'flat'),
+            'dimensional_divisor' => (float) ($this->commerce->shipping_dimensional_divisor ?? 5000),
+            'rate_table' => (string) ($this->commerce->shipping_rate_table ?? ''),
+        ], $customerData, $flatAmount);
+        if ($validate && empty($calculation['available'])) {
+            throw new WireException($this->commerce->_('Carrier delivery is unavailable because one or more products have no required shipping measurements.'));
+        }
+        $originalAmount = round(max(0, (float) ($calculation['amount'] ?? $flatAmount)), 2);
         $threshold = $this->commerce->getFreeShippingThreshold();
         $subtotal = round((float) $cart->getSubtotal(), 2);
         $freeShippingApplied = $threshold > 0 && $subtotal >= $threshold;
@@ -146,6 +158,7 @@ final class MercatoFulfilmentService extends Wire {
             'original_amount' => $originalAmount,
             'free_shipping_threshold' => $threshold,
             'free_shipping_applied' => $freeShippingApplied,
+            'shipping_calculation' => $calculation,
         ], $cart, $customerData, $validate);
     }
 

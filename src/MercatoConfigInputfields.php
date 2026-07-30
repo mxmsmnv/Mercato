@@ -27,6 +27,10 @@ trait MercatoConfigInputfields {
         $data['customer_data_retention_days'] = self::normalizeRetentionDays($data['customer_data_retention_days'] ?? 0, 0, 0);
         $data['low_stock_threshold'] = self::normalizeLowStockThreshold($data['low_stock_threshold'] ?? 5);
         $data['free_shipping_threshold'] = self::normalizeMoneyAmount($data['free_shipping_threshold'] ?? 0);
+        $data['shipping_dimensions_enabled'] = !empty($data['shipping_dimensions_enabled']);
+        $data['shipping_dimensions_field'] = self::normalizeShippingDimensionsField($data['shipping_dimensions_field'] ?? 'mrc_dimensions');
+        $data['shipping_calculation_mode'] = self::normalizeShippingCalculationMode($data['shipping_calculation_mode'] ?? 'flat');
+        $data['shipping_missing_measurements'] = self::normalizeMissingMeasurementsPolicy($data['shipping_missing_measurements'] ?? 'flat');
         $data['tax_shipping'] = !empty($data['tax_shipping']);
         $data['shipping_tax_rate'] = self::normalizeTaxRate($data['shipping_tax_rate'] ?? 20);
         $data['allowed_delivery_countries'] = self::normalizeCountryCodes($data['allowed_delivery_countries'] ?? '');
@@ -343,6 +347,67 @@ trait MercatoConfigInputfields {
         $f->value = (float) $data['free_shipping_threshold'];
         $f->min = 0;
         $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldCheckbox');
+        $f->name = 'shipping_dimensions_enabled';
+        $f->label = __('Weight and dimensions');
+        $f->label2 = __('Use optional FieldtypeDimensions shipping rates');
+        $f->description = wire('modules')->isInstalled('FieldtypeDimensions')
+            ? __('Run the installer after enabling this option to create or attach the configured field to Mercato products.')
+            : __('FieldtypeDimensions is not installed. Flat product shipping remains available.');
+        $f->checked = !empty($data['shipping_dimensions_enabled']);
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldText');
+        $f->name = 'shipping_dimensions_field';
+        $f->label = __('Dimensions field');
+        $f->value = $data['shipping_dimensions_field'];
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldSelect');
+        $f->name = 'shipping_calculation_mode';
+        $f->label = __('Carrier rate calculation');
+        $f->addOptions([
+            'flat' => __('Product flat rates'),
+            'actual_weight' => __('Total actual weight'),
+            'dimensional_weight' => __('Dimensional weight'),
+            'max_weight' => __('Greater of actual and dimensional weight'),
+        ]);
+        $f->value = $data['shipping_calculation_mode'];
+        $f->columnWidth = 34;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldFloat');
+        $f->name = 'shipping_dimensional_divisor';
+        $f->label = __('Dimensional divisor (cm³/kg)');
+        $f->description = __('Common carrier values are 5000 or 6000.');
+        $f->value = (float) $data['shipping_dimensional_divisor'];
+        $f->min = 1;
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldSelect');
+        $f->name = 'shipping_missing_measurements';
+        $f->label = __('Products without measurements');
+        $f->addOptions([
+            'flat' => __('Use existing flat shipping for the cart'),
+            'ignore' => __('Ignore unmeasured products'),
+            'unavailable' => __('Make carrier delivery unavailable'),
+        ]);
+        $f->value = $data['shipping_missing_measurements'];
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldTextarea');
+        $f->name = 'shipping_rate_table';
+        $f->label = __('Weight rate table');
+        $f->description = __('One band per line: scope|min kg|max kg|rate|label. Scope is *, ISO country, or country:region. Example: GB|0|1|4.95|Small parcel');
+        $f->value = $data['shipping_rate_table'];
+        $f->rows = 6;
+        $f->columnWidth = 100;
         $fs->add($f);
 
         $f = $modules->get('InputfieldCheckbox');

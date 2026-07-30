@@ -39,6 +39,11 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
     // -----------------------------------------------------------------------
     // BUG-20: FieldtypeEmail is optional; fall back to FieldtypeText if absent
     $emailType = $wire->modules->isInstalled('FieldtypeEmail') ? 'FieldtypeEmail' : 'FieldtypeText';
+    $dimensionsEnabled = !empty($module->shipping_dimensions_enabled) || !empty($wire->input->post('shipping_dimensions_enabled'));
+    $dimensionsFieldName = strtolower(trim((string) (
+        $wire->input->post('shipping_dimensions_field') ?: ($module->shipping_dimensions_field ?? 'mrc_dimensions')
+    )));
+    $dimensionsFieldName = trim(preg_replace('/[^a-z0-9_]+/', '_', $dimensionsFieldName) ?: '', '_') ?: 'mrc_dimensions';
 
     $fieldDefs = [
         // Order fields
@@ -152,6 +157,13 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
             foreach ($def['extra'] as $k => $v) $f->$k = $v;
         }
 
+        $wire->fields->save($f);
+    }
+    if ($dimensionsEnabled && $wire->modules->isInstalled('FieldtypeDimensions') && !$wire->fields->get($dimensionsFieldName)) {
+        $f = new \ProcessWire\Field();
+        $f->type = $wire->modules->get('FieldtypeDimensions');
+        $f->name = $dimensionsFieldName;
+        $f->label = 'Shipping dimensions';
         $wire->fields->save($f);
     }
 
@@ -434,6 +446,10 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
             }
         }
         if ($added) {
+            $wire->fieldgroups->save($productTemplate->fieldgroup);
+        }
+        if ($dimensionsEnabled && ($dimensionsField = $wire->fields->get($dimensionsFieldName)) && !$productTemplate->fieldgroup->hasField($dimensionsFieldName)) {
+            $productTemplate->fieldgroup->add($dimensionsField);
             $wire->fieldgroups->save($productTemplate->fieldgroup);
         }
         mercato_configure_product_fieldgroup($productTemplate->fieldgroup);

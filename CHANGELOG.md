@@ -7,6 +7,16 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ---
 
+## [1.2.0] - 2026-07-30
+
+### Added
+
+- Optional `FieldtypeDimensions` product integration with actual-weight, dimensional-weight, and greater-of-both carrier rate modes.
+- Country and region weight bands, configurable handling of missing measurements, quantity-aware totals, and immutable calculation details in fulfilment snapshots and order exports.
+- Installer support for creating or attaching the configured dimensions field while preserving flat product shipping as the default and fallback.
+
+---
+
 ## [1.1.0] - 2026-07-08
 
 ### Added

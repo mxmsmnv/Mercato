@@ -68,7 +68,8 @@ class MercatoProductList extends Wire {
             || !isset($item['shipping_price'])
             || !isset($item['template'])
             || !isset($item['uid'])
-            || !isset($item['product_id']);
+            || !isset($item['product_id'])
+            || (!isset($item['shipping_dimensions']) && !empty($this->commerce->shipping_dimensions_enabled));
 
         $page = $needsPageLookup ? $this->findProductPage($item['id']) : null;
 
@@ -127,6 +128,26 @@ class MercatoProductList extends Wire {
             }
             if (!isset($item['stripe_price_id'])) {
                 $item['stripe_price_id'] = $page->hasField('mrc_stripe_price_id') ? trim((string) $page->mrc_stripe_price_id) : '';
+            }
+            if (!isset($item['shipping_dimensions']) && !empty($this->commerce->shipping_dimensions_enabled)) {
+                $fieldName = trim((string) ($this->commerce->shipping_dimensions_field ?? 'mrc_dimensions'));
+                $dimensions = $fieldName !== '' && $page->hasField($fieldName) ? $page->get($fieldName) : null;
+                if (is_object($dimensions) && method_exists($dimensions, 'weightIn') && method_exists($dimensions, 'lengthIn')) {
+                    $length = $dimensions->lengthIn('cm');
+                    $width = method_exists($dimensions, 'widthIn') ? $dimensions->widthIn('cm') : null;
+                    $height = method_exists($dimensions, 'heightIn') ? $dimensions->heightIn('cm') : null;
+                    $weight = $dimensions->weightIn('kg');
+                    $item['shipping_dimensions'] = [
+                        'length_cm' => $length,
+                        'width_cm' => $width,
+                        'height_cm' => $height,
+                        'weight_kg' => $weight,
+                        'volume_cm3' => $length !== null && $width !== null && $height !== null
+                            ? round((float) $length * (float) $width * (float) $height, 6)
+                            : null,
+                        'source_field' => $fieldName,
+                    ];
+                }
             }
 
             // Pull in any extra fields configured on the module

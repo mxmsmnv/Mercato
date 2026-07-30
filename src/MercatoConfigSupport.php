@@ -120,6 +120,22 @@ trait MercatoConfigSupport {
         return $amount;
     }
 
+    protected static function normalizeShippingDimensionsField(mixed $value): string {
+        $name = strtolower(trim((string) $value));
+        $name = preg_replace('/[^a-z0-9_]+/', '_', $name) ?: '';
+        return trim($name, '_') ?: 'mrc_dimensions';
+    }
+
+    protected static function normalizeShippingCalculationMode(mixed $value): string {
+        $value = strtolower(trim((string) $value));
+        return in_array($value, ['flat', 'actual_weight', 'dimensional_weight', 'max_weight'], true) ? $value : 'flat';
+    }
+
+    protected static function normalizeMissingMeasurementsPolicy(mixed $value): string {
+        $value = strtolower(trim((string) $value));
+        return in_array($value, ['flat', 'ignore', 'unavailable'], true) ? $value : 'flat';
+    }
+
     protected static function normalizeTaxRate(mixed $value): float {
         $rate = round((float) $value, 4);
         if ($rate < 0) return 0.0;

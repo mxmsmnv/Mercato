@@ -99,6 +99,17 @@ final class MercatoDiscountService extends Wire {
         return $this->calculatePreview($rule, $subtotal, $shipping);
     }
 
+    /**
+     * Rebase an already validated free-shipping coupon onto the final carrier
+     * rate, after dimensional calculation and free-shipping thresholds.
+     */
+    public function applyFinalShippingAmount(array $discount, float $shipping): array {
+        if (!empty($discount['valid']) && ($discount['type'] ?? '') === MercatoDiscountType::FREE_SHIPPING) {
+            $discount['amount'] = round(max(0.0, $shipping), 2);
+        }
+        return $discount;
+    }
+
     public function resolveCartDiscount(string $code, MercatoProductList $cart, string $email = '', bool $audit = false, array $context = []): array {
         $code = strtoupper(trim($code));
         $hookContext = $this->commerce->beforeResolveDiscount([
@@ -198,7 +209,7 @@ final class MercatoDiscountService extends Wire {
         }
 
         $discount = $this->calculateCartPreview($rule, $cart);
-        if ($discount <= 0) {
+        if ($discount <= 0 && $rule->type !== MercatoDiscountType::FREE_SHIPPING) {
             $result = [
                 'valid' => false,
                 'code' => $code,

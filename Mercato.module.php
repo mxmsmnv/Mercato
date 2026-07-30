@@ -22,7 +22,7 @@ require_once __DIR__ . '/src/MercatoBusinessHealthSummaries.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.1.0 (module info version: 110)
+ * @version 1.2.0 (module info version: 120)
  * @license MIT
  */
 
@@ -56,7 +56,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 110,
+            'version'  => 120,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
@@ -123,6 +123,12 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'default_fulfilment_method' => 'carrier_delivery',
             'carrier_delivery_label'  => 'Delivery',
             'free_shipping_threshold'  => 0.0,
+            'shipping_dimensions_enabled' => false,
+            'shipping_dimensions_field' => 'mrc_dimensions',
+            'shipping_calculation_mode' => 'flat',
+            'shipping_dimensional_divisor' => 5000.0,
+            'shipping_missing_measurements' => 'flat',
+            'shipping_rate_table' => '',
             'default_tax_rate'         => 20.0,
             'tax_display_mode'         => 'included',
             'tax_label'                => 'VAT',
@@ -256,6 +262,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoFulfilmentEventLog::class => '/src/Fulfilment/MercatoFulfilmentEventLog.php',
             MercatoFulfilmentMethodType::class => '/src/Fulfilment/MercatoFulfilmentMethodType.php',
             MercatoFulfilmentService::class => '/src/Fulfilment/MercatoFulfilmentService.php',
+            MercatoShippingRateCalculator::class => '/src/Fulfilment/MercatoShippingRateCalculator.php',
             MercatoShippingNotificationService::class => '/src/Fulfilment/MercatoShippingNotificationService.php',
             MercatoOrderConfirmationService::class => '/src/Notification/MercatoOrderConfirmationService.php',
             MercatoPaymentLinkService::class => '/src/Notification/MercatoPaymentLinkService.php',

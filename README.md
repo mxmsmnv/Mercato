@@ -223,6 +223,16 @@ Checkout can store shipping address, pickup location, local delivery details,
 delivery region, delivery window, delivery note, company, Tax/VAT number, and
 purchase order number where configured.
 
+Carrier delivery uses product flat rates by default. When
+`FieldtypeDimensions` is installed, enable **Weight and dimensions** in the
+module settings and run the installer to create or attach `mrc_dimensions`.
+Rates can then use total actual weight, dimensional weight, or the greater of
+both. Configure bands as `scope|min kg|max kg|rate|label`, where scope is `*`,
+an ISO country code such as `GB`, or a region such as `GB:ENG`. Product
+quantities are included, and the configured missing-measurement policy either
+falls back to flat shipping, ignores the item, or disables carrier delivery.
+The chosen band and calculation inputs are frozen in the fulfilment snapshot.
+
 ## Discounts
 
 Mercato supports coupon and discount rules for:

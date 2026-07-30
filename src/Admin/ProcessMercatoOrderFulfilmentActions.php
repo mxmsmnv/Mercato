@@ -502,6 +502,7 @@ trait ProcessMercatoOrderFulfilmentActions {
                     return ['errors' => [(string) ($discount['message'] ?? $this->_('Discount code could not be applied.'))]];
                 }
             }
+            $discount = $commerce->discountService()->applyFinalShippingAmount($discount, $shipping);
             $discountAmount = round((float) ($discount['amount'] ?? 0), 2);
             $total = round(max(0, $subtotal + $shipping - $discountAmount), 2);
             $commerce->orderRepository()->assertStockAvailable($cart);

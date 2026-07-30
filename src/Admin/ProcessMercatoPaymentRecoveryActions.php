@@ -876,6 +876,7 @@ trait ProcessMercatoPaymentRecoveryActions {
                     ];
                 }
             }
+            $discount = $commerce->discountService()->applyFinalShippingAmount($discount, $shipping);
             $discountAmount = round((float) ($discount['amount'] ?? 0), 2);
             $total = round(max(0, $subtotal + $shipping - $discountAmount), 2);
 

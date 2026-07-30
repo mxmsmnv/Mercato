@@ -46,6 +46,12 @@ trait MercatoStoreServices {
         $data['customer_data_retention_days'] = self::normalizeRetentionDays($data['customer_data_retention_days'] ?? 0, 0, 0);
         $data['low_stock_threshold'] = self::normalizeLowStockThreshold($data['low_stock_threshold'] ?? 5);
         $data['free_shipping_threshold'] = self::normalizeMoneyAmount($data['free_shipping_threshold'] ?? 0);
+        $data['shipping_dimensions_enabled'] = !empty($data['shipping_dimensions_enabled']);
+        $data['shipping_dimensions_field'] = self::normalizeShippingDimensionsField($data['shipping_dimensions_field'] ?? 'mrc_dimensions');
+        $data['shipping_calculation_mode'] = self::normalizeShippingCalculationMode($data['shipping_calculation_mode'] ?? 'flat');
+        $data['shipping_dimensional_divisor'] = max(1.0, min(1000000.0, (float) ($data['shipping_dimensional_divisor'] ?? 5000)));
+        $data['shipping_missing_measurements'] = self::normalizeMissingMeasurementsPolicy($data['shipping_missing_measurements'] ?? 'flat');
+        $data['shipping_rate_table'] = trim((string) ($data['shipping_rate_table'] ?? ''));
         $data['default_tax_rate'] = self::normalizeTaxRate($data['default_tax_rate'] ?? 20);
         $data['tax_display_mode'] = self::normalizeTaxDisplayMode($data['tax_display_mode'] ?? 'included');
         $data['tax_label'] = self::normalizeTaxLabel($data['tax_label'] ?? 'VAT');
@@ -156,6 +162,7 @@ trait MercatoStoreServices {
 
         $subtotal = round((float) $cart->getSubtotal(), 2);
         $shipping = round(max(0.0, (float) ($selected['amount'] ?? 0)), 2);
+        $discount = $this->discountService()->applyFinalShippingAmount($discount, $shipping);
         $discountAmount = round(max(0.0, (float) ($discount['amount'] ?? 0)), 2);
         $total = round(max(0.0, $subtotal + $shipping - $discountAmount), 2);
 
