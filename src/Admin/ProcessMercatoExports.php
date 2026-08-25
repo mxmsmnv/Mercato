@@ -78,7 +78,7 @@ trait ProcessMercatoExports {
             'inventory_reserved', 'inventory_reserved_until', 'inventory_adjusted', 'inventory_details',
             'fulfilment_method', 'fulfilment_label', 'fulfilment_details', 'shipping_calculation_mode', 'actual_weight_kg', 'volume_cm3', 'dimensional_weight_kg', 'billable_weight_kg', 'shipping_rate_band',
             'fulfilment_status', 'fulfilment_tracking', 'fulfilment_tracking_url', 'fulfilment_notes', 'fulfilled_date',
-            'currency', 'subtotal', 'shipping', 'discount_code', 'discount_total',
+            'currency', 'subtotal', 'shipping', 'discount_code', 'discount_total', 'tax', 'tax_provider_reference', 'tax_committed', 'tax_details_json',
             'total', 'items_count', 'items_json',
         ]];
 
@@ -121,7 +121,7 @@ trait ProcessMercatoExports {
                 $order->hasField('mrc_inventory_details') ? (string) $order->mrc_inventory_details : '',
                 $order->hasField('mrc_fulfilment_method') ? (string) $order->mrc_fulfilment_method : '',
                 $order->hasField('mrc_fulfilment_label') ? (string) $order->mrc_fulfilment_label : '',
-                $order->hasField('mrc_fulfilment_details') ? (string) $order->mrc_fulfilment_details : '',
+                $order->hasField('mrc_fulfilment_details') ? (json_encode($commerce->shippingProviderService()->redactSnapshot(is_array($fulfilmentSnapshot) ? $fulfilmentSnapshot : []), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '') : '',
                 (string) ($shippingCalculation['mode'] ?? 'flat'),
                 (string) ($shippingCalculation['actual_weight_kg'] ?? ''),
                 (string) ($shippingCalculation['volume_cm3'] ?? ''),
@@ -138,6 +138,10 @@ trait ProcessMercatoExports {
                 $this->formatCsvAmount((float) $order->mrc_shipping_amount),
                 (string) $order->mrc_discount_code,
                 $this->formatCsvAmount((float) $order->mrc_discount_total),
+                $order->hasField('mrc_tax_amount') ? $this->formatCsvAmount((float) $order->mrc_tax_amount) : '',
+                $order->hasField('mrc_tax_provider_reference') ? (string) $order->mrc_tax_provider_reference : '',
+                $order->hasField('mrc_tax_committed') ? (int) $order->mrc_tax_committed : 0,
+                $order->hasField('mrc_tax_details') ? (string) $order->mrc_tax_details : '',
                 $this->formatCsvAmount($this->getOrderTotal($order, $commerce)),
                 $this->getOrderItemCount($order),
                 (string) $order->mrc_items,
@@ -149,7 +153,7 @@ trait ProcessMercatoExports {
 
     protected function getProductExportRows(Mercato $commerce, array $filters = []): array {
         $products = $this->getProducts($commerce, 10000, $filters);
-        $rows = [['id', 'product_url', 'title', 'name', 'url', 'sku', 'price', 'tax_rate', 'shipping_price', 'stock', 'low_stock_threshold', 'stock_policy', 'product_type', 'product_status', 'stripe_price_id', 'download_limit', 'download_expiry_days', 'digital_files_count', 'status', 'collections', 'image_urls', 'images_count', 'description']];
+        $rows = [['id', 'product_url', 'title', 'name', 'url', 'sku', 'price', 'tax_rate', 'tax_code', 'shipping_price', 'stock', 'low_stock_threshold', 'stock_policy', 'product_type', 'product_status', 'stripe_price_id', 'download_limit', 'download_expiry_days', 'digital_files_count', 'status', 'collections', 'image_urls', 'images_count', 'description', 'variant_options_json', 'variants_json']];
 
         foreach ($products as $product) {
             $imagesCount = $product->hasField('mrc_images') ? count($product->mrc_images) : 0;
@@ -168,6 +172,7 @@ trait ProcessMercatoExports {
                 (string) $product->mrc_sku,
                 $this->formatCsvAmount((float) $product->mrc_price),
                 $this->formatCsvAmount((float) $product->mrc_tax_rate),
+                $product->hasField('mrc_tax_code') ? (string) $product->mrc_tax_code : '',
                 $this->formatCsvAmount((float) $product->mrc_shipping_price),
                 (int) $product->mrc_stock,
                 $product->hasField('mrc_low_stock_threshold') ? (int) $product->mrc_low_stock_threshold : '',
@@ -183,6 +188,8 @@ trait ProcessMercatoExports {
                 implode('|', $imageUrls),
                 $imagesCount,
                 (string) $product->mrc_description,
+                $product->hasField('mrc_variant_options') ? (string) $product->mrc_variant_options : '[]',
+                $product->hasField('mrc_variants') ? (string) $product->mrc_variants : '[]',
             ];
         }
 
@@ -191,9 +198,28 @@ trait ProcessMercatoExports {
 
     protected function getStockPressureExportRows(Mercato $commerce): array {
         $products = $this->getProducts($commerce, 10000, ['sort' => 'stock_asc']);
-        $rows = [['id', 'product_url', 'title', 'sku', 'status', 'stock_policy', 'stock', 'reserved_quantity', 'available_quantity', 'owed_quantity', 'low_stock_threshold', 'stock_state', 'stock_state_label', 'collections', 'url']];
+        $rows = [['id', 'product_url', 'title', 'sku', 'variant_id', 'variant_options_json', 'status', 'stock_policy', 'stock', 'reserved_quantity', 'available_quantity', 'owed_quantity', 'low_stock_threshold', 'stock_state', 'stock_state_label', 'collections', 'url']];
 
         foreach ($products as $product) {
+            $variants = $commerce->variantService()->getDefinition($product)['variants'];
+            if ($variants) {
+                foreach ($variants as $variant) {
+                    $policy = (string) $variant['stock_policy'];
+                    $stock = (int) $variant['stock'];
+                    $reserved = $commerce->orderRepository()->getReservedQuantityForVariant((int) $product->id, (string) $variant['id']);
+                    $available = $policy === 'deny' ? max(0, $stock - $reserved) : '';
+                    $owed = in_array($policy, ['backorder', 'preorder'], true) && $stock < 0 ? abs($stock) : 0;
+                    $threshold = (int) ($variant['low_stock_threshold'] ?: ($product->mrc_low_stock_threshold ?: $commerce->low_stock_threshold));
+                    $raw = $stock <= 0 ? (in_array($policy, ['backorder', 'preorder'], true) ? $policy : 'out_of_stock') : ($stock <= $threshold ? 'low_stock' : 'in_stock');
+                    $rows[] = [
+                        (int) $product->id, $this->productDetailUrl($product), (string) $product->title,
+                        (string) $variant['sku'], (string) $variant['id'], json_encode($variant['options'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
+                        (string) $variant['status'], $policy, $stock, $reserved, $available, $owed, $threshold, $raw, str_replace('_', ' ', ucfirst($raw)),
+                        $this->getProductCollectionLabel($product), $product->httpUrl(),
+                    ];
+                }
+                continue;
+            }
             $policy = $this->getProductStockPolicy($product);
             $stock = $product->hasField('mrc_stock') ? (int) $product->mrc_stock : 0;
             $reserved = $commerce->orderRepository()->getReservedQuantityForProduct((int) $product->id);
@@ -205,6 +231,8 @@ trait ProcessMercatoExports {
                 $this->productDetailUrl($product),
                 (string) $product->title,
                 (string) $product->mrc_sku,
+                '',
+                '',
                 $this->getProductPublicationStatus($product),
                 $policy,
                 $stock,
@@ -746,6 +774,11 @@ trait ProcessMercatoExports {
         }
         fclose($out);
         exit;
+    }
+
+    protected function sendJson(string $filename, array $data): void {
+        while (ob_get_level() > 0) ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8'); header('Content-Disposition: attachment; filename="' . preg_replace('/[^a-zA-Z0-9._-]+/', '-', $filename) . '"'); header('Cache-Control: no-store, private, max-age=0'); header('Pragma: no-cache'); header('Expires: 0'); echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); exit;
     }
 
     protected function formatCsvAmount(float $amount): string {

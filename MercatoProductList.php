@@ -65,6 +65,7 @@ class MercatoProductList extends Wire {
         $needsPageLookup = !isset($item['price'])
             || !isset($item['title'])
             || !isset($item['tax_rate'])
+            || !isset($item['tax_code'])
             || !isset($item['shipping_price'])
             || !isset($item['template'])
             || !isset($item['uid'])
@@ -72,6 +73,12 @@ class MercatoProductList extends Wire {
             || (!isset($item['shipping_dimensions']) && !empty($this->commerce->shipping_dimensions_enabled));
 
         $page = $needsPageLookup ? $this->findProductPage($item['id']) : null;
+
+        if ($page && $page->id && empty($item['variant_snapshot_version'])
+            && (!empty($item['variant_id']) || !empty($item['variant_options']) || $this->commerce->variantService()->hasVariants($page))) {
+            $item = $this->commerce->variantService()->hydrateItem($page, $item);
+            $key = (string) $item['key'];
+        }
 
         if (!isset($item['price'])) {
             if (!$page || !$page->id) {
@@ -93,6 +100,9 @@ class MercatoProductList extends Wire {
                 $item['tax_rate'] = $page->hasField('mrc_tax_rate')
                     ? (float) $page->mrc_tax_rate
                     : 0.0;
+            }
+            if (!isset($item['tax_code'])) {
+                $item['tax_code'] = $page->hasField('mrc_tax_code') ? trim((string) $page->mrc_tax_code) : '';
             }
             if (!isset($item['shipping_price'])) {
                 $item['shipping_price'] = $page->hasField('mrc_shipping_price')

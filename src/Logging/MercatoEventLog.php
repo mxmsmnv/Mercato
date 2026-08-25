@@ -35,7 +35,7 @@ final class MercatoEventLog extends Wire {
         $redacted = [];
         foreach ($value as $key => $item) {
             $keyString = strtolower((string) $key);
-            if (preg_match('/(?:secret|token|api[_-]?key|password|authorization|signature)/', $keyString)) {
+            if (preg_match('/(?:secret|token|api[_-]?key|password|authorization|signature|client[_-]?secret|card(?:_number)?|cvc|cvv|pan|iban|account[_-]?number|routing[_-]?number)/', $keyString)) {
                 $redacted[$key] = '[redacted]';
                 continue;
             }

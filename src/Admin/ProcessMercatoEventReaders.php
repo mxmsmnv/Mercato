@@ -226,7 +226,7 @@ trait ProcessMercatoEventReaders {
         $statusFilter = (string) ($filters['status'] ?? 'all');
         foreach (array_reverse($lines) as $line) {
             $event = $this->parseWebhookLogLine((string) $line);
-            if (!$event || !in_array((string) ($event['event'] ?? ''), ['shipping_email', 'pickup_ready_email', 'local_delivery_email', 'order_confirmation_email', 'payment_link_email', 'test_email'], true)) {
+            if (!$event || !in_array((string) ($event['event'] ?? ''), array_merge(['shipping_email', 'payment_link_email', 'test_email'], array_map(static fn(string $name): string => $name . '_email', MercatoEmailEventCatalog::EVENTS), ['email_delivery_bounce', 'email_delivery_complaint', 'email_delivery_delivered', 'email_delivery_deferred']), true)) {
                 continue;
             }
             if ($eventFilter !== 'all' && (string) ($event['event'] ?? '') !== $eventFilter) {

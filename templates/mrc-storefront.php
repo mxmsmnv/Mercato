@@ -208,6 +208,9 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     line-height: 1.75;
     max-width: 680px;
 }
+.mrc-site-footer .mrc-lead {
+    color: var(--mrc-ivory);
+}
 .mrc-media-frame {
     background: var(--mrc-line);
     border-radius: var(--mrc-radius);
@@ -430,7 +433,7 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
 }
 .mrc-filter-field label,
 .mrc-filter-panel .mrc-filter-label {
-    color: var(--mrc-gold);
+    color: var(--mrc-rust);
     font-size: 11px;
     font-weight: 800;
     letter-spacing: .18em;
@@ -961,6 +964,7 @@ HTML;
         $collectionsUrl = mrc_storefront_page_url($pages, $config, 'collections');
         $aboutUrl = mrc_storefront_page_url($pages, $config, 'about-us');
         $contactUrl = mrc_storefront_page_url($pages, $config, 'contact-us');
+        $accountUrl = mrc_storefront_page_url($pages, $config, 'account');
         $collections = $pages->find('template=mrc-collection, parent=/collections/, sort=sort, sort=title, limit=6');
         $cartText = $cartQuantity > 0 ? 'Cart (' . $cartQuantity . ')' : 'Cart';
         $current = static fn(string $key): string => $active === $key ? ' aria-current="page"' : '';
@@ -974,6 +978,7 @@ HTML;
         }
         $out .= '<a href="' . $sanitizer->entities($aboutUrl) . '"' . $current('about') . '>About</a>';
         $out .= '<a href="' . $sanitizer->entities($contactUrl) . '"' . $current('contact') . '>Contact</a>';
+        if ($commerce->customerAccountService()->isEnabled()) $out .= '<a href="' . $sanitizer->entities($accountUrl) . '"' . $current('account') . '>Account</a>';
         $out .= '<a href="' . $sanitizer->entities($checkoutUrl) . '"' . $current('checkout') . '>' . $sanitizer->entities($cartText) . '</a>';
         $out .= '</nav>';
         $out .= '<button class="mrc-menu-toggle mrc-small-caps" type="button" data-mrc-menu-toggle aria-expanded="false" aria-controls="mrc-store-menu"><span>Menu</span><span class="mrc-menu-lines" aria-hidden="true"><span></span><span></span></span></button>';
@@ -986,6 +991,7 @@ HTML;
         }
         $out .= '<li><a href="' . $sanitizer->entities($aboutUrl) . '">About</a></li>';
         $out .= '<li><a href="' . $sanitizer->entities($contactUrl) . '">Contact</a></li>';
+        if ($commerce->customerAccountService()->isEnabled()) $out .= '<li><a href="' . $sanitizer->entities($accountUrl) . '">Account</a></li>';
         $out .= '<li><a href="' . $sanitizer->entities($checkoutUrl) . '">' . $sanitizer->entities($cartText) . '</a></li>';
         $out .= '</ul>';
         $out .= '</aside>';

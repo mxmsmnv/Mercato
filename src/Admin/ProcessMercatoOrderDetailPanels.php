@@ -41,6 +41,9 @@ trait ProcessMercatoOrderDetailPanels {
         $trackingUrl = $order->hasField('mrc_fulfilment_tracking_url') ? trim((string) $order->mrc_fulfilment_tracking_url) : '';
         $methodLabel = $this->getOrderFulfilmentMethodLabel($order);
         $methodDetails = $this->getOrderFulfilmentMethodDetails($order);
+        $fulfilmentSnapshot = json_decode((string) ($order->mrc_fulfilment_details ?? ''), true);
+        $fulfilmentSnapshot = is_array($fulfilmentSnapshot) ? $fulfilmentSnapshot : [];
+        $manualLabelUrl = trim((string) ($fulfilmentSnapshot['manual_label_url'] ?? ''));
         $customerProfileUrl = $this->getOrderCustomerProfileUrl($order);
 
         $out = '<section class="pw-wrap mrc-admin-panel mrc-order-detail-head">';
@@ -95,6 +98,7 @@ trait ProcessMercatoOrderDetailPanels {
             [$this->_('Status'), $fulfilment['label']],
             [$this->_('Tracking'), $tracking],
             [$this->_('Tracking URL'), $trackingUrl, $trackingUrl],
+            [$this->_('Manual label URL'), $manualLabelUrl, $manualLabelUrl],
             [$this->_('Notes'), $order->hasField('mrc_fulfilment_notes') ? (string) $order->mrc_fulfilment_notes : ''],
         ]);
         $out .= '</div>';
@@ -104,8 +108,10 @@ trait ProcessMercatoOrderDetailPanels {
         $out .= $this->renderPaymentLinkPanel($order, $commerce, $paymentLinkResult);
         $out .= $this->renderPaymentOperations($order, $commerce, $actionResult, $refundResult, $cancelResult);
         $out .= $this->renderPaymentAttemptsPanel($order, $commerce);
+        $out .= $this->renderPaymentReconciliationAuditPanel($order, $commerce);
         $out .= $this->renderOrderCommunication($order, $commerce, $confirmationResult, $statusLinkResult);
         $out .= $this->renderOrderItemsPanel($order, $commerce);
+        $out .= $this->renderShippingProviderPanel($order, $commerce, $actionResult);
         $out .= $this->renderOrderLatestActivity($events);
 
         $paymentDetails = trim((string) $order->mrc_payment_details);
@@ -267,7 +273,7 @@ trait ProcessMercatoOrderDetailPanels {
             if (!is_array($item)) continue;
             $quantity = (float) ($item['quantity'] ?? 1);
             $out .= '<tr>';
-            $out .= '<td><strong>' . $this->e((string) ($item['title'] ?? $item['name'] ?? '-')) . '</strong><br><small>' . $this->e((string) ($item['sku'] ?? $item['uid'] ?? '')) . '</small></td>';
+            $out .= '<td><strong>' . $this->e((string) ($item['title'] ?? $item['name'] ?? '-')) . '</strong><br><small>' . $this->e((string) ($item['variant_label'] ?? '')) . (($item['variant_label'] ?? '') !== '' ? ' · ' : '') . $this->e((string) ($item['sku'] ?? $item['uid'] ?? '')) . '</small></td>';
             $out .= '<td>' . $this->e((string) $quantity) . '</td>';
             $out .= '<td><input class="uk-input" type="number" min="0" step="1" name="edit_item_quantity_' . (int) $index . '" value="' . $this->e((string) $quantity) . '" form="mrc-unpaid-order-edit-' . (int) $order->id . '"></td>';
             $out .= '</tr>';
@@ -547,6 +553,8 @@ trait ProcessMercatoOrderDetailPanels {
             : round($calculatedSubtotal, 2);
         $shipping = $order->hasField('mrc_shipping_amount') ? (float) $order->mrc_shipping_amount : 0.0;
         $discount = $order->hasField('mrc_discount_total') ? (float) $order->mrc_discount_total : 0.0;
+        $storedTax = $commerce->taxService()->getStoredBreakdown($order);
+        $taxAmount = $order->hasField('mrc_tax_amount') ? (float) $order->mrc_tax_amount : array_sum(array_column($storedTax, 'sum'));
 
         $out = '<section class="pw-wrap mrc-admin-panel">';
         $out .= '<div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Items and Totals')) . '</h2></div></div>';
@@ -558,7 +566,7 @@ trait ProcessMercatoOrderDetailPanels {
             $price = (float) ($item['price'] ?? 0);
             $tax = (float) ($item['sum_tax'] ?? $item['sumTax'] ?? 0);
             $sum = (float) ($item['sum'] ?? ($price * $quantity));
-            $out .= '<tr><td><strong>' . $this->e((string) ($item['title'] ?? $item['name'] ?? '-')) . '</strong><br><small>' . $this->e((string) ($item['sku'] ?? $item['uid'] ?? '')) . '</small></td>';
+            $out .= '<tr><td><strong>' . $this->e((string) ($item['title'] ?? $item['name'] ?? '-')) . '</strong><br><small>' . $this->e((string) ($item['variant_label'] ?? '')) . (($item['variant_label'] ?? '') !== '' ? ' · ' : '') . $this->e((string) ($item['sku'] ?? $item['uid'] ?? '')) . '</small></td>';
             $out .= '<td>' . $this->e((string) $quantity) . '</td><td>' . $this->e($commerce->formatPrice($price)) . '</td><td>' . $this->e($commerce->formatPrice($tax)) . '</td><td>' . $this->e($commerce->formatPrice($sum)) . '</td></tr>';
         }
         if (!$items) {
@@ -570,8 +578,60 @@ trait ProcessMercatoOrderDetailPanels {
         if ($discount > 0) {
             $out .= '<tr><th colspan="4">' . $this->e($this->_('Discount')) . ' ' . $this->e((string) $order->mrc_discount_code) . '</th><td>-' . $this->e($commerce->formatPrice($discount)) . '</td></tr>';
         }
+        foreach ($storedTax as $rate) {
+            $label = trim((string) ($rate['jurisdiction'] ?? '')) ?: $commerce->getTaxLabel($order);
+            $out .= '<tr><th colspan="4">' . $this->e($label . ' ' . rtrim(rtrim(number_format((float) ($rate['tax_rate'] ?? 0), 4, '.', ''), '0'), '.') . '%') . '</th><td>' . $this->e($commerce->formatPrice((float) ($rate['sum'] ?? 0))) . '</td></tr>';
+        }
+        if (!$storedTax && $taxAmount > 0) {
+            $out .= '<tr><th colspan="4">' . $this->e($commerce->getTaxLabel($order)) . '</th><td>' . $this->e($commerce->formatPrice($taxAmount)) . '</td></tr>';
+        }
         $out .= '<tr class="mrc-detail-total"><th colspan="4">' . $this->e($this->_('Total')) . '</th><td>' . $this->e($commerce->formatPrice($this->getOrderTotal($order, $commerce))) . '</td></tr>';
         return $out . '</tfoot></table></div></section>';
+    }
+
+    protected function renderShippingProviderPanel(Page $order, Mercato $commerce, array $actionResult = []): string {
+        $details = json_decode((string) ($order->mrc_fulfilment_details ?? ''), true);
+        $details = is_array($details) ? $details : [];
+        $quote = (array) ($details['shipping_provider_quote'] ?? []);
+        if (!$quote) return '';
+        $state = (array) ($details['provider_shipping'] ?? []);
+        $shipment = (array) ($state['shipment'] ?? []); $label = (array) ($state['label'] ?? []); $void = (array) ($state['void'] ?? []);
+        $rate = (array) ($quote['rate'] ?? []);
+        $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Shipping Provider')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Provider references and lifecycle audit. Sensitive label URLs are restricted to this authorized order view.')) . '</p></div></div>';
+        $out .= '<dl class="mrc-detail-list"><dt>' . $this->e($this->_('Provider')) . '</dt><dd>' . $this->e((string) ($quote['provider'] ?? '-')) . '</dd><dt>' . $this->e($this->_('Service')) . '</dt><dd>' . $this->e((string) ($rate['label'] ?? $rate['service'] ?? '-')) . '</dd><dt>' . $this->e($this->_('Rate reference')) . '</dt><dd>' . $this->e((string) ($rate['provider_reference'] ?? '-')) . '</dd><dt>' . $this->e($this->_('Shipment reference')) . '</dt><dd>' . $this->e((string) ($shipment['shipment_reference'] ?? '-')) . '</dd><dt>' . $this->e($this->_('Label reference')) . '</dt><dd>' . $this->e((string) ($label['label_reference'] ?? '-')) . '</dd><dt>' . $this->e($this->_('Tracking events')) . '</dt><dd>' . count((array) ($state['tracking_events'] ?? [])) . '</dd></dl>';
+        $out .= '<div class="mrc-panel-actions">';
+        if (!$label && !$void) $out .= $this->renderShippingProviderActionForm($order, 'purchase_label', $this->_('Purchase label'));
+        if ($label && !$void) { $out .= $this->renderShippingProviderActionForm($order, 'reprint_label', $this->_('Refresh label')); if (!empty($label['label_url'])) $out .= '<a class="uk-button uk-button-primary" href="' . $this->e((string) $label['label_url']) . '" target="_blank" rel="noopener noreferrer">' . $this->e($this->_('Open / reprint label')) . '</a>'; $out .= $this->renderShippingProviderActionForm($order, 'void_label', $this->_('Void and refund label')); }
+        $out .= '</div>';
+        if (!empty($state['tracking_events'])) {
+            $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Event')) . '</th><th>' . $this->e($this->_('Provider status')) . '</th><th>' . $this->e($this->_('Mercato status')) . '</th><th>' . $this->e($this->_('Time')) . '</th></tr></thead><tbody>';
+            foreach (array_reverse((array) $state['tracking_events']) as $event) $out .= '<tr><td>' . $this->e((string) ($event['event_id'] ?? '')) . '</td><td>' . $this->e((string) ($event['provider_status'] ?? '')) . '</td><td>' . $this->e((string) ($event['status'] ?? '')) . '</td><td>' . $this->e((string) ($event['at'] ?? '')) . '</td></tr>';
+            $out .= '</tbody></table></div>';
+        }
+        $out .= '</section>';
+        return $out;
+    }
+
+    protected function renderPaymentReconciliationAuditPanel(Page $order, Mercato $commerce): string {
+        $attempts = array_values(array_filter($this->getPaymentAttemptEvents(10000), static fn(array $event): bool => (int) ($event['order_page_id'] ?? 0) === (int) $order->id));
+        $audit = $commerce->paymentReconciliationAuditService()->inspect($order, $attempts);
+        $issues = (array) ($audit['issues'] ?? []); $remote = (array) ($audit['remote'] ?? []);
+        $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Payment Reconciliation Audit')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Compare local finalization, attempts, refunds, and the last explicitly verified remote state.')) . '</p></div></div>';
+        $out .= '<dl class="mrc-detail-list"><dt>' . $this->e($this->_('Local status')) . '</dt><dd>' . $this->e((string) $audit['local_status']) . '</dd><dt>' . $this->e($this->_('Remote status')) . '</dt><dd>' . $this->e((string) $audit['remote_status']) . '</dd><dt>' . $this->e($this->_('Remote verified')) . '</dt><dd>' . $this->e((string) ($remote['verified_at'] ?? 'Never')) . '</dd><dt>' . $this->e($this->_('Mismatch states')) . '</dt><dd>' . $this->e($issues ? implode(', ', $issues) : $this->_('None detected')) . '</dd></dl>';
+        $out .= '<form method="post" action="' . $this->e($this->orderDetailUrl($order)) . '">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_payment_audit_action" value="verify_remote"><button class="uk-button uk-button-default" type="submit">' . $this->e($this->_('Verify remote state')) . '</button></form>';
+        $repairActions = [];
+        if (in_array('paid_unfinalized', $issues, true)) $repairActions[(string) $audit['local_status'] === MercatoPaymentStatus::PAID ? 'replay_finalization' : 'apply_remote_paid'] = $this->_('Finalize verified payment');
+        if (in_array('refund_mismatch', $issues, true)) $repairActions['reconcile_refund'] = $this->_('Reconcile pending refund');
+        if ($repairActions) {
+            $out .= '<form class="mrc-payment-reconcile-form" method="post" action="' . $this->e($this->orderDetailUrl($order)) . '">' . $this->renderCsrfInput() . '<label><span>' . $this->e($this->_('Repair action')) . '</span><select class="uk-select" name="mrc_payment_audit_action">';
+            foreach ($repairActions as $key => $label) $out .= '<option value="' . $this->e($key) . '">' . $this->e($label) . '</option>';
+            $out .= '</select></label><label><span>' . $this->e($this->_('Reason')) . '</span><textarea class="uk-textarea" name="repair_reason" required></textarea></label><label><input class="uk-checkbox" type="checkbox" name="repair_confirmed" value="1" required> ' . $this->e($this->_('I verified the provider state and want to run this idempotent repair.')) . '</label><button class="uk-button uk-button-primary" type="submit">' . $this->e($this->_('Run repair')) . '</button></form>';
+        }
+        return $out . '</section>';
+    }
+
+    protected function renderShippingProviderActionForm(Page $order, string $action, string $label): string {
+        return '<form method="post" action="' . $this->e($this->orderDetailUrl($order)) . '">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_shipping_provider_action" value="' . $this->e($action) . '"><button class="uk-button uk-button-default" type="submit">' . $this->e($label) . '</button></form>';
     }
 
     protected function renderOrderLatestActivity(array $events): string {

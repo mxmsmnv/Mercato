@@ -3,6 +3,116 @@ namespace ProcessWire;
 
 trait MercatoPublicEndpoints {
 
+    public function handleHeadlessApi(HookEvent $event): void {
+        $requestId = preg_match('/^[A-Za-z0-9._-]{8,80}$/', (string) ($_SERVER['HTTP_X_REQUEST_ID'] ?? ''))
+            ? (string) $_SERVER['HTTP_X_REQUEST_ID'] : 'req_' . bin2hex(random_bytes(10));
+        header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store'); header('X-Request-ID: ' . $requestId);
+        $service = $this->headlessApiService();
+        $origin = trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ''));
+        if ($origin !== '' && $service->isAllowedOrigin($origin)) { header('Access-Control-Allow-Origin: ' . $origin); header('Vary: Origin'); header('Access-Control-Allow-Headers: Authorization, Content-Type, Idempotency-Key, X-Request-ID, X-Mercato-Token'); header('Access-Control-Allow-Methods: GET, POST, OPTIONS'); }
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') { http_response_code($origin === '' || $service->isAllowedOrigin($origin) ? 204 : 403); exit; }
+        try {
+            if (empty($this->headless_api_enabled)) throw new MercatoHeadlessApiException('api_disabled', 'Headless API is disabled.', 503);
+            $service->assertRequestAllowed((string) ($event->arguments('resource') ?: 'store'));
+            $length = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0); if ($length > $service->maxBodyBytes()) throw new MercatoHeadlessApiException('body_too_large', 'JSON request body is too large.', 413);
+            $raw = file_get_contents('php://input') ?: ''; if (strlen($raw) > $service->maxBodyBytes()) throw new MercatoHeadlessApiException('body_too_large', 'JSON request body is too large.', 413);
+            $body = $raw !== '' ? json_decode($raw, true, 64, JSON_THROW_ON_ERROR) : [];
+            if (!is_array($body)) throw new MercatoHeadlessApiException('invalid_json', 'JSON object expected.', 400);
+            $response = $service->dispatch(
+                strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')),
+                (string) ($event->arguments('resource') ?: 'store'), (string) $event->arguments('id'), (string) $event->arguments('action'),
+                $body, array_merge($this->wire('input')->get->getArray(), ['request_id'=>$requestId]), $service->requestHeaders()
+            );
+            http_response_code((int) ($response['status'] ?? 200)); unset($response['status']); echo json_encode(['ok'=>true,'api_version'=>'v1','request_id'=>$requestId]+$response, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+        } catch (MercatoHeadlessApiException $e) {
+            http_response_code($e->httpStatus); echo json_encode(['ok'=>false,'api_version'=>'v1','request_id'=>$requestId,'error'=>['code'=>$e->apiCode,'message'=>$e->getMessage(),'fields'=>$e->fields]], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+        } catch (\JsonException $e) {
+            http_response_code(400); echo json_encode(['ok'=>false,'api_version'=>'v1','request_id'=>$requestId,'error'=>['code'=>'invalid_json','message'=>'Malformed JSON request body.','fields'=>[]]]);
+        } catch (WireException $e) {
+            $status = in_array($e->getCode(), [400,401,403,404,409,410,422,429,502,503], true) ? $e->getCode() : 400; http_response_code($status);
+            echo json_encode(['ok'=>false,'api_version'=>'v1','request_id'=>$requestId,'error'=>['code'=>'commerce_error','message'=>$e->getMessage(),'fields'=>[]]], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            $this->wire('log')->error('Mercato API ' . $requestId . ': ' . $e->getMessage()); http_response_code(500); echo json_encode(['ok'=>false,'api_version'=>'v1','request_id'=>$requestId,'error'=>['code'=>'internal_error','message'=>'The request could not be completed.','fields'=>[]]]);
+        }
+        exit;
+    }
+
+    public function handleAnalyticsConsent(HookEvent $event): void {
+        header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store, private');
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') { http_response_code(405); echo json_encode(['ok' => false, 'error' => 'POST required.']); exit; }
+        $csrf = $this->wire('session')->CSRF ?? null; if ($csrf && method_exists($csrf, 'hasValidToken') && !$csrf->hasValidToken()) { http_response_code(403); echo json_encode(['ok' => false, 'error' => 'Invalid form session.']); exit; }
+        $consent = $this->analyticsService()->setConsent(['analytics' => (bool) $this->wire('input')->post->int('analytics'), 'marketing' => (bool) $this->wire('input')->post->int('marketing')]); echo json_encode(['ok' => true, 'consent' => $consent], JSON_UNESCAPED_SLASHES); exit;
+    }
+
+    public function handleHealthCheck(HookEvent $event): void {
+        header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store, private');
+        $detailed = (bool) $this->wire('input')->get->int('details');
+        if ($detailed) {
+            $authorization = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+            $token = preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches) ? trim((string) $matches[1]) : '';
+            if (!$this->operationalService()->verifyHealthToken($token)) { http_response_code(401); echo json_encode(['service' => 'mercato', 'status' => 'unauthorized']); exit; }
+        }
+        $health = $this->operationalService()->health($detailed); http_response_code($health['status'] === 'down' ? 503 : 200); echo json_encode($health, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); exit;
+    }
+
+    public function handleSeoSitemap(HookEvent $event): void {
+        header('Content-Type: application/xml; charset=utf-8');
+        header('X-Robots-Tag: noindex');
+        echo $this->seoService()->sitemapXml();
+        exit;
+    }
+
+    public function handleEmailWebhook(HookEvent $event): void {
+        header('Content-Type: application/json; charset=utf-8');
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            http_response_code(405); echo json_encode(['ok' => false, 'error' => 'POST a signed transactional email provider event.']); exit;
+        }
+        try {
+            $result = $this->emailWebhookService()->process((string) $this->wire('input')->get->text('provider'), file_get_contents('php://input') ?: '', function_exists('getallheaders') ? (array) getallheaders() : []);
+            echo json_encode(['ok' => true] + $result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (WireException $e) {
+            http_response_code(in_array($e->getCode(), [401, 404, 422], true) ? $e->getCode() : 400);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        exit;
+    }
+
+    public function handleShippingWebhook(HookEvent $event): void {
+        header('Content-Type: application/json; charset=utf-8');
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['ok' => false, 'error' => 'POST a signed provider tracking event.']);
+            exit;
+        }
+        $provider = trim((string) $this->wire('input')->get->text('provider'));
+        $payload = file_get_contents('php://input') ?: '';
+        $headers = function_exists('getallheaders') ? (array) getallheaders() : [];
+        try {
+            $result = $this->shippingProviderService()->processTrackingWebhook($provider, $payload, $headers);
+            http_response_code(200);
+            echo json_encode(['ok' => true] + $result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (WireException $e) {
+            http_response_code(in_array($e->getCode(), [401, 404, 422], true) ? $e->getCode() : 400);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        exit;
+    }
+
+    public function handleQuoteStatus(HookEvent $event): void {
+        $input = $this->wire('input');
+        $quote = $this->wire('pages')->get((int) $input->get('quote'));
+        $token = (string) $input->get->text('token');
+        $ok = $quote instanceof Page && $quote->id && $this->quoteService()->verifyToken($quote, $token);
+        http_response_code($ok ? 200 : 404);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($ok
+            ? ['ok' => true, 'resource' => 'quote', 'data' => $this->quoteService()->serializePublic($quote)]
+            : ['ok' => false, 'resource' => 'quote', 'error' => 'Quote request not found.'],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+        );
+        exit;
+    }
+
     public function hookCleanupExpiredReservations(?HookEvent $event = null): void {
         $this->runBackgroundJobs(['reservation_cleanup'], ['source' => 'lazycron']);
         $this->runBackgroundJobs(['stale_draft_expiration'], ['source' => 'lazycron']);
@@ -10,6 +120,10 @@ trait MercatoPublicEndpoints {
 
     public function hookRunRecoveryAutomation(?HookEvent $event = null): void {
         $this->runBackgroundJobs(['recovery_automation'], ['source' => 'lazycron']);
+    }
+
+    public function hookRunPrivacyRetention(?HookEvent $event = null): void {
+        $this->runBackgroundJobs(['privacy_retention'], ['source' => 'lazycron']);
     }
 
     public function handleRecoveryUnsubscribe(HookEvent $event): void {
@@ -25,7 +139,7 @@ trait MercatoPublicEndpoints {
 
         header('Content-Type: text/html; charset=utf-8');
         http_response_code($ok ? 200 : 400);
-        echo '<!doctype html><html><head><meta charset="utf-8"><title>Mercato recovery emails</title></head><body>';
+        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow,noarchive"><title>Mercato recovery emails</title></head><body>';
         echo '<main style="font-family: system-ui, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 20px;">';
         echo '<h1>' . ($ok ? 'Recovery emails disabled' : 'Invalid unsubscribe link') . '</h1>';
         echo '<p>' . ($ok ? 'This email address will no longer receive Mercato recovery payment-link reminders.' : 'The unsubscribe link is invalid or expired.') . '</p>';
@@ -183,10 +297,11 @@ trait MercatoPublicEndpoints {
         }
 
         if ($resource === 'products') {
-            $selector = 'template=' . $this->wire('sanitizer')->selectorValue((string) $this->product_template) . ', sort=title, limit=' . $limit;
+            $productTemplate = (string) ($this->product_template ?: $this->cart_template ?: 'mrc-product');
+            $selector = 'template=' . $this->wire('sanitizer')->selectorValue($productTemplate) . ', sort=title, limit=' . $limit;
             $query = trim((string) ($params['q'] ?? ''));
             if ($query !== '') {
-                $selector .= ', title%=' . $this->wire('sanitizer')->selectorValue($query);
+                $selector .= ', title|mrc_sku|mrc_variants%=' . $this->wire('sanitizer')->selectorValue($query);
             }
             $products = $this->wire('pages')->find($selector);
             $items = [];
@@ -210,8 +325,9 @@ trait MercatoPublicEndpoints {
         }
 
         if ($resource === 'product') {
-            $product = $this->wire('pages')->get('template=' . $this->wire('sanitizer')->selectorValue((string) $this->product_template) . ', id=' . (int) ($params['id'] ?? 0));
-            $ok = $product instanceof Page && $product->id && $product->template->name === (string) $this->product_template;
+            $productTemplate = (string) ($this->product_template ?: $this->cart_template ?: 'mrc-product');
+            $product = $this->wire('pages')->get('template=' . $this->wire('sanitizer')->selectorValue($productTemplate) . ', id=' . (int) ($params['id'] ?? 0));
+            $ok = $product instanceof Page && $product->id && $product->template->name === $productTemplate;
             $response = [
                 'ok' => $ok,
                 'resource' => 'product',
@@ -234,6 +350,19 @@ trait MercatoPublicEndpoints {
 
     protected function serializeProductForReadApi(Page $product): array {
         $type = $product->hasField('mrc_product_type') ? strtolower(trim((string) $product->mrc_product_type)) : '';
+        $definition = $this->variantService()->getDefinition($product);
+        $variants = [];
+        foreach ($definition['variants'] as $variant) {
+            if ($variant['status'] === 'archived') continue;
+            $purchasability = $this->getProductPurchasability($product, 1, 0, 0, (string) $variant['id']);
+            $publicVariant = $variant;
+            $publicVariant['images'] = $this->variantService()->resolveImageUrls($product, (array) $variant['images']);
+            $variants[] = $publicVariant + [
+                'resolved_price' => (float) $purchasability['resolved_price'],
+                'available_stock' => (int) $purchasability['available_stock'],
+                'purchasable' => (bool) $purchasability['ok'],
+            ];
+        }
         return [
             'id' => (int) $product->id,
             'name' => (string) $product->name,
@@ -243,14 +372,18 @@ trait MercatoPublicEndpoints {
             'price' => $product->hasField('mrc_price') ? round((float) $product->mrc_price, 2) : 0.0,
             'currency' => MercatoCurrency::normalizeCode((string) ($this->currency ?? 'GBP')),
             'tax_rate' => $product->hasField('mrc_tax_rate') ? round((float) $product->mrc_tax_rate, 4) : 0.0,
+            'tax_code' => $product->hasField('mrc_tax_code') ? (string) $product->mrc_tax_code : '',
             'shipping_price' => $product->hasField('mrc_shipping_price') ? round((float) $product->mrc_shipping_price, 2) : 0.0,
             'product_type' => in_array($type, ['physical', 'digital', 'service', 'placeholder', 'recurring', 'bundle'], true) ? $type : 'physical',
             'stock_policy' => $product->hasField('mrc_stock_policy') ? (string) $product->mrc_stock_policy : '',
+            'has_variants' => $variants !== [],
+            'variant_options' => $definition['options'],
+            'variants' => $variants,
         ];
     }
 
     protected function renderPublicOrderStatusError(): string {
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Order status unavailable</title>' . $this->renderPublicOrderStatusStyles() . '</head><body>'
             . '<main class="mrc-public-status"><section class="mrc-status-card">'
             . '<p class="mrc-kicker">Mercato</p><h1>Order status unavailable</h1>'
@@ -263,7 +396,7 @@ trait MercatoPublicEndpoints {
             ? '<p class="mrc-status-alert">' . $this->h($message) . '</p>'
             : '';
 
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Find order status</title>' . $this->renderPublicOrderStatusStyles() . '</head><body>'
             . '<main class="mrc-public-status"><section class="mrc-status-card">'
             . '<p class="mrc-kicker">Mercato</p><h1>Find order status</h1>'
@@ -277,7 +410,7 @@ trait MercatoPublicEndpoints {
     }
 
     protected function renderPublicOrderReceiptError(): string {
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Receipt unavailable</title>' . $this->renderPublicOrderStatusStyles() . '</head><body>'
             . '<main class="mrc-public-status"><section class="mrc-status-card">'
             . '<p class="mrc-kicker">Mercato</p><h1>Receipt unavailable</h1>'
@@ -498,7 +631,7 @@ trait MercatoPublicEndpoints {
             $downloadHtml = '<section class="mrc-status-card"><h2>Downloads</h2><ul>' . $downloadRows . '</ul></section>';
         }
 
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Receipt ' . $this->h($invoice) . '</title>' . $this->renderPublicOrderStatusStyles() . '<style>@media print {.mrc-print-actions{display:none}.mrc-public-status{margin:0;width:100%}body{background:#fff}.mrc-status-card{border-color:#aaa}}</style></head><body>'
             . '<main class="mrc-public-status">'
             . '<section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Receipt</p><h1>Receipt ' . $this->h($invoice) . '</h1>'
@@ -766,7 +899,7 @@ trait MercatoPublicEndpoints {
             ? '<p class="mrc-status-actions"><a class="mrc-primary-action" href="' . $this->h($this->getPaymentLinkUrl($order)) . '">Retry payment</a></p>'
             : '';
 
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Order ' . $this->h($invoice) . ' status</title>' . $this->renderPublicOrderStatusStyles() . '</head><body>'
             . '<main class="mrc-public-status">'
             . '<section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Order status</p><h1>Order ' . $this->h($invoice) . '</h1>'

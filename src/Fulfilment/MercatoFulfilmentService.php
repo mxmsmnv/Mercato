@@ -28,6 +28,15 @@ final class MercatoFulfilmentService extends Wire {
         foreach ($enabled as $type) {
             $methods[] = $this->buildMethod($type, $cart, $customerData, false);
         }
+        if (in_array(MercatoFulfilmentMethodType::CARRIER_DELIVERY, $enabled, true) && $this->commerce->shippingProviderService()->isEnabled()) {
+            $live = $this->commerce->shippingProviderService()->getLiveMethods($cart, $customerData);
+            if ($live) {
+                if (empty($this->commerce->shipping_provider_include_manual_rates)) {
+                    $methods = array_values(array_filter($methods, static fn(array $method): bool => ($method['type'] ?? '') !== MercatoFulfilmentMethodType::CARRIER_DELIVERY));
+                }
+                $methods = array_merge($methods, $live);
+            }
+        }
         return $methods;
     }
 
@@ -41,8 +50,20 @@ final class MercatoFulfilmentService extends Wire {
                 ? $this->commerce->getDefaultFulfilmentMethod()
                 : MercatoFulfilmentMethodType::CARRIER_DELIVERY;
         }
+        if ($this->commerce->shippingProviderService()->isLiveSelection($method)) {
+            if (!in_array(MercatoFulfilmentMethodType::CARRIER_DELIVERY, $this->commerce->getEnabledFulfilmentMethods(), true)) throw new WireException($this->commerce->_('Carrier delivery is not available.'));
+            $this->assertDeliveryAddress($customerData);
+            $this->assertDeliveryCountryAllowed($customerData);
+            return $this->finalizeMethod($this->commerce->shippingProviderService()->resolveSelection($method, $cart, $customerData), $cart, $customerData, true);
+        }
         if (!in_array($method, $this->commerce->getEnabledFulfilmentMethods(), true)) {
             throw new WireException($this->commerce->_('The selected fulfilment method is not available.'));
+        }
+
+        if ($method === MercatoFulfilmentMethodType::CARRIER_DELIVERY && $this->commerce->shippingProviderService()->isEnabled() && empty($this->commerce->shipping_provider_include_manual_rates)) {
+            $live = $this->commerce->shippingProviderService()->getLiveMethods($cart, $customerData);
+            if (array_filter($live, static fn(array $candidate): bool => !empty($candidate['available']))) throw new WireException($this->commerce->_('Choose one of the available live delivery services.'), 409);
+            if ($live) throw new WireException($this->commerce->_('Live delivery is unavailable for this address.'), 409);
         }
 
         return $this->buildMethod($method, $cart, $customerData, true);

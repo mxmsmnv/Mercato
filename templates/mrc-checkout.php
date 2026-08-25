@@ -20,6 +20,7 @@ $paymentLinkToken = '';
 $couponMessage = '';
 $couponError = '';
 $cartMessage = '';
+$quoteSubmitted = null;
 
 if ($input->get('mrc_order') && $input->get('mrc_token')) {
     $candidate = $pages->get((int) $input->get('mrc_order'));
@@ -72,6 +73,7 @@ $hasValidCsrf = static function () use ($csrf): bool {
     return !$csrf || !method_exists($csrf, 'hasValidToken') || (bool) $csrf->hasValidToken();
 };
 $postedAction = (string) $input->post('mrc_action');
+$checkoutAvailable = $commerce->operationalService()->isCheckoutAvailable();
 $checkoutNonce = (string) $session->get('mrc_checkout_nonce');
 if ($checkoutNonce === '') {
     $checkoutNonce = bin2hex(random_bytes(16));
@@ -84,7 +86,11 @@ try {
     $publishableKey = '';
 }
 
-if ($postedAction !== '' && !$hasValidCsrf()) {
+if (in_array($postedAction, ['checkout', 'request_quote'], true) && !$checkoutAvailable) {
+    $error = $commerce->operationalService()->checkoutMessage();
+} elseif (in_array($postedAction, ['checkout', 'request_quote'], true) && $commerce->customerAccountService()->isRequiredAtCheckout() && !$commerce->customerAccountService()->isVerified($user)) {
+    $error = 'A verified customer account is required for checkout. Sign in or create an account first.';
+} elseif ($postedAction !== '' && !$hasValidCsrf()) {
     $error = 'Form session expired. Please reload the page and try again.';
 } elseif ($postedAction === 'apply_coupon') {
     $code = strtoupper($input->post->text('discount_code'));
@@ -125,8 +131,11 @@ if ($postedAction !== '' && !$hasValidCsrf()) {
                     $stockPolicy = strtolower((string) ($item['stock_policy'] ?? 'deny'));
                     $stock = isset($item['stock']) ? (int) $item['stock'] : null;
                     $productId = (int) ($item['product_id'] ?? 0);
+                    $variantId = (string) ($item['variant_id'] ?? '');
                     $reserved = ($stockPolicy === 'deny' && $productId > 0)
-                        ? $commerce->orderRepository()->getReservedQuantityForProduct($productId)
+                        ? ($variantId !== ''
+                            ? $commerce->orderRepository()->getReservedQuantityForVariant($productId, $variantId)
+                            : $commerce->orderRepository()->getReservedQuantityForProduct($productId))
                         : 0;
                     $available = $stock === null ? null : max(0, $stock - $reserved);
                     if ($stockPolicy === 'deny' && $available !== null && $requestedQuantity > $available) {
@@ -143,6 +152,35 @@ if ($postedAction !== '' && !$hasValidCsrf()) {
         if ($cart->count() === 0) {
             $session->remove('mrc_discount_code');
         }
+        $commerce->analyticsService()->track('cart_change', ['action' => $removeKey !== '' ? 'remove' : 'update', 'line_count' => $cart->count(), 'value' => round($cart->getSum(), 2), 'currency' => (string) $commerce->currency]);
+    } catch (WireException $e) {
+        $error = $e->getMessage();
+    }
+} elseif ($postedAction === 'refresh_shipping') {
+    $cartMessage = 'Delivery services refreshed for this address.';
+} elseif ($postedAction === 'request_quote') {
+    try {
+        $postedPolicyPages = method_exists($commerce, 'getPolicyPages') ? $commerce->getPolicyPages() : new PageArray();
+        $quoteSubmitted = $commerce->submitQuoteRequest([
+            'first_name' => $input->post->text('first_name'),
+            'last_name' => $input->post->text('last_name'),
+            'email' => $input->post->email('email'),
+            'phone' => $input->post->text('phone'),
+            'address' => $input->post->text('address'),
+            'city' => $input->post->text('city'),
+            'zip' => $input->post->text('zip'),
+            'country' => strtoupper($input->post->text('country')),
+            'region' => strtoupper($input->post->text('region')),
+            'delivery_window' => $input->post->text('delivery_window'),
+            'delivery_note' => $input->post->textarea('delivery_note'),
+            'pickup_location' => $input->post->text('pickup_location'),
+            'notes' => $input->post->textarea('notes'),
+            'fulfilment_method' => $input->post->text('fulfilment_method'),
+            'discount_code' => (string) $session->get('mrc_discount_code'),
+            'mrc_policy_accepted' => $postedPolicyPages->count() > 0 && (string) $input->post->text('policy_accepted') === '1' ? 1 : 0,
+        ]);
+        $cartMessage = sprintf('Quote request %s submitted. We sent the status link to your email.', (string) $quoteSubmitted->mrc_quote_number);
+        $cart = $commerce->cart();
     } catch (WireException $e) {
         $error = $e->getMessage();
     }
@@ -251,6 +289,14 @@ $values = [
     'payment_method' => $input->post->text('payment_method') ?: 'stripe-card',
 ];
 
+if (!$input->post('mrc_action') && !$paymentLinkOrder && $commerce->customerAccountService()->isEnabled() && $commerce->customerAccountService()->isVerified($user)) {
+    $accountProfile = $commerce->customerAccountService()->profile($user);
+    $accountAddress = (array) ($accountProfile['addresses'][0] ?? []);
+    foreach (['first_name', 'last_name', 'phone'] as $profileKey) if ($values[$profileKey] === '') $values[$profileKey] = (string) ($accountProfile[$profileKey] ?? '');
+    $values['email'] = (string) $accountProfile['email'];
+    foreach (['address', 'city', 'zip', 'country'] as $addressKey) if ($values[$addressKey] === '' || ($addressKey === 'country' && $values[$addressKey] === $defaultCountry)) $values[$addressKey] = (string) ($accountAddress[$addressKey] ?? $values[$addressKey]);
+}
+
 if ($paymentLinkOrder && !$input->post('mrc_action')) {
     $billingSnapshot = json_decode((string) $paymentLinkOrder->mrc_billing_address, true);
     $billingSnapshot = is_array($billingSnapshot) ? $billingSnapshot : [];
@@ -316,12 +362,12 @@ foreach ($fulfilmentMethods as $method) {
     }
 }
 foreach ($fulfilmentMethods as $method) {
-    if ($method['type'] === $values['fulfilment_method'] && !empty($method['available'])) {
+    if (($method['selection_key'] ?? $method['type']) === $values['fulfilment_method'] && !empty($method['available'])) {
         $selectedFulfilment = $method;
         break;
     }
 }
-$values['fulfilment_method'] = $selectedFulfilment['type'];
+$values['fulfilment_method'] = (string) ($selectedFulfilment['selection_key'] ?? $selectedFulfilment['type']);
 $selectedPickupLocations = is_array($selectedFulfilment['pickup_locations'] ?? null) ? $selectedFulfilment['pickup_locations'] : $pickupLocations;
 if ($values['pickup_location'] === '' && count($selectedPickupLocations) > 0) {
     $values['pickup_location'] = (string) array_key_first($selectedPickupLocations);
@@ -338,12 +384,13 @@ $emptyCartProducts = $cart->count() === 0
     : new PageArray();
 $checkoutShellClass = $isVanilla ? $ui['shell'] : $ui['shell'] . ' mrc-section-reveal mrc-checkout-shell';
 $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
+$seoHead = $commerce->seoService()->render($page, ['private' => true]);
 
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title><?= $sanitizer->entities($page->title ?: 'Checkout') ?></title>
+    <?= $seoHead ?>
     <?= $frameworkAssets ?>
     <?= mrc_storefront_assets($isVanilla) ?>
     <?php if (!$isVanilla): ?>
@@ -415,7 +462,7 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
             grid-template-columns: 54px minmax(0, 1fr);
         }
         .mrc-checkout-step-index {
-            color: var(--mrc-gold);
+            color: var(--mrc-rust);
             font-size: 12px;
             font-weight: 800;
             letter-spacing: .18em;
@@ -506,7 +553,7 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
         }
         .mrc-checkout-item-placeholder {
             align-items: center;
-            color: var(--mrc-gold);
+            color: var(--mrc-rust);
             display: flex;
             font-size: 10px;
             font-weight: 800;
@@ -550,7 +597,7 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
             width: 82px;
         }
         .mrc-checkout-qty span {
-            color: var(--mrc-gold);
+            color: var(--mrc-rust);
             font-size: 10px;
             font-weight: 800;
             letter-spacing: .16em;
@@ -648,7 +695,7 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
         .mrc-empty-product-card { border: 1px solid rgba(0,0,0,0.16); border-radius: 6px; display: grid; gap: 12px; padding: 14px; }
         .mrc-empty-product-media { aspect-ratio: 3 / 2; background: rgba(0,0,0,0.08); border-radius: 6px; overflow: hidden; }
         .mrc-empty-product-media img { display: block; height: 100%; object-fit: cover; width: 100%; }
-        .mrc-empty-product-placeholder { align-items: center; color: rgba(0,0,0,0.5); display: flex; font-size: 12px; height: 100%; justify-content: center; text-transform: uppercase; }
+        .mrc-empty-product-placeholder { align-items: center; color: var(--mrc-ink); display: flex; font-size: 12px; height: 100%; justify-content: center; text-transform: uppercase; }
         .mrc-empty-product-title { font-weight: 700; margin: 0; }
         .mrc-empty-product-meta { color: rgba(0,0,0,0.6); margin: 0; }
         .mrc-line-stock { color: rgba(0,0,0,0.58); display: block; font-size: 12px; margin-top: 4px; }
@@ -862,7 +909,6 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
             <?php endif; ?>
         <?php else: ?>
             <form method="post" action="" class="<?= $ui['form'] ?>">
-                <input type="hidden" name="mrc_action" value="checkout">
                 <input type="hidden" name="checkout_nonce" value="<?= $sanitizer->entities($checkoutNonce) ?>">
                 <?= $csrfInput ?>
                 <?php if ($paymentLinkOrder && $paymentLinkOrder->id): ?>
@@ -875,6 +921,7 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
                         <span class="mrc-checkout-step-index">01</span>
                         <h2 class="mrc-checkout-step-title">Customer and fulfilment</h2>
                     </div>
+                    <?php if ($commerce->customerAccountService()->isEnabled()): ?><p class="mrc-help"><?= $commerce->customerAccountService()->isVerified($user) ? 'Checkout details are prefilled from your verified account.' : ($commerce->customerAccountService()->isRequiredAtCheckout() ? 'A verified account is required. ' : 'Guest checkout is available. ') ?><a href="<?= $config->urls->root ?>account/">Account</a></p><?php endif; ?>
                     <div class="<?= $ui['grid'] ?>">
                     <div class="<?= $ui['field'] ?>">
                         <label for="mrc-first-name">First name</label>
@@ -909,12 +956,12 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
                         <select class="<?= $ui['select'] ?>" id="mrc-fulfilment-method" name="fulfilment_method" aria-controls="mrc-delivery-address">
                             <?php foreach ($fulfilmentMethods as $method): ?>
                                 <option
-                                    value="<?= $sanitizer->entities($method['type']) ?>"
+                                    value="<?= $sanitizer->entities((string) ($method['selection_key'] ?? $method['type'])) ?>"
                                     data-label="<?= $sanitizer->entities($method['label']) ?>"
                                     data-fee="<?= (float) $method['amount'] ?>"
                                     data-details="<?= $sanitizer->entities($method['details']) ?>"
                                     <?= empty($method['available']) ? 'disabled' : '' ?>
-                                    <?= $values['fulfilment_method'] === $method['type'] ? 'selected' : '' ?>
+                                    <?= $values['fulfilment_method'] === (string) ($method['selection_key'] ?? $method['type']) ? 'selected' : '' ?>
                                 ><?= $sanitizer->entities($method['label']) ?> - <?= (float) $method['amount'] > 0 ? $commerce->formatPrice((float) $method['amount']) : 'Free' ?><?= empty($method['available']) ? ' (unavailable)' : '' ?></option>
                             <?php endforeach; ?>
                         </select>
@@ -1031,7 +1078,16 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
                         </span>
                     </label>
                 <?php endif; ?>
-                <p><button class="<?= $ui['button'] ?>" type="submit">Continue to payment</button></p>
+                <p class="mrc-checkout-actions">
+                    <?php if ($commerce->shippingProviderService()->isEnabled()): ?>
+                        <button class="<?= $ui['buttonSecondary'] ?>" type="submit" name="mrc_action" value="refresh_shipping" formnovalidate>Update delivery rates</button>
+                    <?php endif; ?>
+                    <?php if (!$checkoutAvailable): ?><p class="<?= $ui['message'] ?>"><?= $sanitizer->entities($commerce->operationalService()->checkoutMessage()) ?></p><?php endif; ?>
+                    <button class="<?= $ui['button'] ?>" type="submit" name="mrc_action" value="checkout" <?= !$checkoutAvailable ? 'disabled aria-disabled="true"' : '' ?>>Continue to payment</button>
+                    <?php if (!empty($commerce->quote_requests_enabled) && !$paymentLinkOrder): ?>
+                        <button class="<?= $ui['buttonSecondary'] ?>" type="submit" name="mrc_action" value="request_quote" formnovalidate <?= !$checkoutAvailable ? 'disabled aria-disabled="true"' : '' ?>>Request a quote</button>
+                    <?php endif; ?>
+                </p>
             </form>
 
             <?php if ($clientSecret && $publishableKey): ?>
@@ -1086,15 +1142,16 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
                         $stockPolicy = strtolower((string) ($item['stock_policy'] ?? 'deny'));
                         $stock = isset($item['stock']) ? (int) $item['stock'] : 0;
                         $productId = (int) ($item['product_id'] ?? 0);
+                        $variantId = (string) ($item['variant_id'] ?? '');
                         $reserved = ($stockPolicy === 'deny' && $productId > 0)
-                            ? $commerce->orderRepository()->getReservedQuantityForProduct($productId)
+                            ? ($variantId !== '' ? $commerce->orderRepository()->getReservedQuantityForVariant($productId, $variantId) : $commerce->orderRepository()->getReservedQuantityForProduct($productId))
                             : 0;
                         $available = max(0, $stock - $reserved);
                         $maxAttr = $stockPolicy === 'deny' && $available > 0 ? ' max="' . $available . '"' : '';
                         $product = $productId > 0 ? $pages->get($productId) : null;
                         $productUrl = ($product && $product->id) ? $product->url : '';
-                        $imageUrl = '';
-                        if ($product && $product->id && $product->hasField('mrc_images') && $product->mrc_images && $product->mrc_images->count()) {
+                        $imageUrl = (string) ($item['image_url'] ?? '');
+                        if ($imageUrl === '' && $product && $product->id && $product->hasField('mrc_images') && $product->mrc_images && $product->mrc_images->count()) {
                             $imageUrl = $product->mrc_images->first()->url;
                         }
                         ?>
@@ -1118,6 +1175,7 @@ $checkoutHeadingClass = $isVanilla ? '' : 'mrc-display mrc-checkout-title';
                                 <div class="mrc-checkout-item-top">
                                     <div>
                                         <p class="mrc-checkout-item-title"><?= $sanitizer->entities($item['title'] ?? $item['id']) ?></p>
+                                        <?php if (!empty($item['variant_label'])): ?><p class="mrc-checkout-item-meta"><?= $sanitizer->entities((string) $item['variant_label']) ?><?= !empty($item['sku']) ? ' · ' . $sanitizer->entities((string) $item['sku']) : '' ?></p><?php endif; ?>
                                         <?php if ($stockPolicy === 'deny' && $productId > 0): ?>
                                             <small class="mrc-line-stock"><?= (int) $available ?> available</small>
                                         <?php elseif ($stockPolicy === 'backorder'): ?>

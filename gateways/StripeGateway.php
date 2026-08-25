@@ -69,6 +69,10 @@ class StripeGateway extends MercatoGatewayBase {
         $errors = [];
         $warnings = [];
 
+        if (!class_exists('\\Stripe\\StripeClient')) {
+            $errors[] = 'Stripe SDK is missing. Run `composer install --no-dev --classmap-authoritative` in the Mercato module directory, or deploy a complete Mercato release artifact.';
+        }
+
         if ($publishableKey === '') {
             $errors[] = 'Stripe publishable key is missing.';
         }
@@ -78,6 +82,10 @@ class StripeGateway extends MercatoGatewayBase {
         if ($webhookSecret === '') {
             $warnings[] = 'Stripe webhook signing secret is not configured.';
         }
+        if (!empty($this->commerce->production) && !str_starts_with($publishableKey, 'pk_live_')) $errors[] = 'Stripe production mode requires a pk_live_ publishable key.';
+        if (!empty($this->commerce->production) && !str_starts_with($secretKey, 'sk_live_')) $errors[] = 'Stripe production mode requires an sk_live_ secret key.';
+        if (!empty($this->commerce->production) && !str_starts_with($webhookSecret, 'whsec_')) $errors[] = 'Stripe production mode requires a whsec_ webhook secret.';
+        if (!empty($this->commerce->production) && !str_starts_with(strtolower($this->commerce->getHttpRoot()), 'https://')) $errors[] = 'Stripe production webhook URL must use HTTPS.';
 
         return new MercatoGatewaySetupStatus(
             gateway: $this->getName(),
@@ -86,6 +94,9 @@ class StripeGateway extends MercatoGatewayBase {
             warnings: $warnings,
             details: [
                 'mode' => $this->commerce->production ? 'live' : 'test',
+                'credential_status' => $errors ? 'blocked' : 'configured',
+                'webhook_status' => $webhookSecret !== '' ? 'configured_unverified' : 'missing',
+                'capabilities' => $this->getCapabilities()->toArray(),
                 'webhook_url' => $this->commerce->getHttpRoot() . '/api/mercato/stripe-webhook/',
                 'required_events' => [
                     'payment_intent.succeeded',
@@ -111,6 +122,15 @@ class StripeGateway extends MercatoGatewayBase {
 
     public function mapExternalStatus(string $externalStatus): string {
         return MercatoPaymentStatusMapper::stripePaymentIntent($externalStatus);
+    }
+
+    public function retrievePaymentState(Page $order): array {
+        $id = trim((string) ($order->mrc_stripe_payment_intent_id ?? ''));
+        if ($id === '') throw new WireException('Stripe PaymentIntent reference is missing.');
+        $intent = $this->retrievePaymentIntent($id); $refunded = 0.0;
+        $chargeId = is_string($intent->latest_charge ?? null) ? (string) $intent->latest_charge : (string) (($intent->latest_charge->id ?? ''));
+        if ($chargeId !== '' && class_exists('\Stripe\Charge')) { $charge = \Stripe\Charge::retrieve($chargeId); $refunded = round((float) ($charge->amount_refunded ?? 0) / 100, 2); }
+        return ['status' => $this->mapExternalStatus((string) $intent->status), 'amount' => round((float) ($intent->amount_received ?: $intent->amount) / 100, 2), 'refunded_amount' => $refunded, 'currency' => strtoupper((string) $intent->currency), 'reference' => (string) $intent->id];
     }
 
     // -----------------------------------------------------------------------
@@ -587,6 +607,7 @@ class StripeGateway extends MercatoGatewayBase {
         }
 
         \Stripe\Stripe::setApiKey($key);
+        if (method_exists('\Stripe\Stripe', 'setMaxNetworkRetries')) \Stripe\Stripe::setMaxNetworkRetries(max(0, min(3, (int) ($this->commerce->gateway_retries ?? 2))));
         \Stripe\Stripe::setAppInfo('Mercato', '1.0.0');
     }
 }

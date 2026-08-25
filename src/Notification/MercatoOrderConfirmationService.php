@@ -49,30 +49,20 @@ final class MercatoOrderConfirmationService extends Wire {
             ?: "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\n{fulfilment}: {shipping}\n{fulfilment_details}\nTotal: {total}\n\nReceipt:\n{receipt_link}\n\nYou can check order status here:\n{order_status_link}\n\nWe will send the next fulfilment update.\n\n{policy_links}";
 
         try {
-            $mail = wireMail();
-            $mail->to($recipient)
-                ->from($sender, trim((string) $this->commerce->notification_sender_name))
-                ->subject(strtr($subjectTemplate, $values))
-                ->body(strtr($bodyTemplate, $values));
-            $replyTo = (string) $this->wire('sanitizer')->email((string) $this->commerce->notification_reply_to);
-            if ($replyTo !== '') {
-                $mail->header('Reply-To', $replyTo);
-            }
-            if ((int) $mail->send() < 1) {
-                return $this->record($order, 'failed', 'WireMail did not report a sent message.', $recipient);
-            }
-
+            $result = $this->commerce->notificationDeliveryService()->deliver('order_confirmation', $recipient, $values, [
+                'order_id' => (int) $order->id,
+                'invoice' => (string) ($order->mrc_invoice_number ?: $order->title),
+                'business_event_id' => 'paid',
+                'force' => $resend,
+            ], ['subject' => $subjectTemplate, 'text' => $bodyTemplate]);
+            if (($result['status'] ?? '') !== 'sent') return $result;
             $order->of(false);
             $order->mrc_confirmation_sent_date = date('Y-m-d H:i:s');
             $order->mrc_confirmation_send_count = (int) $order->mrc_confirmation_send_count + 1;
             $this->wire('pages')->save($order);
 
-            return $this->record(
-                $order,
-                'sent',
-                $resend ? 'Order confirmation resent.' : 'Order confirmation sent.',
-                $recipient
-            );
+            $result['message'] = $resend ? 'Order confirmation resent.' : 'Order confirmation sent.';
+            return $result;
         } catch (\Throwable $e) {
             return $this->record($order, 'failed', $e->getMessage(), $recipient);
         }
@@ -84,6 +74,7 @@ final class MercatoOrderConfirmationService extends Wire {
         foreach (is_array($items) ? $items : [] as $item) {
             $quantity = max(1, (int) ceil((float) ($item['quantity'] ?? 1)));
             $title = trim((string) ($item['title'] ?? $item['name'] ?? 'Product'));
+            if (trim((string) ($item['variant_label'] ?? '')) !== '') $title .= ' (' . trim((string) $item['variant_label']) . ')';
             $price = (float) ($item['price'] ?? 0) * $quantity;
             $lines[] = $quantity . ' x ' . $title . ' - ' . $this->commerce->formatPrice($price);
         }

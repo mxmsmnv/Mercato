@@ -77,6 +77,18 @@ trait ProcessMercatoImportCustomerReportData {
             }
 
             $isNew = !$existing || !$existing->id;
+            if (array_key_exists('variant_options_json', $row) || array_key_exists('variants_json', $row)) {
+                $previewOptions = json_decode((string) ($row['variant_options_json'] ?? '[]'), true);
+                $previewVariants = json_decode((string) ($row['variants_json'] ?? '[]'), true);
+                $previewValidation = is_array($previewOptions) && is_array($previewVariants)
+                    ? MercatoVariantDefinition::validate($previewOptions, $previewVariants)
+                    : ['valid' => false, 'errors' => [$this->_('variant_options_json and variants_json must be valid JSON arrays.')]];
+                if (!$previewValidation['valid']) {
+                    $result['errors'][] = $title . ': ' . implode(' ', $previewValidation['errors']);
+                    $result['skipped']++;
+                    continue;
+                }
+            }
             if ($dryRun) {
                 $result[$isNew ? 'created' : 'updated']++;
                 continue;
@@ -109,6 +121,7 @@ trait ProcessMercatoImportCustomerReportData {
                     : ($isNew ? $commerce->getDefaultTaxRate() : (float) $product->mrc_tax_rate);
                 $product->mrc_tax_rate = $taxRate;
             }
+            if ($product->hasField('mrc_tax_code')) $product->mrc_tax_code = trim((string) ($row['tax_code'] ?? ''));
             if ($product->hasField('mrc_shipping_price')) $product->mrc_shipping_price = (float) ($row['shipping_price'] ?? 0);
             if ($product->hasField('mrc_stock')) $product->mrc_stock = (int) ($row['stock'] ?? 0);
             if ($product->hasField('mrc_low_stock_threshold')) $product->mrc_low_stock_threshold = (int) ($row['low_stock_threshold'] ?? 0);
@@ -138,6 +151,23 @@ trait ProcessMercatoImportCustomerReportData {
                 $this->assignProductCollections($product, (string) ($row['collections'] ?? ''));
             }
 
+            $variantDefinition = null;
+            if (array_key_exists('variant_options_json', $row) || array_key_exists('variants_json', $row)) {
+                $variantOptions = json_decode((string) ($row['variant_options_json'] ?? '[]'), true);
+                $variants = json_decode((string) ($row['variants_json'] ?? '[]'), true);
+                if (!is_array($variantOptions) || !is_array($variants)) {
+                    $result['errors'][] = $title . ': ' . $this->_('variant_options_json and variants_json must be valid JSON arrays.');
+                    $result['skipped']++;
+                    continue;
+                }
+                $variantDefinition = $commerce->variantService()->validateDefinition($product, $variantOptions, $variants);
+                if (!$variantDefinition['valid']) {
+                    $result['errors'][] = $title . ': ' . implode(' ', $variantDefinition['errors']);
+                    $result['skipped']++;
+                    continue;
+                }
+            }
+
             $status = strtolower((string) ($row['status'] ?? 'published'));
             if ($status === 'unpublished') {
                 $product->addStatus(Page::statusUnpublished);
@@ -151,6 +181,9 @@ trait ProcessMercatoImportCustomerReportData {
             }
 
             $pages->save($product);
+            if ($variantDefinition !== null) {
+                $commerce->variantService()->saveDefinition($product, $variantDefinition['options'], $variantDefinition['variants']);
+            }
             $importedImages = 0;
             if (!empty($row['image_urls'])) {
                 $imageResult = $this->importProductImages($product, (string) $row['image_urls']);

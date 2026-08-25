@@ -3,3 +3,6 @@
 .mercato-local/
 vendor/
 node_modules/
+artifacts/
+dist/
+.playwright/

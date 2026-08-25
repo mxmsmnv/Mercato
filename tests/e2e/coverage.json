@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "browser_contract": {
+    "engines": ["chromium", "firefox", "webkit"],
+    "viewports": ["desktop", "Pixel 7", "iPhone 15"],
+    "accessibility": "axe-core serious and critical violations; color contrast reported separately"
+  },
+  "scenarios": {
+    "happy_path_coupon_validation_payment_success": "tests/e2e/journey.spec.js",
+    "desktop_mobile_catalog_product_checkout_account": "tests/e2e/surfaces.spec.js",
+    "stock_race_reservation_refund_restore": "tests/MercatoPaymentHardeningIntegrationTest.php",
+    "decline_retry_delayed_duplicate_webhook_cancel": "tests/MercatoPaymentHardeningIntegrationTest.php",
+    "tax_shipping_invalid_destination": ["tests/MercatoTaxIntegrationTest.php", "tests/MercatoShippingProviderIntegrationTest.php"],
+    "email_signed_links_permissions": ["tests/MercatoEmailDeliveryIntegrationTest.php", "tests/MercatoPrivacyIntegrationTest.php"],
+    "noindex_and_analytics": ["tests/MercatoSeoIntegrationTest.php", "tests/MercatoAnalyticsIntegrationTest.php", "tests/e2e/surfaces.spec.js"],
+    "headless_native_guest_checkout": ["tests/MercatoHeadlessApiIntegrationTest.php", "tests/e2e/api.spec.js"],
+    "live_provider_smoke_opt_in": "tests/e2e/live-provider.spec.js"
+  }
+}

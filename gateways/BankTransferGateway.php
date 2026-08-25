@@ -50,6 +50,9 @@ final class BankTransferGateway extends MercatoGatewayBase {
             details: [
                 'mode' => 'offline',
                 'manual_reconciliation' => true,
+                'credential_status' => 'not_required',
+                'webhook_status' => 'not_applicable',
+                'capabilities' => $this->getCapabilities()->toArray(),
                 'setup_note' => 'Mark the order paid from Order Detail after funds arrive.',
             ],
         );

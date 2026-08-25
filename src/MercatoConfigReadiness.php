@@ -11,6 +11,11 @@ trait MercatoConfigReadiness {
         $hasMollie = in_array('mollie', $enabledMethods, true);
         $hasPayPal = in_array('paypal', $enabledMethods, true);
 
+        $httpRoot = (string) (wire('config')->urls->httpRoot ?? '');
+        foreach (MercatoProductionGuard::validate($data + ['enabled_payment_methods' => $enabledMethods], $httpRoot) as $productionError) {
+            $checks[] = ['label' => $productionError, 'ok' => false];
+        }
+
         if ($hasStripe) {
             $checks[] = [
                 'label' => __('Stripe live publishable key'),
@@ -50,8 +55,8 @@ trait MercatoConfigReadiness {
 
         $checks[] = [
             'label' => __('Customer email sender'),
-            'ok' => trim((string) ($data['notification_sender_email'] ?? '')) !== '',
-            'warning' => true,
+            'ok' => filter_var((string) ($data['notification_sender_email'] ?? ''), FILTER_VALIDATE_EMAIL) !== false,
+            'warning' => empty($data['enabled_notification_events']),
         ];
         $checks[] = [
             'label' => __('Seller/legal receipt details'),

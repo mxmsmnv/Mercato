@@ -1,0 +1,13 @@
+/.claude export-ignore
+/.github export-ignore
+/.mercato-local export-ignore
+/tests export-ignore
+/tools export-ignore
+/scripts/build-release.sh export-ignore
+/.DS_Store export-ignore
+/.gitignore export-ignore
+/phpunit.xml.dist export-ignore
+/package.json export-ignore
+/package-lock.json export-ignore
+/tests/e2e export-ignore
+*.log export-ignore

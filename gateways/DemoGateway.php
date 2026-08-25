@@ -44,7 +44,7 @@ final class DemoGateway extends MercatoGatewayBase {
             gateway: $this->getName(),
             ready: !$this->commerce->production,
             errors: $this->commerce->production ? ['Demo Payment is unavailable in production mode.'] : [],
-            details: ['mode' => $this->commerce->production ? 'disabled' : 'test'],
+            details: ['mode' => $this->commerce->production ? 'disabled' : 'test', 'credential_status' => 'not_required', 'webhook_status' => 'simulated', 'capabilities' => $this->getCapabilities()->toArray()],
         );
     }
 

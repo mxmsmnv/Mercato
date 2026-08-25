@@ -65,6 +65,16 @@ class MercatoOrderRepository extends Wire {
                 $page->mrc_items = $pending['mrc_items'];
             }
 
+            if ($page->template->hasField('mrc_customer_user_id')) {
+                $customerUserId = (int) ($pending['mrc_customer_user_id'] ?? 0);
+                if ($customerUserId === 0 && $savedUser->id && !$savedUser->isGuest() && $savedUser->hasRole('mercato-customer') && (int) ($savedUser->mrc_customer_verified ?? 0) === 1) {
+                    $customerUserId = (int) $savedUser->id;
+                }
+                $existingOwnerId = (int) ($page->mrc_customer_user_id ?? 0);
+                if (MercatoAccountPolicy::mergeConflict($existingOwnerId, $customerUserId)) throw new WireException($this->commerce->_('Order ownership conflict.'), 409);
+                if ($customerUserId > 0) $page->mrc_customer_user_id = $customerUserId;
+            }
+
             if ($page->template->hasField('mrc_payment_status')) {
                 $page->mrc_payment_status = $pending['payment_status'] ?? Mercato::PAYMENT_STATUS_PENDING;
             }
@@ -213,6 +223,10 @@ class MercatoOrderRepository extends Wire {
             'mrc_discount_total' => $order->hasField('mrc_discount_total') ? round((float) $order->mrc_discount_total, 2) : 0.0,
             'mrc_discount_details' => $order->hasField('mrc_discount_details') ? (string) $order->mrc_discount_details : '',
             'mrc_total_amount' => $this->getTotalAmount($order),
+            'mrc_tax_amount' => $order->hasField('mrc_tax_amount') ? round((float) $order->mrc_tax_amount, 2) : 0.0,
+            'mrc_tax_details' => $order->hasField('mrc_tax_details') ? (string) $order->mrc_tax_details : '',
+            'mrc_tax_provider_reference' => $order->hasField('mrc_tax_provider_reference') ? (string) $order->mrc_tax_provider_reference : '',
+            'mrc_tax_committed' => $order->hasField('mrc_tax_committed') ? (int) $order->mrc_tax_committed : 0,
             'fulfilment_method' => $order->hasField('mrc_fulfilment_method') ? (string) $order->mrc_fulfilment_method : '',
             'mrc_fulfilment_label' => $order->hasField('mrc_fulfilment_label') ? (string) $order->mrc_fulfilment_label : '',
             'mrc_fulfilment_details' => $order->hasField('mrc_fulfilment_details') ? (string) $order->mrc_fulfilment_details : '',
@@ -261,6 +275,11 @@ class MercatoOrderRepository extends Wire {
             'mrc_discount_total' => 'mrc_discount_total',
             'mrc_discount_details' => 'mrc_discount_details',
             'mrc_total_amount' => 'mrc_total_amount',
+            'mrc_tax_amount' => 'mrc_tax_amount',
+            'mrc_tax_details' => 'mrc_tax_details',
+            'mrc_tax_provider_reference' => 'mrc_tax_provider_reference',
+            'mrc_tax_committed' => 'mrc_tax_committed',
+            'mrc_customer_user_id' => 'mrc_customer_user_id',
             'fulfilment_method' => 'mrc_fulfilment_method',
             'mrc_fulfilment_label' => 'mrc_fulfilment_label',
             'mrc_fulfilment_details' => 'mrc_fulfilment_details',
@@ -282,13 +301,17 @@ class MercatoOrderRepository extends Wire {
             if (!$product || !$product->id || $product->template->name !== 'mrc-product') {
                 continue;
             }
-            $purchasability = $this->commerce->getProductPurchasability($product, $quantity, 0, $excludeOrderId);
+            $variantId = (string) ($item['variant_id'] ?? '');
+            $purchasability = $this->commerce->getProductPurchasability($product, $quantity, 0, $excludeOrderId, $variantId !== '' ? $variantId : null);
             if (empty($purchasability['ok'])) {
                 throw new WireException(sprintf(
                     $this->commerce->_('"%s" cannot be purchased: %s'),
                     (string) $product->title,
                     (string) ($purchasability['first_error'] ?? $this->commerce->_('Product is not available.'))
                 ), 409);
+            }
+            if ($variantId !== '') {
+                continue;
             }
             if (!$product->hasField('mrc_stock')) {
                 continue;
@@ -360,9 +383,22 @@ class MercatoOrderRepository extends Wire {
     }
 
     public function getReservedQuantityForProduct(int $productId, int $excludeOrderId = 0): int {
+        return $this->getReservedQuantity($productId, null, $excludeOrderId);
+    }
+
+    public function getReservedQuantityForVariant(int $productId, string $variantId, int $excludeOrderId = 0): int {
+        $variantId = MercatoVariantDefinition::slug($variantId);
+        return $variantId === '' ? 0 : $this->getReservedQuantity($productId, $variantId, $excludeOrderId);
+    }
+
+    protected function getReservedQuantity(int $productId, ?string $variantId, int $excludeOrderId = 0): int {
         if ($productId <= 0) return 0;
         $product = $this->wire('pages')->get($productId);
-        if ($product && $product->id && $this->allowsOversell($product)) {
+        $resolvedVariant = $product && $product->id && $variantId !== null
+            ? $this->commerce->variantService()->resolve($product, $variantId, [], false)
+            : null;
+        $policy = $resolvedVariant ? (string) $resolvedVariant['stock_policy'] : ($product && $product->id ? $this->getProductStockPolicy($product) : 'deny');
+        if (in_array($policy, ['backorder', 'preorder'], true)) {
             return 0;
         }
 
@@ -384,7 +420,23 @@ class MercatoOrderRepository extends Wire {
             foreach ($items as $item) {
                 if (!is_array($item)) continue;
                 if ($this->getItemProductId($item) !== $productId) continue;
+                if ($variantId !== null && (string) ($item['variant_id'] ?? '') !== $variantId) continue;
                 $reserved += (int) ceil((float) ($item['quantity'] ?? 1));
+            }
+        }
+
+        if ((string) ($this->commerce->quote_inventory_policy ?? 'none') === 'on_acceptance') {
+            $quoteTemplate = $this->wire('sanitizer')->selectorValue((string) ($this->commerce->quote_template ?? 'mrc-quote'));
+            $quotes = $this->wire('pages')->find("template=$quoteTemplate, include=all, mrc_inventory_reserved=1");
+            foreach ($quotes as $quote) {
+                $until = strtotime((string) $quote->mrc_inventory_reserved_until);
+                if ($until !== false && $until < $now) continue;
+                $items = json_decode((string) $quote->mrc_items, true);
+                foreach (is_array($items) ? $items : [] as $item) {
+                    if (!is_array($item) || $this->getItemProductId($item) !== $productId) continue;
+                    if ($variantId !== null && (string) ($item['variant_id'] ?? '') !== $variantId) continue;
+                    $reserved += (int) ceil((float) ($item['quantity'] ?? 1));
+                }
             }
         }
 
@@ -544,6 +596,25 @@ class MercatoOrderRepository extends Wire {
                     continue;
                 }
 
+                $variantId = (string) ($item['variant_id'] ?? '');
+                if ($variantId !== '') {
+                    try {
+                        $stockResult = $this->commerce->variantService()->updateStock($product, $variantId, -$quantity);
+                        $movement = [
+                            'product_id' => (int) $product->id, 'title' => (string) $product->title,
+                            'variant_id' => $variantId, 'variant_label' => (string) ($item['variant_label'] ?? ''),
+                            'sku' => (string) ($item['sku'] ?? $stockResult['sku'] ?? ''), 'quantity' => $quantity,
+                            'before' => (int) $stockResult['before'], 'after' => (int) $stockResult['after'],
+                            'stock_policy' => (string) ($item['stock_policy'] ?? 'deny'),
+                        ];
+                        $adjusted[] = $movement;
+                        $this->recordInventoryMovement('sold', $order, $movement);
+                    } catch (WireException $e) {
+                        $errors[] = $e->getMessage();
+                    }
+                    continue;
+                }
+
                 $before = (int) $product->mrc_stock;
                 $allowsOversell = $this->allowsOversell($product);
                 if (!$allowsOversell && $before < $quantity) {
@@ -617,8 +688,20 @@ class MercatoOrderRepository extends Wire {
                 $errors[] = sprintf('Product %s cannot be restored.', (string) ($item['title'] ?? ''));
                 continue;
             }
-            $before = (int) $product->mrc_stock;
             $quantity = (int) ($item['quantity'] ?? 0);
+            $variantId = (string) ($item['variant_id'] ?? '');
+            if ($variantId !== '') {
+                try {
+                    $stockResult = $this->commerce->variantService()->updateStock($product, $variantId, $quantity);
+                    $movement = array_merge($item, ['before' => (int) $stockResult['before'], 'after' => (int) $stockResult['after']]);
+                    $restored[] = $movement;
+                    $this->recordInventoryMovement('refund_restored', $order, $movement);
+                } catch (WireException $e) {
+                    $errors[] = $e->getMessage();
+                }
+                continue;
+            }
+            $before = (int) $product->mrc_stock;
             $product->of(false);
             $product->mrc_stock = $before + $quantity;
             $this->wire('pages')->save($product);
@@ -685,6 +768,10 @@ class MercatoOrderRepository extends Wire {
                 'product_id' => $productId,
                 'title' => (string) ($item['title'] ?? $item['name'] ?? ''),
                 'quantity' => $quantity,
+                'variant_id' => (string) ($item['variant_id'] ?? ''),
+                'variant_label' => (string) ($item['variant_label'] ?? ''),
+                'sku' => (string) ($item['sku'] ?? ''),
+                'stock_policy' => (string) ($item['stock_policy'] ?? ''),
             ];
         }
 
@@ -695,7 +782,14 @@ class MercatoOrderRepository extends Wire {
         $result = [];
         foreach ($this->getOrderInventoryItems($order) as $item) {
             $product = $this->wire('pages')->get((int) ($item['product_id'] ?? 0));
-            if (!$product || !$product->id || $this->allowsOversell($product)) {
+            $variantId = (string) ($item['variant_id'] ?? '');
+            $variant = $product && $product->id && $variantId !== ''
+                ? $this->commerce->variantService()->resolve($product, $variantId, [], false)
+                : null;
+            $allowsOversell = $variant
+                ? in_array((string) $variant['stock_policy'], ['backorder', 'preorder'], true)
+                : ($product && $product->id && $this->allowsOversell($product));
+            if (!$product || !$product->id || $allowsOversell) {
                 continue;
             }
             $result[] = $item;
@@ -736,6 +830,9 @@ class MercatoOrderRepository extends Wire {
             'invoice' => ($order && $order->hasField('mrc_invoice_number')) ? (string) $order->mrc_invoice_number : '',
             'product_id' => (int) ($item['product_id'] ?? 0),
             'title' => (string) ($item['title'] ?? ''),
+            'variant_id' => (string) ($item['variant_id'] ?? ''),
+            'variant_label' => (string) ($item['variant_label'] ?? ''),
+            'sku' => (string) ($item['sku'] ?? ''),
             'quantity' => (int) ($item['quantity'] ?? 0),
             'before' => array_key_exists('before', $item) ? (int) $item['before'] : null,
             'after' => array_key_exists('after', $item) ? (int) $item['after'] : null,

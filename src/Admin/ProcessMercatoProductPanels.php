@@ -201,7 +201,7 @@ trait ProcessMercatoProductPanels {
         return $out;
     }
 
-    protected function renderProductDetail(Page $product, Mercato $commerce, $orders, array $adjustmentResult = [], array $quickUpdateResult = [], array $duplicateResult = [], bool $canViewOrders = false): string {
+    protected function renderProductDetail(Page $product, Mercato $commerce, $orders, array $adjustmentResult = [], array $quickUpdateResult = [], array $duplicateResult = [], bool $canViewOrders = false, array $variantResult = []): string {
         $stock = $product->hasField('mrc_stock') ? (int) $product->mrc_stock : 0;
         $stockState = $this->getProductStockState($product, $commerce);
         $shipping = $product->hasField('mrc_shipping_price') ? (float) $product->mrc_shipping_price : 0.0;
@@ -253,6 +253,12 @@ trait ProcessMercatoProductPanels {
             }
             $out .= '</div>';
         }
+        if ($variantResult) {
+            $class = !empty($variantResult['errors']) ? 'uk-alert-danger' : 'uk-alert-success';
+            $out .= '<div class="uk-alert ' . $class . '"><p><strong>' . $this->e((string) ($variantResult['summary'] ?? '')) . '</strong></p>';
+            foreach ((array) ($variantResult['errors'] ?? []) as $error) $out .= '<p>' . $this->e((string) $error) . '</p>';
+            $out .= '</div>';
+        }
 
         $out .= '<div class="mrc-product-detail-grid">';
         $out .= '<div class="mrc-product-detail-media">';
@@ -281,6 +287,8 @@ trait ProcessMercatoProductPanels {
         $out .= '</div></div>';
         $out .= '</section>';
 
+        $out .= $this->renderProductVariantManager($product, $commerce);
+
         $out .= '<div class="pw-wrap mrc-admin-stats uk-child-width-1-4@l uk-child-width-1-2@s" uk-grid>';
         foreach ([
             [$this->_('Orders'), (string) $metrics['orders'], $canViewOrders ? $this->_('Orders containing this product.') : $this->_('Requires order view permission.')],
@@ -298,6 +306,22 @@ trait ProcessMercatoProductPanels {
 
         $out .= $this->renderProductOrders($orders, $product, $commerce, $canViewOrders);
         $out .= $this->renderProductActivity($events);
+        return $out;
+    }
+
+    protected function renderProductVariantManager(Page $product, Mercato $commerce): string {
+        $definition = $commerce->variantService()->getDefinition($product);
+        $optionsJson = json_encode($definition['options'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]';
+        $variantsJson = json_encode($definition['variants'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]';
+        $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div>';
+        $out .= '<div class="ds-section-label">' . $this->e($this->_('Variants')) . '</div><h2 class="uk-h3">' . $this->e($this->_('Product options and combinations')) . '</h2>';
+        $out .= '<p class="uk-text-muted">' . $this->e($this->_('Define option groups, then list only valid purchasable combinations. Variant SKU, price, stock, policy, measurements, images, and status override the base product.')) . '</p></div></div>';
+        $out .= '<form method="post" action="' . $this->e($this->productDetailUrl($product)) . '" class="uk-form-stacked">' . $this->renderCsrfInput();
+        $out .= '<input type="hidden" name="mrc_save_variants" value="1"><input type="hidden" name="product_id" value="' . (int) $product->id . '">';
+        $out .= '<div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label><span class="uk-form-label">' . $this->e($this->_('Option groups JSON')) . '</span><textarea class="uk-textarea" rows="18" name="variant_options_json" spellcheck="false">' . $this->e($optionsJson) . '</textarea></label>';
+        $out .= '<label><span class="uk-form-label">' . $this->e($this->_('Valid variants JSON')) . '</span><textarea class="uk-textarea" rows="18" name="variants_json" spellcheck="false">' . $this->e($variantsJson) . '</textarea></label></div>';
+        $out .= '<p class="uk-text-meta">' . $this->e($this->_('Option ids and value ids are stable API keys. Existing products remain single-SKU when both arrays are empty.')) . '</p>';
+        $out .= '<button class="uk-button uk-button-primary" type="submit"><i class="fa fa-save uk-margin-small-right"></i>' . $this->e($this->_('Validate and save variants')) . '</button></form></section>';
         return $out;
     }
 
@@ -554,6 +578,15 @@ trait ProcessMercatoProductPanels {
     }
 
     protected function isLowStockProduct(Page $product, Mercato $commerce): bool {
+        $variants = $commerce->variantService()->getDefinition($product)['variants'];
+        if ($variants) {
+            foreach ($variants as $variant) {
+                if ($variant['status'] !== 'active') continue;
+                $threshold = (int) ($variant['low_stock_threshold'] ?: $this->getProductStockThreshold($product, $commerce));
+                if ($variant['stock_policy'] === 'deny' && $threshold > 0 && (int) $variant['stock'] <= $threshold) return true;
+            }
+            return false;
+        }
         if (!$product->hasField('mrc_stock')) {
             return false;
         }
@@ -627,14 +660,14 @@ trait ProcessMercatoProductPanels {
     }
 
     protected function renderProductImportPanel(array $result = []): string {
-        $sample = "title,name,sku,price,tax_rate,shipping_price,stock,low_stock_threshold,stock_policy,product_type,product_status,stripe_price_id,download_limit,download_expiry_days,status,collections,image_urls,description\n"
-            . "Sample Product,sample-product,MRC-SAMPLE,19.90,20,3.95,25,5,deny,physical,active,,0,0,published,Demo Essentials,/site/assets/import/sample.jpg,Short product description";
+        $sample = "title,name,sku,price,tax_rate,tax_code,shipping_price,stock,low_stock_threshold,stock_policy,product_type,product_status,stripe_price_id,download_limit,download_expiry_days,status,collections,image_urls,description,variant_options_json,variants_json\n"
+            . "Sample Product,sample-product,MRC-SAMPLE,19.90,20,general,3.95,25,5,deny,physical,active,,0,0,published,Demo Essentials,/site/assets/import/sample.jpg,Short product description,[],[]";
 
         $out = '<div class="mrc-admin-subsection">';
         $out .= '<div class="mrc-admin-panel-head">';
         $out .= '<div>';
         $out .= '<h3 class="uk-h4">' . $this->e($this->_('Import Products CSV')) . '</h3>';
-        $out .= '<p class="uk-text-muted">' . $this->e($this->_('Paste CSV with headers. Existing products are updated by SKU first, then by page name. No products are deleted. image_urls accepts local paths or URLs separated by |.')) . '</p>';
+        $out .= '<p class="uk-text-muted">' . $this->e($this->_('Paste CSV with headers. Existing products are updated by SKU first, then by page name. No products are deleted. image_urls accepts local paths or URLs separated by |; variant JSON columns round-trip the exact option and combination model.')) . '</p>';
         $out .= '</div>';
         $out .= '</div>';
 

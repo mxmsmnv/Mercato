@@ -24,6 +24,15 @@ function mercato_wire() {
 function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false): void {
     $wire = mercato_wire();
 
+    $runtime = $module->getRuntimeCompatibilityReport();
+    if (empty($runtime['ready'])) {
+        throw new \ProcessWire\WireException('Mercato runtime compatibility check failed: ' . implode(' ', (array) ($runtime['errors'] ?? [])));
+    }
+    if ($module->getInstalledSchemaVersion() > Mercato::SCHEMA_VERSION) {
+        throw new \ProcessWire\WireException('Mercato database schema is newer than this module build. Restore the matching pre-upgrade database backup before rolling code back.');
+    }
+    if ($module->getInstalledSchemaVersion() > 0 && $module->getInstalledSchemaVersion() < Mercato::SCHEMA_VERSION) $module->operationalService()->assertPreUpgradeBackup();
+
     mercato_store_schema_version($module);
     mercato_ensure_permissions();
     mercato_ensure_roles();
@@ -104,18 +113,51 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         ['name' => 'mrc_discount_total',           'type' => 'FieldtypeFloat',    'label' => 'Discount Total', 'extra' => ['precision' => 2]],
         ['name' => 'mrc_discount_details',         'type' => 'FieldtypeTextarea', 'label' => 'Discount Details (JSON)'],
         ['name' => 'mrc_total_amount',             'type' => 'FieldtypeFloat',    'label' => 'Total Amount', 'extra' => ['precision' => 2]],
+        ['name' => 'mrc_tax_amount',               'type' => 'FieldtypeFloat',    'label' => 'Tax Amount', 'extra' => ['precision' => 2]],
+        ['name' => 'mrc_tax_details',              'type' => 'FieldtypeTextarea', 'label' => 'Tax Calculation (JSON)'],
+        ['name' => 'mrc_tax_provider_reference',   'type' => 'FieldtypeText',     'label' => 'Tax Provider Reference'],
+        ['name' => 'mrc_tax_committed',            'type' => 'FieldtypeCheckbox', 'label' => 'Tax Committed'],
         ['name' => 'mrc_stripe_customer_id',       'type' => 'FieldtypeText',     'label' => 'Stripe Customer ID'],
+        ['name' => 'mrc_privacy_legal_hold',        'type' => 'FieldtypeCheckbox', 'label' => 'Privacy Legal Hold'],
+        ['name' => 'mrc_privacy_anonymized_date',   'type' => 'FieldtypeText',     'label' => 'Privacy Anonymized Date'],
+        ['name' => 'mrc_privacy_details',           'type' => 'FieldtypeTextarea', 'label' => 'Privacy Details (JSON)'],
         ['name' => 'mrc_stripe_payment_intent_id', 'type' => 'FieldtypeText',     'label' => 'Stripe PaymentIntent ID'],
         ['name' => 'mrc_mollie_payment_id',        'type' => 'FieldtypeText',     'label' => 'Mollie Payment ID'],
+        ['name' => 'mrc_customer_user_id',          'type' => 'FieldtypeInteger',  'label' => 'Customer User ID'],
+        ['name' => 'mrc_customer_claim_details',    'type' => 'FieldtypeTextarea', 'label' => 'Customer Claim Details (JSON)'],
+        ['name' => 'mrc_analytics_details',          'type' => 'FieldtypeTextarea', 'label' => 'Analytics Delivery State (JSON)'],
+        ['name' => 'mrc_api_checkout_id',            'type' => 'FieldtypeText',     'label' => 'Headless API Checkout ID'],
+        ['name' => 'mrc_api_order_id',               'type' => 'FieldtypeText',     'label' => 'Headless API Order ID'],
+        ['name' => 'mrc_api_details',                'type' => 'FieldtypeTextarea', 'label' => 'Headless API State (JSON)'],
+        // Quote request fields. Quote records reuse customer/item/total fields
+        // but remain a dedicated template outside order and revenue queries.
+        ['name' => 'mrc_quote_number',             'type' => 'FieldtypeText',     'label' => 'Quote Number'],
+        ['name' => 'mrc_quote_status',             'type' => 'FieldtypeText',     'label' => 'Quote Status'],
+        ['name' => 'mrc_quote_amount',             'type' => 'FieldtypeFloat',    'label' => 'Quoted Amount', 'extra' => ['precision' => 2]],
+        ['name' => 'mrc_quote_expires',            'type' => 'FieldtypeText',     'label' => 'Quote Expires'],
+        ['name' => 'mrc_quote_details',            'type' => 'FieldtypeTextarea', 'label' => 'Quote Details (JSON)'],
+        ['name' => 'mrc_quote_token_seed',         'type' => 'FieldtypeText',     'label' => 'Quote Token Seed'],
+        ['name' => 'mrc_quote_customer_user_id',   'type' => 'FieldtypeInteger',  'label' => 'Quote Customer User ID'],
+        // Customer-account fields are attached to ProcessWire's user template.
+        ['name' => 'mrc_customer_verified',         'type' => 'FieldtypeCheckbox', 'label' => 'Customer Email Verified'],
+        ['name' => 'mrc_customer_verification',     'type' => 'FieldtypeTextarea', 'label' => 'Customer Verification Token'],
+        ['name' => 'mrc_customer_password_reset',   'type' => 'FieldtypeTextarea', 'label' => 'Customer Password Reset Token'],
+        ['name' => 'mrc_customer_addresses',        'type' => 'FieldtypeTextarea', 'label' => 'Customer Addresses (JSON)'],
+        ['name' => 'mrc_customer_preferences',      'type' => 'FieldtypeTextarea', 'label' => 'Customer Preferences (JSON)'],
+        ['name' => 'mrc_customer_revision',         'type' => 'FieldtypeInteger',  'label' => 'Customer Profile Revision'],
         // Product fields
         ['name' => 'mrc_price',       'type' => 'FieldtypeFloat',   'label' => 'Price (incl. tax)', 'extra' => ['precision' => 2]],
         ['name' => 'mrc_tax_rate',    'type' => 'FieldtypeFloat',   'label' => 'Tax Rate (%)',      'extra' => ['precision' => 2]],
+        ['name' => 'mrc_tax_code',    'type' => 'FieldtypeText',    'label' => 'Product Tax Code'],
         ['name' => 'mrc_shipping_price', 'type' => 'FieldtypeFloat', 'label' => 'Shipping Price',    'extra' => ['precision' => 2]],
         ['name' => 'mrc_shipping_note', 'type' => 'FieldtypeText',   'label' => 'Shipping Note'],
         ['name' => 'mrc_images',      'type' => 'FieldtypeImage',   'label' => 'Product Images',    'extra' => ['extensions' => 'jpg jpeg png gif webp', 'maxFiles' => 0]],
         ['name' => 'mrc_sku',         'type' => 'FieldtypeText',    'label' => 'SKU'],
         ['name' => 'mrc_product_type', 'type' => 'FieldtypeText',    'label' => 'Product Type'],
         ['name' => 'mrc_product_status', 'type' => 'FieldtypeText', 'label' => 'Product Status'],
+        ['name' => 'mrc_seo_title', 'type' => 'FieldtypeText', 'label' => 'SEO Title'],
+        ['name' => 'mrc_seo_description', 'type' => 'FieldtypeTextarea', 'label' => 'SEO Meta Description'],
+        ['name' => 'mrc_seo_robots', 'type' => 'FieldtypeText', 'label' => 'SEO Robots'],
         ['name' => 'mrc_stripe_price_id', 'type' => 'FieldtypeText', 'label' => 'Stripe Price ID'],
         ['name' => 'mrc_digital_files', 'type' => 'FieldtypeFile',   'label' => 'Digital Files', 'extra' => ['extensions' => 'pdf zip txt epub mp3 mp4 mov wav jpg jpeg png webp', 'maxFiles' => 0]],
         ['name' => 'mrc_download_limit', 'type' => 'FieldtypeInteger', 'label' => 'Download Limit'],
@@ -123,6 +165,8 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         ['name' => 'mrc_stock',       'type' => 'FieldtypeInteger', 'label' => 'Stock'],
         ['name' => 'mrc_low_stock_threshold', 'type' => 'FieldtypeInteger', 'label' => 'Low Stock Threshold'],
         ['name' => 'mrc_stock_policy', 'type' => 'FieldtypeText', 'label' => 'Stock Policy'],
+        ['name' => 'mrc_variant_options', 'type' => 'FieldtypeTextarea', 'label' => 'Variant Options (JSON)'],
+        ['name' => 'mrc_variants', 'type' => 'FieldtypeTextarea', 'label' => 'Variants (JSON)'],
         ['name' => 'mrc_collections', 'type' => 'FieldtypePage',    'label' => 'Collections'],
         ['name' => 'mrc_description', 'type' => 'FieldtypeTextarea','label' => 'Product Description'],
         // Discount fields
@@ -211,11 +255,14 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
             'mrc_inventory_reserved_until', 'mrc_inventory_adjusted',
             'mrc_inventory_refund_restored', 'mrc_inventory_details', 'mrc_fulfilment_status',
             'mrc_fulfilment_method', 'mrc_fulfilment_label', 'mrc_fulfilment_details',
+            'mrc_inventory_reserved', 'mrc_inventory_reserved_until',
             'mrc_fulfilment_tracking', 'mrc_fulfilment_tracking_url', 'mrc_fulfilment_notes',
             'mrc_fulfilled_date', 'mrc_currency',
             'mrc_stripe_customer_id', 'mrc_stripe_payment_intent_id', 'mrc_mollie_payment_id',
             'mrc_subtotal_amount', 'mrc_shipping_amount', 'mrc_discount_code',
             'mrc_discount_total', 'mrc_discount_details', 'mrc_total_amount',
+            'mrc_tax_amount', 'mrc_tax_details', 'mrc_tax_provider_reference', 'mrc_tax_committed',
+            'mrc_customer_user_id', 'mrc_customer_claim_details', 'mrc_analytics_details', 'mrc_api_checkout_id', 'mrc_api_order_id', 'mrc_api_details',
         ] as $fn) {
             $field = $wire->fields->get($fn);
             if ($field) $fg->add($field);
@@ -240,14 +287,83 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         }
     }
 
+    // Dedicated quote storage keeps requests out of order revenue, payment,
+    // inventory reservation, and fulfilment selectors.
+    if (!$wire->templates->get('mrc-quotes')) {
+        $fg = new \ProcessWire\Fieldgroup();
+        $fg->name = 'mrc-quotes';
+        $fg->add($wire->fields->get('title'));
+        $wire->fieldgroups->save($fg);
+
+        $t = new \ProcessWire\Template();
+        $t->name = 'mrc-quotes';
+        $t->fieldgroup = $fg;
+        $t->label = 'Mercato Quote Requests';
+        $t->filename = 'mrc-quotes.php';
+        $wire->templates->save($t);
+    }
+
+    if (!$wire->templates->get('mrc-quote')) {
+        $fg = new \ProcessWire\Fieldgroup();
+        $fg->name = 'mrc-quote';
+        foreach ([
+            'title', 'mrc_quote_number', 'mrc_quote_status', 'mrc_quote_amount',
+            'mrc_quote_expires', 'mrc_quote_details', 'mrc_quote_token_seed',
+            'mrc_quote_customer_user_id',
+            'mrc_first_name', 'mrc_last_name', 'mrc_email', 'mrc_phone',
+            'mrc_address', 'mrc_city', 'mrc_zip', 'mrc_country', 'mrc_notes',
+            'mrc_items', 'mrc_currency', 'mrc_subtotal_amount', 'mrc_shipping_amount',
+            'mrc_discount_code', 'mrc_discount_total', 'mrc_total_amount',
+            'mrc_fulfilment_method', 'mrc_fulfilment_label', 'mrc_fulfilment_details',
+        ] as $fn) {
+            $field = $wire->fields->get($fn);
+            if ($field) $fg->add($field);
+        }
+        $wire->fieldgroups->save($fg);
+
+        $t = new \ProcessWire\Template();
+        $t->name = 'mrc-quote';
+        $t->fieldgroup = $fg;
+        $t->label = 'Mercato Quote Request';
+        $t->noChildren = 1;
+        $t->noParents = -1;
+        $t->parentTemplates = [$wire->templates->get('mrc-quotes')];
+        $t->filename = 'mrc-quote.php';
+        $wire->templates->save($t);
+
+        $quotesTemplate = $wire->templates->get('mrc-quotes');
+        $quotesTemplate->childTemplates = [$wire->templates->get('mrc-quote')];
+        $wire->templates->save($quotesTemplate);
+    }
+
+    if (!$wire->templates->get('mrc-my-quotes')) {
+        $fg = new \ProcessWire\Fieldgroup();
+        $fg->name = 'mrc-my-quotes';
+        $fg->add($wire->fields->get('title'));
+        $wire->fieldgroups->save($fg);
+        $t = new \ProcessWire\Template();
+        $t->name = 'mrc-my-quotes';
+        $t->fieldgroup = $fg;
+        $t->label = 'Mercato Customer Quotes';
+        $t->noChildren = 1;
+        $t->filename = 'mrc-my-quotes.php';
+        $wire->templates->save($t);
+    }
+
+    if (!$wire->templates->get('mrc-account')) {
+        $fg = new \ProcessWire\Fieldgroup(); $fg->name = 'mrc-account'; $fg->add($wire->fields->get('title')); $wire->fieldgroups->save($fg);
+        $t = new \ProcessWire\Template(); $t->name = 'mrc-account'; $t->fieldgroup = $fg; $t->label = 'Mercato Customer Account'; $t->noChildren = 1; $t->filename = 'mrc-account.php'; $wire->templates->save($t);
+    }
+
     // mrc-product
     if (!$wire->templates->get('mrc-product')) {
         $fg = new \ProcessWire\Fieldgroup();
         $fg->name = 'mrc-product';
         foreach ([
-            'title', 'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_shipping_price',
+            'title', 'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
             'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_product_status', 'mrc_stripe_price_id',
-            'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_shipping_note', 'mrc_description',
+            'mrc_variant_options', 'mrc_variants',
+            'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
         ] as $fn) {
             $field = $wire->fields->get($fn);
             if ($field) $fg->add($field);
@@ -307,7 +423,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
     if (!$wire->templates->get('mrc-collection')) {
         $fg = new \ProcessWire\Fieldgroup();
         $fg->name = 'mrc-collection';
-        foreach (['title', 'mrc_description'] as $fn) {
+        foreach (['title', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots'] as $fn) {
             $field = $wire->fields->get($fn);
             if ($field) $fg->add($field);
         }
@@ -371,7 +487,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
     if (!$wire->templates->get('mrc-page')) {
         $fg = new \ProcessWire\Fieldgroup();
         $fg->name = 'mrc-page';
-        foreach (['title', 'mrc_description'] as $fn) {
+        foreach (['title', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots'] as $fn) {
             $field = $wire->fields->get($fn);
             if ($field) $fg->add($field);
         }
@@ -417,7 +533,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
     $orderTemplate = $wire->templates->get('mrc-order');
     if ($orderTemplate) {
         $added = false;
-        foreach (['mrc_billing_address', 'mrc_shipping_address', 'mrc_payment_status', 'mrc_mollie_payment_id', 'mrc_receipt_details', 'mrc_status_token_seed', 'mrc_subscription_id', 'mrc_subscription_status', 'mrc_subscription_current_period_end', 'mrc_subscription_cancel_at_period_end', 'mrc_subscription_canceled_at', 'mrc_subscription_cancel_details', 'mrc_subscription_details', 'mrc_subscription_renewal_details', 'mrc_stripe_customer_id', 'mrc_policy_accepted', 'mrc_policy_acceptance_details', 'mrc_confirmation_sent_date', 'mrc_confirmation_send_count', 'mrc_refunded_amount', 'mrc_refund_pending_amount', 'mrc_refunded_date', 'mrc_refund_details', 'mrc_download_details', 'mrc_subtotal_amount', 'mrc_shipping_amount', 'mrc_discount_code', 'mrc_discount_total', 'mrc_discount_details', 'mrc_total_amount', 'mrc_inventory_reserved', 'mrc_inventory_reserved_until', 'mrc_inventory_adjusted', 'mrc_inventory_refund_restored', 'mrc_inventory_details', 'mrc_fulfilment_status', 'mrc_fulfilment_method', 'mrc_fulfilment_label', 'mrc_fulfilment_details', 'mrc_fulfilment_tracking', 'mrc_fulfilment_tracking_url', 'mrc_fulfilment_notes', 'mrc_fulfilled_date'] as $fieldName) {
+        foreach (['mrc_billing_address', 'mrc_shipping_address', 'mrc_payment_status', 'mrc_mollie_payment_id', 'mrc_receipt_details', 'mrc_status_token_seed', 'mrc_subscription_id', 'mrc_subscription_status', 'mrc_subscription_current_period_end', 'mrc_subscription_cancel_at_period_end', 'mrc_subscription_canceled_at', 'mrc_subscription_cancel_details', 'mrc_subscription_details', 'mrc_subscription_renewal_details', 'mrc_stripe_customer_id', 'mrc_policy_accepted', 'mrc_policy_acceptance_details', 'mrc_confirmation_sent_date', 'mrc_confirmation_send_count', 'mrc_refunded_amount', 'mrc_refund_pending_amount', 'mrc_refunded_date', 'mrc_refund_details', 'mrc_download_details', 'mrc_subtotal_amount', 'mrc_shipping_amount', 'mrc_discount_code', 'mrc_discount_total', 'mrc_discount_details', 'mrc_total_amount', 'mrc_tax_amount', 'mrc_tax_details', 'mrc_tax_provider_reference', 'mrc_tax_committed', 'mrc_inventory_reserved', 'mrc_inventory_reserved_until', 'mrc_inventory_adjusted', 'mrc_inventory_refund_restored', 'mrc_inventory_details', 'mrc_fulfilment_status', 'mrc_fulfilment_method', 'mrc_fulfilment_label', 'mrc_fulfilment_details', 'mrc_fulfilment_tracking', 'mrc_fulfilment_tracking_url', 'mrc_fulfilment_notes', 'mrc_fulfilled_date', 'mrc_privacy_legal_hold', 'mrc_privacy_anonymized_date', 'mrc_privacy_details', 'mrc_customer_user_id', 'mrc_customer_claim_details', 'mrc_analytics_details', 'mrc_api_checkout_id', 'mrc_api_order_id', 'mrc_api_details'] as $fieldName) {
             if ($orderTemplate->fieldgroup->hasField($fieldName)) continue;
             $field = $wire->fields->get($fieldName);
             if ($field) {
@@ -430,13 +546,46 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         }
     }
 
+    $userTemplate = $wire->templates->get('user');
+    if ($userTemplate) {
+        $added = false;
+        foreach (['mrc_first_name', 'mrc_last_name', 'mrc_phone', 'mrc_customer_verified', 'mrc_customer_verification', 'mrc_customer_password_reset', 'mrc_customer_addresses', 'mrc_customer_preferences', 'mrc_customer_revision'] as $fieldName) {
+            if ($userTemplate->fieldgroup->hasField($fieldName)) continue; $field = $wire->fields->get($fieldName); if ($field) { $userTemplate->fieldgroup->add($field); $added = true; }
+        }
+        if ($added) $wire->fieldgroups->save($userTemplate->fieldgroup);
+    }
+
+    $quoteTemplate = $wire->templates->get('mrc-quote');
+    if ($quoteTemplate) {
+        $added = false;
+        foreach ([
+            'mrc_quote_number', 'mrc_quote_status', 'mrc_quote_amount', 'mrc_quote_expires',
+            'mrc_quote_details', 'mrc_quote_token_seed', 'mrc_first_name', 'mrc_last_name',
+            'mrc_quote_customer_user_id',
+            'mrc_email', 'mrc_phone', 'mrc_address', 'mrc_city', 'mrc_zip', 'mrc_country',
+            'mrc_notes', 'mrc_items', 'mrc_currency', 'mrc_subtotal_amount',
+            'mrc_shipping_amount', 'mrc_discount_code', 'mrc_discount_total',
+            'mrc_total_amount', 'mrc_fulfilment_method', 'mrc_fulfilment_label',
+            'mrc_fulfilment_details', 'mrc_inventory_reserved', 'mrc_inventory_reserved_until',
+        ] as $fieldName) {
+            if ($quoteTemplate->fieldgroup->hasField($fieldName)) continue;
+            $field = $wire->fields->get($fieldName);
+            if ($field) {
+                $quoteTemplate->fieldgroup->add($field);
+                $added = true;
+            }
+        }
+        if ($added) $wire->fieldgroups->save($quoteTemplate->fieldgroup);
+    }
+
     $productTemplate = $wire->templates->get('mrc-product');
     if ($productTemplate) {
         $added = false;
         foreach ([
-            'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_shipping_price',
+            'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
             'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_product_status', 'mrc_stripe_price_id',
-            'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_collections', 'mrc_shipping_note', 'mrc_description',
+            'mrc_variant_options', 'mrc_variants',
+            'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_collections', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
         ] as $fieldName) {
             if ($productTemplate->fieldgroup->hasField($fieldName)) continue;
             $field = $wire->fields->get($fieldName);
@@ -453,6 +602,12 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
             $wire->fieldgroups->save($productTemplate->fieldgroup);
         }
         mercato_configure_product_fieldgroup($productTemplate->fieldgroup);
+    }
+
+    foreach (['mrc-products', 'mrc-collections', 'mrc-collection', 'mrc-page'] as $seoTemplateName) {
+        $seoTemplate = $wire->templates->get($seoTemplateName); if (!$seoTemplate) continue; $added = false;
+        foreach (['mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots'] as $fieldName) { if ($seoTemplate->fieldgroup->hasField($fieldName)) continue; $field = $wire->fields->get($fieldName); if ($field) { $seoTemplate->fieldgroup->add($field); $added = true; } }
+        if ($added) $wire->fieldgroups->save($seoTemplate->fieldgroup);
     }
 
     $discountTemplate = $wire->templates->get('mrc-discount');
@@ -486,6 +641,12 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
     if (!$ordersName) $ordersName = 'orders';
 
     mercato_ensure_page_path($ordersName, 'mrc-orders', 'Orders', true);
+
+    $quotesName = trim((string) ($module->quotes_parent ?? 'quotes'), '/');
+    if (!$quotesName) $quotesName = 'quotes';
+    mercato_ensure_page_path($quotesName, 'mrc-quotes', 'Quote Requests', true);
+    mercato_ensure_page_path('my-quotes', 'mrc-my-quotes', 'My Quote Requests', false);
+    mercato_ensure_page_path('account', 'mrc-account', 'My Account', false);
 
     // Success page
     $successPagePath = (string) ($module->success_page ?? 'checkout/success');
@@ -526,11 +687,14 @@ function mercato_permission_definitions(): array {
         'mercato-edit-orders' => 'Edit Mercato orders and send order emails',
         'mercato-refund-orders' => 'Issue and reconcile Mercato refunds',
         'mercato-create-manual-orders' => 'Create Mercato manual orders',
+        'mercato-view-quotes' => 'View Mercato quote requests',
+        'mercato-manage-quotes' => 'Manage Mercato quote requests',
         'mercato-manage-products' => 'Manage Mercato products and product imports',
         'mercato-manage-inventory' => 'Adjust and view Mercato inventory',
         'mercato-fulfil-orders' => 'Update Mercato fulfilment and send fulfilment emails',
         'mercato-view-customers' => 'View Mercato customers',
         'mercato-manage-customers' => 'Manage Mercato customer notes',
+        'mercato-manage-privacy' => 'Review and execute Mercato privacy actions',
         'mercato-manage-recovery' => 'Manage Mercato abandoned checkout recovery',
         'mercato-view-reports' => 'View Mercato reports',
         'mercato-manage-discounts' => 'Manage Mercato discounts',
@@ -563,12 +727,18 @@ function mercato_ensure_permissions(): void {
 
 function mercato_role_definitions(): array {
     return [
+        'mercato-customer' => [
+            'title' => 'Mercato Customer',
+            'permissions' => [],
+        ],
         'mercato-support' => [
             'title' => 'Mercato Support',
             'permissions' => [
                 'mercato-admin',
                 'mercato-view-orders',
                 'mercato-edit-orders',
+                'mercato-view-quotes',
+                'mercato-manage-quotes',
                 'mercato-view-customers',
                 'mercato-manage-customers',
                 'mercato-manage-recovery',
@@ -809,13 +979,19 @@ function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void
         'mrc_stock',
         'mrc_low_stock_threshold',
         'mrc_stock_policy',
+        'mrc_variant_options',
+        'mrc_variants',
         'mrc_price',
         'mrc_tax_rate',
+        'mrc_tax_code',
         'mrc_shipping_price',
         'mrc_collections',
         'mrc_images',
         'mrc_description',
         'mrc_shipping_note',
+        'mrc_seo_title',
+        'mrc_seo_description',
+        'mrc_seo_robots',
     ];
 
     foreach ($orderedFields as $fieldName) {
@@ -848,13 +1024,19 @@ function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void
         'mrc_stock' => ['columnWidth' => 25],
         'mrc_low_stock_threshold' => ['columnWidth' => 25],
         'mrc_stock_policy' => ['columnWidth' => 25],
+        'mrc_variant_options' => ['columnWidth' => 50],
+        'mrc_variants' => ['columnWidth' => 50],
         'mrc_price' => ['columnWidth' => 25],
         'mrc_tax_rate' => ['columnWidth' => 25],
+        'mrc_tax_code' => ['columnWidth' => 25],
         'mrc_shipping_price' => ['columnWidth' => 50],
         'mrc_collections' => ['columnWidth' => 50],
         'mrc_images' => ['columnWidth' => 40],
         'mrc_description' => ['columnWidth' => 60],
         'mrc_shipping_note' => ['columnWidth' => 100],
+        'mrc_seo_title' => ['columnWidth' => 50],
+        'mrc_seo_description' => ['columnWidth' => 50],
+        'mrc_seo_robots' => ['columnWidth' => 50],
     ];
 
     foreach ($contexts as $fieldName => $settings) {
@@ -1051,6 +1233,16 @@ function mercato_ensure_demo_products(): void {
             'collections' => ['tableware', 'gifts'],
             'image_file' => 'stoneware-mug.jpg',
             'image_color' => [92, 55, 32],
+            'variant_options' => [
+                ['id' => 'size', 'label' => 'Size', 'values' => [['id' => '250ml', 'label' => '250 ml'], ['id' => '350ml', 'label' => '350 ml']]],
+                ['id' => 'glaze', 'label' => 'Glaze', 'values' => [['id' => 'oatmeal', 'label' => 'Oatmeal'], ['id' => 'charcoal', 'label' => 'Charcoal']]],
+                ['id' => 'material', 'label' => 'Material', 'values' => [['id' => 'stoneware', 'label' => 'Stoneware']]],
+            ],
+            'variants' => [
+                ['id' => '250-oatmeal-stoneware', 'options' => ['size' => '250ml', 'glaze' => 'oatmeal', 'material' => 'stoneware'], 'sku' => 'CER-MUG-250-OAT', 'price' => 28, 'stock' => 8, 'stock_policy' => 'deny', 'status' => 'active', 'weight_kg' => 0.34, 'length_cm' => 11, 'width_cm' => 9, 'height_cm' => 9, 'images' => ['stoneware-mug.jpg']],
+                ['id' => '350-oatmeal-stoneware', 'options' => ['size' => '350ml', 'glaze' => 'oatmeal', 'material' => 'stoneware'], 'sku' => 'CER-MUG-350-OAT', 'price' => 32, 'stock' => 6, 'stock_policy' => 'deny', 'status' => 'active', 'weight_kg' => 0.42, 'length_cm' => 12, 'width_cm' => 10, 'height_cm' => 10, 'images' => ['stoneware-mug.jpg']],
+                ['id' => '250-charcoal-stoneware', 'options' => ['size' => '250ml', 'glaze' => 'charcoal', 'material' => 'stoneware'], 'sku' => 'CER-MUG-250-CHR', 'price' => 29, 'stock' => 2, 'stock_policy' => 'deny', 'status' => 'active', 'weight_kg' => 0.34, 'length_cm' => 11, 'width_cm' => 9, 'height_cm' => 9, 'images' => ['stoneware-mug.jpg']],
+            ],
         ],
         [
             'name' => 'oatmeal-dinner-plate',
@@ -1182,6 +1374,8 @@ function mercato_ensure_demo_products(): void {
                 'mrc_product_type' => $data['product_type'],
                 'mrc_product_status' => 'active',
                 'mrc_description' => $data['description'],
+                'mrc_variant_options' => json_encode($data['variant_options'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                'mrc_variants' => json_encode($data['variants'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             ] as $fieldName => $value) {
                 if ($existing->hasField($fieldName)) {
                     $existing->set($fieldName, $value);
@@ -1208,6 +1402,8 @@ function mercato_ensure_demo_products(): void {
         if ($p->hasField('mrc_stock_policy')) $p->mrc_stock_policy = $data['stock_policy'];
         if ($p->hasField('mrc_product_type')) $p->mrc_product_type = $data['product_type'];
         if ($p->hasField('mrc_product_status')) $p->mrc_product_status = 'active';
+        if ($p->hasField('mrc_variant_options')) $p->mrc_variant_options = json_encode($data['variant_options'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($p->hasField('mrc_variants')) $p->mrc_variants = json_encode($data['variants'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $p->mrc_description = $data['description'];
         mercado_assign_demo_product_collections($p, (array) ($data['collections'] ?? []));
         $wire->pages->save($p);
@@ -1448,7 +1644,7 @@ function mercato_copy_template_files(Mercato $module, bool $overwrite = false): 
     $dstDir = $wire->config->paths->templates;
     $result = ['copied' => [], 'skipped' => []];
 
-    foreach (['home.php', 'mrc-storefront.php', 'mrc-home.php', 'mrc-order.php', 'mrc-orders.php', 'mrc-products.php', 'mrc-product.php', 'mrc-collections.php', 'mrc-collection.php', 'mrc-page.php', 'mrc-checkout.php', 'mrc-success.php'] as $f) {
+    foreach (['home.php', 'mrc-storefront.php', 'mrc-home.php', 'mrc-order.php', 'mrc-orders.php', 'mrc-quote.php', 'mrc-quotes.php', 'mrc-my-quotes.php', 'mrc-account.php', 'mrc-products.php', 'mrc-product.php', 'mrc-collections.php', 'mrc-collection.php', 'mrc-page.php', 'mrc-checkout.php', 'mrc-success.php'] as $f) {
         $src = $srcDir . $f;
         $dst = $dstDir . $f;
         if (!file_exists($src)) {

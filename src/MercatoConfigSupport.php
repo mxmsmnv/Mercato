@@ -327,6 +327,7 @@ trait MercatoConfigSupport {
             'every30Minutes' => 'Every 30 minutes',
             'everyHour' => 'Every hour',
             'every2Hours' => 'Every 2 hours',
+            'everyDay' => 'Every day',
         ];
     }
 

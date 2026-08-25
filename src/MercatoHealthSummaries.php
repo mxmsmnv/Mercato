@@ -219,7 +219,7 @@ trait MercatoHealthSummaries {
         }
 
         $events = [];
-        $allowed = ['shipping_email', 'pickup_ready_email', 'local_delivery_email', 'order_confirmation_email', 'payment_link_email', 'recovery_email', 'test_email'];
+        $allowed = array_merge(['shipping_email', 'payment_link_email', 'recovery_email', 'test_email'], array_map(static fn(string $name): string => $name . '_email', MercatoEmailEventCatalog::EVENTS), ['email_delivery_bounce', 'email_delivery_complaint', 'email_delivery_delivered', 'email_delivery_deferred']);
         foreach (array_reverse($lines) as $line) {
             $event = $this->parseJsonLogLine((string) $line);
             if (!$event || !in_array((string) ($event['event'] ?? ''), $allowed, true)) {

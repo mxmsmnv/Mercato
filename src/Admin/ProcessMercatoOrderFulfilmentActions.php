@@ -3,6 +3,34 @@ namespace ProcessWire;
 
 trait ProcessMercatoOrderFulfilmentActions {
 
+    protected function handlePrivacyRetention(Mercato $commerce): array {
+        $action = (string) $this->wire('input')->post->text('mrc_privacy_retention_action'); if ($action === '') return [];
+        if (!$this->hasCommercePermission(self::PERMISSION_MANAGE_PRIVACY)) return $this->permissionError(self::PERMISSION_MANAGE_PRIVACY, $this->_('Privacy retention was blocked.'));
+        if (!$this->validateCsrf()) return ['summary' => $this->_('Privacy retention was blocked.'), 'errors' => [$this->_('CSRF token validation failed.')]];
+        $dryRun = $action === 'dry_run'; if (!$dryRun && ((string) $this->wire('input')->post->text('privacy_retention_confirmed') !== '1' || $action !== 'run')) return ['summary' => $this->_('Privacy retention was blocked.'), 'errors' => [$this->_('Explicit execution confirmation is required.')]];
+        try { $report = $commerce->privacyService()->runRetention($dryRun, (int) ($commerce->privacy_retention_batch_limit ?? 100)); return ['summary' => $dryRun ? $this->_('Privacy retention dry-run completed.') : $this->_('Privacy retention completed.'), 'report' => $report, 'errors' => []]; } catch (\Throwable $e) { return ['summary' => $this->_('Privacy retention failed.'), 'errors' => [$e->getMessage()]]; }
+    }
+
+    protected function handleShippingProviderAction(Mercato $commerce, Page $order): array {
+        $action = trim((string) $this->wire('input')->post->text('mrc_shipping_provider_action'));
+        if ($action === '') return [];
+        if (!$this->hasCommercePermission(self::PERMISSION_FULFIL_ORDERS)) return $this->permissionError(self::PERMISSION_FULFIL_ORDERS, $this->_('Shipping provider action was blocked.'));
+        if (!$this->validateCsrf()) return ['summary' => $this->_('Shipping provider action was blocked.'), 'errors' => [$this->_('CSRF token validation failed.')]];
+        try {
+            $result = match ($action) {
+                'purchase_label' => $commerce->shippingProviderService()->purchaseLabel($order),
+                'void_label' => $commerce->shippingProviderService()->voidLabel($order),
+                'reprint_label' => $commerce->shippingProviderService()->getLabel($order),
+                default => throw new WireException($this->_('Unknown shipping provider action.')),
+            };
+            $summary = match ($action) { 'purchase_label' => $this->_('Shipping label purchased.'), 'void_label' => $this->_('Shipping label and shipment voided.'), default => $this->_('Shipping label is ready to reprint.') };
+            $this->wire('session')->message($summary);
+            return ['summary' => $summary, 'errors' => [], 'shipping_provider' => $result];
+        } catch (\Throwable $e) {
+            return ['summary' => $this->_('Shipping provider action failed.'), 'errors' => [$e->getMessage()]];
+        }
+    }
+
     protected function handleReservationCleanup(Mercato $commerce): array {
         if ((string) $this->wire('input')->post->text('mrc_cleanup_reservations') !== '1') {
             return [];
@@ -802,7 +830,6 @@ trait ProcessMercatoOrderFulfilmentActions {
             $notes = $this->appendFulfilmentNoteDetail($notes, $this->_('Proof of delivery'), $proof);
         } elseif ($method === MercatoFulfilmentMethodType::CARRIER_DELIVERY) {
             $notes = $this->appendFulfilmentNoteDetail($notes, $this->_('Carrier reference'), $carrierReference);
-            $notes = $this->appendFulfilmentNoteDetail($notes, $this->_('Label URL'), $labelUrl);
         }
 
         if (!$order->hasField('mrc_fulfilment_status')) {
@@ -825,6 +852,12 @@ trait ProcessMercatoOrderFulfilmentActions {
         }
         if ($order->hasField('mrc_fulfilment_notes')) {
             $order->mrc_fulfilment_notes = $notes;
+        }
+        if ($labelUrl !== '' && $order->hasField('mrc_fulfilment_details')) {
+            $privateDetails = json_decode((string) $order->mrc_fulfilment_details, true);
+            $privateDetails = is_array($privateDetails) ? $privateDetails : [];
+            $privateDetails['manual_label_url'] = $labelUrl;
+            $order->mrc_fulfilment_details = json_encode($privateDetails, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
         if ($order->hasField('mrc_fulfilled_date') && in_array($status, [MercatoFulfilmentStatus::FULFILLED, MercatoFulfilmentStatus::SHIPPED, MercatoFulfilmentStatus::COLLECTED, MercatoFulfilmentStatus::DELIVERED], true)) {
             $order->mrc_fulfilled_date = (string) $order->mrc_fulfilled_date ?: date('Y-m-d H:i:s');

@@ -480,7 +480,7 @@ trait ProcessMercatoQueries {
         }
         return [
             'event' => $event,
-            'status' => in_array($status, ['all', 'sent', 'failed'], true) ? $status : 'all',
+            'status' => in_array($status, ['all', 'sent', 'failed', 'retrying', 'skipped', 'bounce', 'complaint'], true) ? $status : 'all',
         ];
     }
 

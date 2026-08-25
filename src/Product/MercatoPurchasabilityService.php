@@ -13,14 +13,24 @@ final class MercatoPurchasabilityService extends Wire {
      * Admin/catalog UI may still display products that fail this check, but
      * public add-to-cart and payment creation should use this shared decision.
      */
-    public function evaluate(Page $product, int $requestedQuantity = 1, float $cartQuantity = 0.0, int $excludeOrderId = 0): array {
+    public function evaluate(Page $product, int $requestedQuantity = 1, float $cartQuantity = 0.0, int $excludeOrderId = 0, string|array|null $variantReference = null): array {
         $requestedQuantity = max(1, (int) ceil($requestedQuantity));
         $cartQuantity = max(0.0, $cartQuantity);
         $errors = [];
 
-        $stockPolicy = $product && $product->hasField('mrc_stock_policy')
+        $variantId = is_string($variantReference) ? $variantReference : '';
+        $variantSelection = is_array($variantReference) ? $variantReference : [];
+        $hasVariants = $product && $product->id ? $this->commerce->variantService()->hasVariants($product) : false;
+        $variant = $hasVariants ? $this->commerce->variantService()->resolve($product, $variantId, $variantSelection) : null;
+        if ($hasVariants && !$variant) {
+            $errors[] = $this->commerce->_('Choose an available product variant.');
+        }
+
+        $stockPolicy = $variant
+            ? (string) $variant['stock_policy']
+            : ($product && $product->hasField('mrc_stock_policy')
             ? strtolower(trim((string) $product->mrc_stock_policy))
-            : 'deny';
+            : 'deny');
         if (!in_array($stockPolicy, ['deny', 'backorder', 'preorder'], true)) {
             $stockPolicy = 'deny';
         }
@@ -38,13 +48,18 @@ final class MercatoPurchasabilityService extends Wire {
         }
         $purchasableType = in_array($productType, ['physical', 'digital', 'service'], true);
         $allowsOversell = in_array($stockPolicy, ['backorder', 'preorder'], true);
-        $stock = $product && $product->hasField('mrc_stock') ? (int) $product->mrc_stock : 0;
+        $stock = $variant ? (int) $variant['stock'] : ($product && $product->hasField('mrc_stock') ? (int) $product->mrc_stock : 0);
         $reservedQuantity = ($product && $product->id && !$allowsOversell)
-            ? $this->commerce->orderRepository()->getReservedQuantityForProduct((int) $product->id, $excludeOrderId)
+            ? ($variant
+                ? $this->commerce->orderRepository()->getReservedQuantityForVariant((int) $product->id, (string) $variant['id'], $excludeOrderId)
+                : $this->commerce->orderRepository()->getReservedQuantityForProduct((int) $product->id, $excludeOrderId))
             : 0;
         $availableStock = max(0, $stock - $reservedQuantity);
         $remainingStock = max(0, $availableStock - (int) ceil($cartQuantity));
-        $hasValidPrice = $product && $product->hasField('mrc_price') && (float) $product->mrc_price > 0;
+        $resolvedPrice = $variant
+            ? ($variant['price'] !== null ? (float) $variant['price'] : (float) $product->mrc_price + (float) $variant['price_adjustment'])
+            : ($product && $product->hasField('mrc_price') ? (float) $product->mrc_price : 0.0);
+        $hasValidPrice = $resolvedPrice > 0;
 
         if (!$product || !$product->id || !$product->template || $product->template->name !== 'mrc-product') {
             $errors[] = $this->commerce->_('Product is no longer available.');
@@ -90,6 +105,10 @@ final class MercatoPurchasabilityService extends Wire {
             'available_stock' => $availableStock,
             'remaining_stock' => $remainingStock,
             'stock_label' => $stockLabel,
+            'has_variants' => $hasVariants,
+            'variant' => $variant,
+            'variant_id' => (string) ($variant['id'] ?? ''),
+            'resolved_price' => round($resolvedPrice, 2),
         ];
     }
 }

@@ -88,20 +88,20 @@ final class MercatoShippingNotificationService extends Wire {
         $body = (string) $preview['body'];
 
         try {
-            $mail = wireMail();
-            $mail->to($recipient)
-                ->from($sender, trim((string) $this->commerce->notification_sender_name))
-                ->subject($subject)
-                ->body($body);
-            $replyTo = (string) $this->wire('sanitizer')->email((string) $this->commerce->notification_reply_to);
-            if ($replyTo !== '') {
-                $mail->header('Reply-To', $replyTo);
-            }
-            $sent = (int) $mail->send();
-            if ($sent < 1) {
-                return $this->record($order, $event, 'failed', 'WireMail did not report a sent message.', $recipient);
-            }
-            return $this->record($order, $event, 'sent', $successMessage, $recipient);
+            $emailEvent = match ($event) {
+                'shipping_email' => 'shipment_tracking',
+                'pickup_ready_email' => 'pickup_ready',
+                'local_delivery_email' => 'local_delivery',
+                default => throw new WireException('Unsupported fulfilment email event.'),
+            };
+            $result = $this->commerce->notificationDeliveryService()->deliver($emailEvent, $recipient, (array) $preview['values'], [
+                'order_id' => (int) $order->id,
+                'invoice' => (string) ($order->mrc_invoice_number ?: $order->title),
+                'business_event_id' => $event . '|' . (string) ($order->mrc_fulfilment_tracking ?? '') . '|' . (string) ($order->mrc_fulfilment_status ?? ''),
+                'log_event' => $event,
+            ], ['subject' => $subjectTemplate, 'text' => $bodyTemplate]);
+            if (($result['status'] ?? '') === 'sent') $result['message'] = $successMessage;
+            return $result;
         } catch (\Throwable $e) {
             return $this->record($order, $event, 'failed', $e->getMessage(), $recipient);
         }

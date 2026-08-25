@@ -5,6 +5,7 @@ trait MercatoStoreServices {
 
     public function setConfigData(array $data): void {
         $this->requireArchitectureClasses();
+        $productionActivationConfirmed = !empty($data['production_activation_confirmed']);
         $previousConfig = self::getDefaultConfig();
         foreach (array_keys($previousConfig) as $key) {
             $value = $this->get($key);
@@ -13,7 +14,7 @@ trait MercatoStoreServices {
             }
         }
         $data = array_merge(self::getDefaultConfig(), $data);
-        unset($data['mrc_run_installer'], $data['mrc_overwrite_template_files']);
+        unset($data['mrc_run_installer'], $data['mrc_overwrite_template_files'], $data['production_activation_confirmed']);
         $data['currency'] = MercatoCurrency::isIsoCode((string) ($data['currency'] ?? ''))
             ? MercatoCurrency::normalizeCode((string) $data['currency'])
             : self::getDefaultConfig()['currency'];
@@ -24,6 +25,12 @@ trait MercatoStoreServices {
             ? (string) $data['currency_symbol_position']
             : self::getDefaultConfig()['currency_symbol_position'];
         $data['invoice_prefix'] = self::normalizeInvoicePrefix($data['invoice_prefix'] ?? '');
+        $data['quotes_parent'] = self::normalizePagePathConfig($data['quotes_parent'] ?? 'quotes', 'quotes');
+        $data['quote_requests_enabled'] = !empty($data['quote_requests_enabled']);
+        $data['quote_expiry_days'] = max(1, min(365, (int) ($data['quote_expiry_days'] ?? 30)));
+        $data['quote_inventory_policy'] = in_array((string) ($data['quote_inventory_policy'] ?? 'none'), ['none', 'on_acceptance'], true)
+            ? (string) $data['quote_inventory_policy']
+            : 'none';
         $data['success_page'] = self::normalizePagePathConfig($data['success_page'], self::getDefaultConfig()['success_page']);
         $data['cancel_page'] = self::normalizePagePathConfig($data['cancel_page'], self::getDefaultConfig()['cancel_page']);
         $data['policy_pages'] = self::normalizePagePathListConfig($data['policy_pages'] ?? []);
@@ -43,8 +50,49 @@ trait MercatoStoreServices {
         $data['cart_retention_days'] = self::normalizeRetentionDays($data['cart_retention_days'] ?? 30, 30, 1);
         $data['draft_order_retention_days'] = self::normalizeRetentionDays($data['draft_order_retention_days'] ?? 14, 14, 1);
         $data['webhook_payload_retention_days'] = self::normalizeRetentionDays($data['webhook_payload_retention_days'] ?? 90, 90, 1);
+        $data['gateway_timeout_seconds'] = max(3, min(120, (int) ($data['gateway_timeout_seconds'] ?? 30)));
+        $data['gateway_retries'] = max(0, min(3, (int) ($data['gateway_retries'] ?? 2)));
         $data['customer_data_retention_days'] = self::normalizeRetentionDays($data['customer_data_retention_days'] ?? 0, 0, 0);
+        $data['email_log_retention_days'] = self::normalizeRetentionDays($data['email_log_retention_days'] ?? 180, 180, 1);
+        $data['payment_attempt_retention_days'] = self::normalizeRetentionDays($data['payment_attempt_retention_days'] ?? 180, 180, 1);
+        $data['operational_log_retention_days'] = self::normalizeRetentionDays($data['operational_log_retention_days'] ?? 365, 365, 1);
+        $data['provider_reference_retention_days'] = self::normalizeRetentionDays($data['provider_reference_retention_days'] ?? 0, 0, 0);
+        $data['signed_link_retention_days'] = self::normalizeRetentionDays($data['signed_link_retention_days'] ?? 3650, 3650, 0);
+        $data['privacy_retention_schedule'] = self::normalizeReservationCleanupSchedule($data['privacy_retention_schedule'] ?? 'everyDay');
+        $data['privacy_retention_batch_limit'] = max(1, min(500, (int) ($data['privacy_retention_batch_limit'] ?? 100)));
+        $data['privacy_policy_version'] = substr(preg_replace('/[^a-zA-Z0-9._-]+/', '', trim((string) ($data['privacy_policy_version'] ?? '1.0'))) ?: '1.0', 0, 40);
+        $data['privacy_backup_retention_note'] = trim((string) ($data['privacy_backup_retention_note'] ?? ''));
+        $data['customer_accounts_mode'] = MercatoAccountPolicy::normalizeMode($data['customer_accounts_mode'] ?? 'disabled');
+        $data['account_claim_guest_orders'] = !empty($data['account_claim_guest_orders']);
+        $data['account_token_ttl_minutes'] = max(5, min(1440, (int) ($data['account_token_ttl_minutes'] ?? 60)));
+        $data['account_login_attempts'] = max(1, min(20, (int) ($data['account_login_attempts'] ?? 5)));
+        $data['account_login_window_seconds'] = max(60, min(86400, (int) ($data['account_login_window_seconds'] ?? 900)));
+        $data['account_orders_per_page'] = max(1, min(100, (int) ($data['account_orders_per_page'] ?? 10)));
+        $data['checkout_enabled'] = !empty($data['checkout_enabled']);
+        $data['checkout_maintenance_message'] = substr(trim((string) ($data['checkout_maintenance_message'] ?? '')), 0, 500);
+        $data['preupgrade_backup_required'] = !empty($data['preupgrade_backup_required']);
+        $data['backup_max_age_hours'] = max(1, min(8760, (int) ($data['backup_max_age_hours'] ?? 24)));
+        $data['backup_evidence'] = trim((string) ($data['backup_evidence'] ?? ''));
+        $data['health_check_token'] = trim((string) ($data['health_check_token'] ?? ''));
+        $data['health_storage_min_bytes'] = max(1048576, (int) ($data['health_storage_min_bytes'] ?? 104857600));
+        $data['health_cron_max_age_seconds'] = max(3600, min(2592000, (int) ($data['health_cron_max_age_seconds'] ?? 172800)));
+        $data['analytics_enabled'] = !empty($data['analytics_enabled']);
+        $data['analytics_adapters'] = array_values(array_unique(array_filter(array_map(static fn($value) => preg_replace('/[^a-z0-9_-]+/', '', strtolower((string) $value)), (array) ($data['analytics_adapters'] ?? ['data_layer', 'first_party'])))));
+        $data['analytics_default_consent'] = (string) ($data['analytics_default_consent'] ?? 'denied') === 'granted' ? 'granted' : 'denied';
+        $data['analytics_order_identifier'] = in_array((string) ($data['analytics_order_identifier'] ?? 'invoice'), ['invoice', 'hash', 'omit'], true) ? (string) $data['analytics_order_identifier'] : 'invoice';
+        $data['analytics_account_identifier'] = (string) ($data['analytics_account_identifier'] ?? 'omit') === 'hash' ? 'hash' : 'omit';
         $data['low_stock_threshold'] = self::normalizeLowStockThreshold($data['low_stock_threshold'] ?? 5);
+        $data['notification_transport'] = preg_match('/^[a-z0-9_-]+$/', (string) ($data['notification_transport'] ?? 'wiremail')) ? (string) $data['notification_transport'] : 'wiremail';
+        $data['notification_locale'] = MercatoEmailTemplateRenderer::normalizeLocale((string) ($data['notification_locale'] ?? 'en'));
+        $data['notification_brand_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', trim((string) ($data['notification_brand_color'] ?? ''))) ? strtolower(trim((string) $data['notification_brand_color'])) : '#6b4f3a';
+        $logoUrl = trim((string) ($data['notification_logo_url'] ?? ''));
+        $data['notification_logo_url'] = $logoUrl !== '' && filter_var($logoUrl, FILTER_VALIDATE_URL) && str_starts_with(strtolower($logoUrl), 'https://') ? $logoUrl : '';
+        $data['notification_retries'] = max(0, min(5, (int) ($data['notification_retries'] ?? 2)));
+        $data['enabled_notification_events'] = array_values(array_intersect(MercatoEmailEventCatalog::EVENTS, array_map('strval', (array) ($data['enabled_notification_events'] ?? MercatoEmailEventCatalog::EVENTS))));
+        $data['seo_site_name'] = MercatoSeoRules::safeText((string) ($data['seo_site_name'] ?? 'Mercato Store'), 80);
+        $data['seo_default_description'] = MercatoSeoRules::safeText((string) ($data['seo_default_description'] ?? ''), 160);
+        $data['seo_default_robots'] = MercatoSeoRules::normalizeRobots((string) ($data['seo_default_robots'] ?? 'index,follow,max-image-preview:large'));
+        foreach (['seo_social_image_url', 'seo_organization_logo_url'] as $seoUrlKey) { $value = trim((string) ($data[$seoUrlKey] ?? '')); $data[$seoUrlKey] = $value !== '' && filter_var($value, FILTER_VALIDATE_URL) && str_starts_with(strtolower($value), 'https://') ? $value : ''; }
         $data['free_shipping_threshold'] = self::normalizeMoneyAmount($data['free_shipping_threshold'] ?? 0);
         $data['shipping_dimensions_enabled'] = !empty($data['shipping_dimensions_enabled']);
         $data['shipping_dimensions_field'] = self::normalizeShippingDimensionsField($data['shipping_dimensions_field'] ?? 'mrc_dimensions');
@@ -52,12 +100,31 @@ trait MercatoStoreServices {
         $data['shipping_dimensional_divisor'] = max(1.0, min(1000000.0, (float) ($data['shipping_dimensional_divisor'] ?? 5000)));
         $data['shipping_missing_measurements'] = self::normalizeMissingMeasurementsPolicy($data['shipping_missing_measurements'] ?? 'flat');
         $data['shipping_rate_table'] = trim((string) ($data['shipping_rate_table'] ?? ''));
+        $data['shipping_provider'] = trim((string) ($data['shipping_provider'] ?? 'manual')) ?: 'manual';
+        $data['shipping_provider_failure_policy'] = in_array((string) ($data['shipping_provider_failure_policy'] ?? 'manual_fallback'), ['fail_closed', 'manual_fallback'], true) ? (string) $data['shipping_provider_failure_policy'] : 'manual_fallback';
+        $data['shipping_provider_timeout_seconds'] = max(1, min(30, (int) ($data['shipping_provider_timeout_seconds'] ?? 5)));
+        $data['shipping_provider_retries'] = max(0, min(3, (int) ($data['shipping_provider_retries'] ?? 1)));
+        $data['shipping_provider_quote_ttl_seconds'] = max(60, min(86400, (int) ($data['shipping_provider_quote_ttl_seconds'] ?? 900)));
+        $data['shipping_provider_origin'] = trim((string) ($data['shipping_provider_origin'] ?? ''));
+        $data['shipping_provider_service_map'] = trim((string) ($data['shipping_provider_service_map'] ?? ''));
+        $data['shipping_provider_handling_fixed'] = self::normalizeMoneyAmount($data['shipping_provider_handling_fixed'] ?? 0);
+        $data['shipping_provider_handling_percent'] = max(-100, min(1000, (float) ($data['shipping_provider_handling_percent'] ?? 0)));
+        $data['shipping_provider_allowed_regions'] = trim((string) ($data['shipping_provider_allowed_regions'] ?? ''));
+        $data['shipping_provider_package_mode'] = in_array((string) ($data['shipping_provider_package_mode'] ?? 'combined'), ['combined', 'per_item'], true) ? (string) $data['shipping_provider_package_mode'] : 'combined';
+        $data['shipping_provider_include_manual_rates'] = !empty($data['shipping_provider_include_manual_rates']);
+        $data['shipping_provider_webhook_secret'] = trim((string) ($data['shipping_provider_webhook_secret'] ?? ''));
         $data['default_tax_rate'] = self::normalizeTaxRate($data['default_tax_rate'] ?? 20);
         $data['tax_display_mode'] = self::normalizeTaxDisplayMode($data['tax_display_mode'] ?? 'included');
         $data['tax_label'] = self::normalizeTaxLabel($data['tax_label'] ?? 'VAT');
         $data['tax_rounding_mode'] = self::normalizeTaxRoundingMode($data['tax_rounding_mode'] ?? 'line');
         $data['tax_shipping'] = !empty($data['tax_shipping']);
         $data['shipping_tax_rate'] = self::normalizeTaxRate($data['shipping_tax_rate'] ?? 20);
+        $data['tax_provider'] = trim((string) ($data['tax_provider'] ?? 'manual')) ?: 'manual';
+        $data['tax_provider_failure_policy'] = in_array((string) ($data['tax_provider_failure_policy'] ?? 'fail_closed'), ['fail_closed', 'manual_fallback', 'zero_tax'], true) ? (string) $data['tax_provider_failure_policy'] : 'fail_closed';
+        $data['tax_provider_timeout_seconds'] = max(1, min(30, (int) ($data['tax_provider_timeout_seconds'] ?? 5)));
+        $data['tax_provider_retries'] = max(0, min(3, (int) ($data['tax_provider_retries'] ?? 1)));
+        $data['tax_registrations'] = trim((string) ($data['tax_registrations'] ?? ''));
+        $data['tax_nexus_regions'] = trim((string) ($data['tax_nexus_regions'] ?? ''));
         $data['allowed_delivery_countries'] = self::normalizeCountryCodes($data['allowed_delivery_countries'] ?? '');
         $data['delivery_regions'] = self::normalizeDeliveryRegions($data['delivery_regions'] ?? '');
         $data['delivery_windows'] = self::normalizeDeliveryWindows($data['delivery_windows'] ?? '');
@@ -71,6 +138,11 @@ trait MercatoStoreServices {
         $data['recovery_suppressed_emails'] = self::normalizeRecoverySuppressedEmails($data['recovery_suppressed_emails'] ?? '');
         $data['receipt_template_file'] = self::normalizeReceiptTemplateFile($data['receipt_template_file'] ?? '');
         $data['receipt_pdf_url_template'] = self::normalizeReceiptPdfUrlTemplate($data['receipt_pdf_url_template'] ?? '');
+        if (empty($previousConfig['production']) && !empty($data['production'])) {
+            if (!$productionActivationConfirmed) throw new WireException($this->_('Confirm the production activation checklist before enabling production mode.'));
+            $productionErrors = MercatoProductionGuard::validate($data, $this->getHttpRoot());
+            if ($productionErrors) throw new WireException($this->_('Production activation blocked: ') . implode(' ', $productionErrors));
+        }
         $this->recordSettingsAuditEvents($previousConfig, $data);
         $this->setArray($data);
     }
@@ -78,6 +150,72 @@ trait MercatoStoreServices {
     public function formatInvoiceNumber(int $sequence): string {
         $prefix = self::normalizeInvoicePrefix($this->invoice_prefix ?? '');
         return $prefix . str_pad((string) max(0, $sequence), 5, '0', STR_PAD_LEFT);
+    }
+
+    public function ___emailTransport(MercatoEmailTransportInterface $default): MercatoEmailTransportInterface {
+        return $default;
+    }
+
+    public function notificationDeliveryService(): MercatoEmailDeliveryService {
+        if (!$this->emailDeliveryService) {
+            $transport = $this->emailTransport(new MercatoWireMailTransport());
+            $this->emailDeliveryService = new MercatoEmailDeliveryService($this, $transport);
+            $this->emailDeliveryService->setWire($this->wire());
+        }
+        return $this->emailDeliveryService;
+    }
+
+    public function emailWebhookService(): MercatoEmailWebhookService {
+        if (!$this->emailWebhookService) {
+            $this->emailWebhookService = new MercatoEmailWebhookService($this);
+            $this->emailWebhookService->setWire($this->wire());
+        }
+        return $this->emailWebhookService;
+    }
+
+    public function seoService(): MercatoSeoService {
+        if (!$this->seoService) { $this->seoService = new MercatoSeoService($this); $this->seoService->setWire($this->wire()); }
+        return $this->seoService;
+    }
+
+    public function privacyService(): MercatoPrivacyService {
+        if (!$this->privacyService) { $this->privacyService = new MercatoPrivacyService($this); $this->privacyService->setWire($this->wire()); }
+        return $this->privacyService;
+    }
+
+    public function customerAccountService(): MercatoCustomerAccountService {
+        if (!$this->customerAccountService) { $this->customerAccountService = new MercatoCustomerAccountService($this); $this->customerAccountService->setWire($this->wire()); }
+        return $this->customerAccountService;
+    }
+
+    public function getRuntimeCompatibilityReport(): array {
+        return MercatoRuntimeCompatibility::report($this->getEnabledPaymentMethods(), (string) ($this->wire('config')->version ?? ''));
+    }
+
+    public function operationalService(): MercatoOperationalService {
+        if (!$this->operationalService) { $this->operationalService = new MercatoOperationalService($this); $this->operationalService->setWire($this->wire()); }
+        return $this->operationalService;
+    }
+
+    public function analyticsService(): MercatoAnalyticsService {
+        if (!$this->analyticsService) { $this->analyticsService = new MercatoAnalyticsService($this); $this->analyticsService->setWire($this->wire()); }
+        return $this->analyticsService;
+    }
+
+    public function setAnalyticsConsent(array $categories): array { return $this->analyticsService()->setConsent($categories); }
+    public function ___analyticsAdapters(array $adapters): array { return $adapters; }
+
+    public function ___backupStatus(array $status): array { return $status; }
+
+    public function ___customerAccountRegistrationData(array $profile, string $email): array { return $profile; }
+    public function ___customerAccountCreated(User $user): void {}
+    public function ___customerAccountVerified(User $user): void {}
+    public function ___customerAccountProfileUpdated(User $user, array $profile): void {}
+    public function ___customerAccountClaimed(User $user, Page $order): void {}
+
+    public function areOrderSignedLinksExpired(Page $order, ?int $now = null): bool {
+        $days = max(0, (int) ($this->signed_link_retention_days ?? 3650));
+        return $days > 0 && (int) $order->created > 0 && (int) $order->created <= ($now ?? time()) - ($days * 86400);
     }
 
     public function ___deprecationNotices(array $notices): array {
@@ -130,7 +268,22 @@ trait MercatoStoreServices {
         return new MercatoProductList($data);
     }
 
+    public function variantService(): MercatoVariantService {
+        $this->requireArchitectureClasses();
+        $service = new MercatoVariantService($this);
+        $service->setWire($this->wire());
+        return $service;
+    }
+
     public function getHeadlessCheckoutQuote(array $items, array $customerData = [], array $options = []): array {
+        foreach ($items as $key => $item) {
+            if (!is_array($item)) continue;
+            $reference = $item['product_id'] ?? $item['id'] ?? '';
+            $product = $reference !== '' ? $this->wire('pages')->get($reference) : null;
+            if ($product && $product->id && $product->template && $product->template->name === 'mrc-product') {
+                $items[$key] = $this->variantService()->hydrateItem($product, $item);
+            }
+        }
         $cart = $this->productList($items);
         $discountCode = trim((string) ($options['discount_code'] ?? ''));
         $email = (string) ($customerData['email'] ?? $options['email'] ?? '');
@@ -148,7 +301,7 @@ trait MercatoStoreServices {
             if (!is_array($method)) {
                 continue;
             }
-            if ($selectedType !== '' && (string) ($method['type'] ?? '') === $selectedType) {
+            if ($selectedType !== '' && (string) ($method['selection_key'] ?? $method['type'] ?? '') === $selectedType) {
                 $selected = $method;
                 break;
             }
@@ -164,7 +317,11 @@ trait MercatoStoreServices {
         $shipping = round(max(0.0, (float) ($selected['amount'] ?? 0)), 2);
         $discount = $this->discountService()->applyFinalShippingAmount($discount, $shipping);
         $discountAmount = round(max(0.0, (float) ($discount['amount'] ?? 0)), 2);
-        $total = round(max(0.0, $subtotal + $shipping - $discountAmount), 2);
+        $taxQuote = $this->taxService()->estimate($cart, $customerData, $selected, $discount);
+        $taxAmount = round(max(0.0, (float) ($taxQuote['total_tax'] ?? 0)), 2);
+        $taxAddedToTotal = (string) ($taxQuote['provider'] ?? 'manual') !== 'manual'
+            && (string) ($taxQuote['display_mode'] ?? 'included') === 'excluded';
+        $total = round(max(0.0, $subtotal + $shipping - $discountAmount + ($taxAddedToTotal ? $taxAmount : 0.0)), 2);
 
         $quote = [
             'items' => $cart->toArray(),
@@ -173,10 +330,12 @@ trait MercatoStoreServices {
             'subtotal' => $subtotal,
             'shipping' => $shipping,
             'discount' => $discountAmount,
+            'tax' => $taxAmount,
+            'tax_quote' => $taxQuote,
             'total' => $total,
             'discount_code' => (string) ($discount['code'] ?? ''),
             'discount_valid' => !empty($discount['valid']),
-            'fulfilment_method' => (string) ($selected['type'] ?? ''),
+            'fulfilment_method' => (string) ($selected['selection_key'] ?? $selected['type'] ?? ''),
             'fulfilment_label' => (string) ($selected['label'] ?? ''),
             'fulfilment_methods' => $methods,
             'requires_payment' => $total > 0,
@@ -188,6 +347,11 @@ trait MercatoStoreServices {
             'options' => $options,
         ]);
         return is_array($hooked) ? $hooked + $quote : $quote;
+    }
+
+    public function headlessApiService(): MercatoHeadlessApiService {
+        $this->requireArchitectureClasses();
+        $service = new MercatoHeadlessApiService($this); $service->setWire($this->wire()); return $service;
     }
 
     public function createProductBundleItem(array $bundle, array $components = [], array $context = []): array {
@@ -337,6 +501,10 @@ trait MercatoStoreServices {
     }
 
     public function getReceiptTaxRates(Page $order, array $items, float $shippingAmount = 0.0): array {
+        $stored = $this->taxService()->getStoredBreakdown($order);
+        if ($stored) {
+            return $stored;
+        }
         if ($order->hasField('mrc_receipt_details')) {
             $decoded = json_decode((string) $order->mrc_receipt_details, true);
             $taxBreakdown = is_array($decoded) ? ($decoded['tax_breakdown'] ?? null) : null;
@@ -510,6 +678,24 @@ trait MercatoStoreServices {
         return $this->paymentService;
     }
 
+    public function refundService(): MercatoRefundService {
+        if ($this->refundService === null) {
+            $this->requireArchitectureClasses();
+            $this->refundService = new MercatoRefundService($this);
+            $this->refundService->setWire($this->wire());
+        }
+        return $this->refundService;
+    }
+
+    public function paymentReconciliationAuditService(): MercatoPaymentReconciliationAuditService {
+        if ($this->paymentReconciliationAuditService === null) {
+            $this->requireArchitectureClasses();
+            $this->paymentReconciliationAuditService = new MercatoPaymentReconciliationAuditService($this);
+            $this->paymentReconciliationAuditService->setWire($this->wire());
+        }
+        return $this->paymentReconciliationAuditService;
+    }
+
     public function discountService(): MercatoDiscountService {
         if ($this->discountService === null) {
             $this->discountService = new MercatoDiscountService($this);
@@ -532,12 +718,46 @@ trait MercatoStoreServices {
         return $this->fulfilmentService;
     }
 
+    public function shippingProviderService(): MercatoShippingProviderService {
+        if ($this->shippingProviderService === null) {
+            $this->requireArchitectureClasses();
+            $this->shippingProviderService = new MercatoShippingProviderService($this);
+            $this->shippingProviderService->setWire($this->wire());
+        }
+        return $this->shippingProviderService;
+    }
+
     public function purchasabilityService(): MercatoPurchasabilityService {
         if ($this->purchasabilityService === null) {
             $this->requireArchitectureClasses();
             $this->purchasabilityService = new MercatoPurchasabilityService($this);
         }
         return $this->purchasabilityService;
+    }
+
+    public function quoteService(): MercatoQuoteService {
+        if ($this->quoteService === null) {
+            $this->requireArchitectureClasses();
+            $this->quoteService = new MercatoQuoteService($this);
+        }
+        return $this->quoteService;
+    }
+
+    public function taxService(): MercatoTaxService {
+        if ($this->taxService === null) {
+            $this->requireArchitectureClasses();
+            $this->taxService = new MercatoTaxService($this);
+            $this->taxService->setWire($this->wire());
+        }
+        return $this->taxService;
+    }
+
+    public function submitQuoteRequest(array $data, ?array $items = null): Page {
+        return $this->quoteService()->submit($data, $items);
+    }
+
+    public function updateQuoteStatus(Page $quote, string $status, string $note = '', ?float $amount = null): Page {
+        return $this->quoteService()->updateStatus($quote, $status, $note, $amount);
     }
 
     public function getEnabledFulfilmentMethods(): array {
@@ -595,6 +815,7 @@ trait MercatoStoreServices {
             'installed' => $installed > 0,
             'up_to_date' => $installed >= $current,
             'needs_repair' => $installed <= 0 || $installed < $current,
+            'newer_than_code' => $installed > $current,
         ];
     }
 
@@ -771,6 +992,8 @@ trait MercatoStoreServices {
         $sender = (string) $sanitizer->email((string) ($input->post->text('notification_sender_email') ?: ($data['notification_sender_email'] ?? '')));
         $senderName = trim((string) ($input->post->text('notification_sender_name') ?: ($data['notification_sender_name'] ?? 'Mercato Store')));
         $replyTo = (string) $sanitizer->email((string) ($input->post->text('notification_reply_to') ?: ($data['notification_reply_to'] ?? '')));
+        $event = (string) $input->post->text('mrc_test_email_event');
+        if (!in_array($event, MercatoEmailEventCatalog::EVENTS, true)) $event = 'order_confirmation';
         if ($recipient === '') {
             return self::recordNotificationTestEmail('failed', 'Enter a valid recipient email.', '');
         }
@@ -779,18 +1002,21 @@ trait MercatoStoreServices {
         }
 
         try {
+            $definition = MercatoEmailEventCatalog::get($event);
+            $rendered = MercatoEmailTemplateRenderer::render((string) $definition['subject'], (string) $definition['text'], '', ['invoice' => 'MRC-TEST', 'customer' => 'Test Customer', 'items' => '1 x Test product', 'total' => '10.00', 'receipt_link' => 'https://example.test/receipt?signed=test', 'order_status_link' => 'https://example.test/order?signed=test', 'payment_link' => 'https://example.test/pay?signed=test', 'policy_links' => 'https://example.test/policies', 'reason' => 'Test payment failure', 'refund_amount' => '5.00', 'refund_status' => 'refunded', 'tracking' => 'TEST123', 'tracking_url' => 'https://example.test/tracking', 'fulfilment_details' => 'Test fulfilment details', 'recovery_discount_line' => '', 'recovery_unsubscribe_link' => 'https://example.test/unsubscribe?signed=test', 'store_name' => $senderName, 'account_link' => 'https://example.test/account', 'security_message' => 'Test security notice']);
             $mail = wireMail();
             $mail->to($recipient)
                 ->from($sender, $senderName)
-                ->subject('Mercato test email')
-                ->body("This is a Mercato test email.\n\nIf you received it, your ProcessWire mail transport accepted the configured sender.");
+                ->subject('[TEST] ' . (string) $rendered['subject'])
+                ->body((string) $rendered['text']);
+            if (method_exists($mail, 'bodyHTML')) $mail->bodyHTML((string) $rendered['html']);
             if ($replyTo !== '') {
                 $mail->header('Reply-To', $replyTo);
             }
             if ((int) $mail->send() < 1) {
                 return self::recordNotificationTestEmail('failed', 'WireMail did not report a sent message.', $recipient);
             }
-            return self::recordNotificationTestEmail('sent', 'Mercato test email sent.', $recipient);
+            return self::recordNotificationTestEmail('sent', 'Mercato ' . $event . ' test email sent.', $recipient);
         } catch (\Throwable $e) {
             return self::recordNotificationTestEmail('failed', $e->getMessage(), $recipient);
         }
@@ -800,12 +1026,14 @@ trait MercatoStoreServices {
         if (!class_exists(MercatoEventLog::class, false)) {
             require_once __DIR__ . '/src/Logging/MercatoEventLog.php';
         }
+        $at = strrpos($recipient, '@');
         $payload = [
             'event' => 'test_email',
             'status' => $status,
             'order_id' => 0,
             'invoice' => '',
-            'recipient' => $recipient,
+            'recipient' => $at === false ? '' : substr($recipient, 0, 1) . '***' . substr($recipient, $at),
+            'recipient_hash' => $recipient !== '' ? hash('sha256', strtolower($recipient)) : '',
             'message' => $message,
         ];
         $log = new MercatoEventLog('mercato-notifications');

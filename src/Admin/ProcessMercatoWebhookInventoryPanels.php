@@ -268,11 +268,18 @@ trait ProcessMercatoWebhookInventoryPanels {
             $out .= '<div class="mrc-gateway-readiness-title"><strong>' . $this->e(ucfirst($gateway)) . '</strong><span class="uk-label mrc-admin-status ' . $statusClass . '">' . $this->e($label) . '</span></div>';
             $out .= '<dl class="mrc-gateway-readiness-list">';
             $out .= '<dt>' . $this->e($this->_('Mode')) . '</dt><dd>' . $this->e((string) ($details['mode'] ?? '-')) . '</dd>';
+            $out .= '<dt>' . $this->e($this->_('Credentials')) . '</dt><dd>' . $this->e((string) ($details['credential_status'] ?? '-')) . '</dd>';
+            $out .= '<dt>' . $this->e($this->_('Webhook verification')) . '</dt><dd>' . $this->e((string) ($details['webhook_status'] ?? '-')) . '</dd>';
             $out .= '<dt>' . $this->e($this->_('Webhook URL')) . '</dt><dd><code>' . $this->e((string) ($details['webhook_url'] ?? '-')) . '</code></dd>';
             if (!empty($details['payment_method_source'])) {
                 $out .= '<dt>' . $this->e($this->_('Payment methods')) . '</dt><dd>' . $this->e((string) $details['payment_method_source']) . '</dd>';
             }
             $out .= '</dl>';
+            if (!empty($details['capabilities']) && is_array($details['capabilities'])) {
+                $enabledCapabilities = [];
+                foreach ($details['capabilities'] as $capability => $value) if ($value === true) $enabledCapabilities[] = str_replace('supports_', '', (string) $capability);
+                if ($enabledCapabilities) $out .= '<p class="uk-text-muted"><strong>' . $this->e($this->_('Capabilities')) . ':</strong> ' . $this->e(implode(', ', $enabledCapabilities)) . '</p>';
+            }
             if (!empty($details['required_events']) && is_array($details['required_events'])) {
                 $out .= '<div class="mrc-gateway-events">';
                 $out .= '<span class="ds-section-label">' . $this->e($this->_('Required events')) . '</span>';
@@ -314,7 +321,7 @@ trait ProcessMercatoWebhookInventoryPanels {
         $out = '<div class="mrc-admin-simulator">';
         $out .= '<div>';
         $out .= '<h3 class="uk-h4">' . $this->e($this->_('Local Webhook Simulator')) . '</h3>';
-        $out .= '<p class="uk-text-muted">' . $this->e($this->_('Test-mode bridge for local development. It writes webhook log records and moves an unpaid order through the normal payment, inventory, and notification path without calling Stripe or Mollie.')) . '</p>';
+        $out .= '<p class="uk-text-muted">' . $this->e($this->_('Guided non-production verification for success, decline, cancellation, retry success, delayed webhook, and duplicate callback behavior. Refund verification remains in the paid order refund panel.')) . '</p>';
         $out .= '</div>';
 
         if ($simulationResult) {
@@ -351,10 +358,8 @@ trait ProcessMercatoWebhookInventoryPanels {
         $out .= '<option value="stripe">' . $this->e($this->_('Stripe')) . '</option>';
         $out .= '<option value="mollie">' . $this->e($this->_('Mollie')) . '</option>';
         $out .= '</select></label>';
-        $out .= '<label><span>' . $this->e($this->_('Result')) . '</span><select name="payment_status" ' . ($disabled ? 'disabled' : '') . '>';
-        foreach ([MercatoPaymentStatus::PAID, MercatoPaymentStatus::PROCESSING, MercatoPaymentStatus::FAILED, MercatoPaymentStatus::CANCELED] as $status) {
-            $out .= '<option value="' . $this->e($status) . '">' . $this->e(ucfirst(str_replace('_', ' ', $status))) . '</option>';
-        }
+        $out .= '<label><span>' . $this->e($this->_('Scenario')) . '</span><select name="verification_scenario" ' . ($disabled ? 'disabled' : '') . '>';
+        foreach (['success' => $this->_('Success and finalization'), 'decline' => $this->_('Decline'), 'cancellation' => $this->_('Cancellation'), 'retry_success' => $this->_('Retry success'), 'delayed_webhook' => $this->_('Delayed webhook / processing'), 'duplicate_callback' => $this->_('Duplicate callback replay')] as $scenario => $label) $out .= '<option value="' . $this->e($scenario) . '">' . $this->e($label) . '</option>';
         $out .= '</select></label>';
         $out .= '<button class="uk-button uk-button-default" type="submit" ' . ($disabled ? 'disabled' : '') . '><i class="fa fa-bolt uk-margin-small-right"></i>' . $this->e($this->_('Simulate webhook')) . '</button>';
         $out .= '</form></div>';

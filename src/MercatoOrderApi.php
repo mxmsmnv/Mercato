@@ -124,6 +124,7 @@ trait MercatoOrderApi {
         if ((int) $order->mrc_payment_complete === 1 || (string) $order->mrc_payment_status === self::PAYMENT_STATUS_PAID) {
             return false;
         }
+        if ($this->areOrderSignedLinksExpired($order)) return false;
         return hash_equals($this->getPaymentLinkToken($order), trim($token));
     }
 
@@ -321,7 +322,7 @@ trait MercatoOrderApi {
         if (!$order || !$order->id || $order->template->name !== (string) $this->order_template) {
             return false;
         }
-        return hash_equals($this->getOrderStatusToken($order), trim($token));
+        return !$this->areOrderSignedLinksExpired($order) && hash_equals($this->getOrderStatusToken($order), trim($token));
     }
 
     public function getOrderReceiptUrl(Page $order): string {
@@ -358,6 +359,11 @@ trait MercatoOrderApi {
                 'enabled' => false,
                 'schedule' => 'manual',
             ],
+            'privacy_retention' => [
+                'label' => 'Privacy retention',
+                'enabled' => (string) ($this->privacy_retention_schedule ?? 'everyDay') !== 'disabled',
+                'schedule' => (string) ($this->privacy_retention_schedule ?? 'everyDay'),
+            ],
             'recovery_automation' => [
                 'label' => 'Abandoned checkout recovery',
                 'enabled' => (bool) ($this->recovery_automation_enabled ?? false) && $this->getRecoveryAutomationSchedule() !== 'disabled',
@@ -383,6 +389,7 @@ trait MercatoOrderApi {
                 continue;
             }
             $job = is_array($jobs[$name]) ? $jobs[$name] : [];
+            $startedAt = microtime(true);
             try {
                 $result = $this->runBackgroundJob($name, $context + [
                     'job' => $name,
@@ -394,6 +401,7 @@ trait MercatoOrderApi {
                 $this->wire('log')->save('mercato-background-jobs', sprintf('%s failed: %s', $name, $e->getMessage()));
                 $results[$name] = ['ok' => false, 'error' => $e->getMessage()];
             }
+            $this->recordEvent('mercato-background-jobs', ['event' => 'background_job', 'job' => $name, 'status' => !empty($results[$name]['ok']) ? 'completed' : (!empty($results[$name]['skipped']) ? 'skipped' : 'failed'), 'source' => substr((string) ($context['source'] ?? 'manual'), 0, 40), 'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000)], 'background_job');
         }
         return $results;
     }

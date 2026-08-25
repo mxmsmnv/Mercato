@@ -51,6 +51,9 @@ class MollieGateway extends MercatoGatewayBase {
         if ($apiKey === '') {
             $errors[] = 'Mollie API key is missing.';
         }
+        $expectedPrefix = !empty($this->commerce->production) ? 'live_' : 'test_';
+        if ($apiKey !== '' && !str_starts_with($apiKey, $expectedPrefix)) $errors[] = 'Mollie credential does not match the selected live/test mode.';
+        if (!empty($this->commerce->production) && !str_starts_with(strtolower($this->getWebhookUrl()), 'https://')) $errors[] = 'Mollie production webhook URL must use HTTPS.';
 
         return new MercatoGatewaySetupStatus(
             gateway: $this->getName(),
@@ -58,6 +61,9 @@ class MollieGateway extends MercatoGatewayBase {
             errors: $errors,
             details: [
                 'mode' => $this->commerce->production ? 'live' : 'test',
+                'credential_status' => $errors ? 'blocked' : 'configured',
+                'webhook_status' => 'provider_refetch_verification',
+                'capabilities' => $this->getCapabilities()->toArray(),
                 'webhook_url' => $this->getWebhookUrl(),
                 'required_events' => [
                     'payment status changes',
@@ -75,6 +81,13 @@ class MollieGateway extends MercatoGatewayBase {
 
     public function mapExternalStatus(string $externalStatus): string {
         return MercatoPaymentStatusMapper::molliePayment($externalStatus);
+    }
+
+    public function retrievePaymentState(Page $order): array {
+        $id = trim((string) ($order->mrc_mollie_payment_id ?? ''));
+        if ($id === '') throw new WireException('Mollie payment reference is missing.');
+        $payment = $this->retrievePayment($id);
+        return ['status' => $this->mapExternalStatus((string) ($payment['status'] ?? '')), 'amount' => (float) ($payment['amount']['value'] ?? 0), 'refunded_amount' => (float) ($payment['amountRefunded']['value'] ?? 0), 'currency' => (string) ($payment['amount']['currency'] ?? ''), 'reference' => (string) ($payment['id'] ?? $id)];
     }
 
     public function initializePayment(array $pendingOrder, MercatoCart $cart): array {
@@ -215,6 +228,10 @@ class MollieGateway extends MercatoGatewayBase {
     }
 
     protected function request(string $method, string $path, ?array $payload = null): array {
+        return MercatoGatewayRequestPolicy::run(fn(): array => $this->requestOnce($method, $path, $payload), (int) ($this->commerce->gateway_retries ?? 2), (float) ($this->commerce->gateway_timeout_seconds ?? 30));
+    }
+
+    protected function requestOnce(string $method, string $path, ?array $payload = null): array {
         if (!function_exists('curl_init')) {
             throw new WireException('PHP cURL extension is required for Mollie payments.');
         }
@@ -235,7 +252,7 @@ class MollieGateway extends MercatoGatewayBase {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CUSTOMREQUEST => strtoupper($method),
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT => max(3, (int) ($this->commerce->gateway_timeout_seconds ?? 30)),
         ]);
 
         if ($payload !== null) {

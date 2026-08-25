@@ -88,4 +88,16 @@ final class MercatoPaymentStatus {
             self::PARTIALLY_REFUNDED,
         ], true);
     }
+
+    /**
+     * Settled payments must not be moved backwards by delayed webhook events.
+     * Refund transitions are handled by the dedicated refund reconciliation path.
+     */
+    public static function wouldRegressSettled(string $current, string $incoming): bool {
+        $current = strtolower(trim($current));
+        $incoming = strtolower(trim($incoming));
+        $settled = [self::PAID, self::PARTIALLY_REFUNDED, self::REFUNDED];
+
+        return in_array($current, $settled, true) && !in_array($incoming, $settled, true);
+    }
 }

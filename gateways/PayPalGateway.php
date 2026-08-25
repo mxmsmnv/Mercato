@@ -61,6 +61,8 @@ class PayPalGateway extends MercatoGatewayBase {
         if (empty($this->commerce->production) && $this->getWebhookId() === '') {
             $warnings[] = 'PayPal sandbox webhook verification is skipped until a Sandbox Webhook ID is configured.';
         }
+        if (!empty($this->commerce->production) && trim((string) $this->commerce->paypal_live_client_id) === trim((string) $this->commerce->paypal_test_client_id)) $errors[] = 'PayPal live and sandbox client IDs cannot match.';
+        if (!empty($this->commerce->production) && !str_starts_with(strtolower($this->getWebhookUrl()), 'https://')) $errors[] = 'PayPal production webhook URL must use HTTPS.';
 
         return new MercatoGatewaySetupStatus(
             gateway: $this->getName(),
@@ -69,6 +71,9 @@ class PayPalGateway extends MercatoGatewayBase {
             warnings: $warnings,
             details: [
                 'mode' => $this->commerce->production ? 'live' : 'sandbox',
+                'credential_status' => $errors ? 'blocked' : 'configured',
+                'webhook_status' => $this->getWebhookId() !== '' ? 'configured_unverified' : 'missing',
+                'capabilities' => $this->getCapabilities()->toArray(),
                 'webhook_url' => $this->getWebhookUrl(),
                 'required_events' => [
                     'CHECKOUT.ORDER.APPROVED',
@@ -107,6 +112,16 @@ class PayPalGateway extends MercatoGatewayBase {
         ], 'mrc_paypal_webhook_verify_' . md5((string) ($headers['transmission_id'] ?? uniqid('', true))));
 
         return strtoupper((string) ($response['verification_status'] ?? '')) === 'SUCCESS';
+    }
+
+    public function retrievePaymentState(Page $order): array {
+        $details = json_decode((string) ($order->mrc_payment_details ?? ''), true); $details = is_array($details) ? $details : [];
+        $id = trim((string) ($details['id'] ?? $details['paypal_order_id'] ?? ''));
+        if ($id === '') throw new WireException('PayPal order reference is missing.');
+        $remote = $this->request('GET', '/v2/checkout/orders/' . rawurlencode($id), null, 'mrc_paypal_reconcile_' . (int) $order->id);
+        $amount = 0.0; $refunded = 0.0;
+        foreach ((array) ($remote['purchase_units'] ?? []) as $unit) { $amount += (float) ($unit['amount']['value'] ?? 0); foreach ((array) ($unit['payments']['refunds'] ?? []) as $refund) $refunded += (float) ($refund['amount']['value'] ?? 0); }
+        return ['status' => $this->mapExternalStatus((string) ($remote['status'] ?? '')), 'amount' => round($amount, 2), 'refunded_amount' => round($refunded, 2), 'currency' => (string) ($remote['purchase_units'][0]['amount']['currency_code'] ?? ''), 'reference' => (string) ($remote['id'] ?? $id)];
     }
 
     public function mapExternalStatus(string $externalStatus): string {
@@ -172,6 +187,10 @@ class PayPalGateway extends MercatoGatewayBase {
     }
 
     protected function request(string $method, string $path, mixed $payload = null, string $requestId = ''): array {
+        return MercatoGatewayRequestPolicy::run(fn(): array => $this->requestOnce($method, $path, $payload, $requestId), (int) ($this->commerce->gateway_retries ?? 2), (float) ($this->commerce->gateway_timeout_seconds ?? 30));
+    }
+
+    protected function requestOnce(string $method, string $path, mixed $payload = null, string $requestId = ''): array {
         if (!function_exists('curl_init')) {
             throw new WireException('PHP cURL extension is required for PayPal payments.');
         }
@@ -190,7 +209,7 @@ class PayPalGateway extends MercatoGatewayBase {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CUSTOMREQUEST => strtoupper($method),
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT => max(3, (int) ($this->commerce->gateway_timeout_seconds ?? 30)),
         ]);
 
         if ($payload !== null) {
@@ -234,7 +253,7 @@ class PayPalGateway extends MercatoGatewayBase {
                 'Accept-Language: en_US',
             ],
             CURLOPT_POSTFIELDS => 'grant_type=client_credentials',
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT => max(3, (int) ($this->commerce->gateway_timeout_seconds ?? 30)),
         ]);
 
         $body = curl_exec($ch);

@@ -431,7 +431,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
         return $out;
     }
 
-    protected function renderCustomerDetail(array $customer, PageArray $orders, Mercato $commerce, array $noteResult = []): string {
+    protected function renderCustomerDetail(array $customer, PageArray $orders, Mercato $commerce, array $noteResult = [], array $privacyResult = []): string {
         $name = (string) (($customer['name'] ?? '') ?: ($customer['email'] ?? $customer['key'] ?? '-'));
 
         $out = '<section class="pw-wrap mrc-admin-panel">';
@@ -481,6 +481,8 @@ trait ProcessMercatoRecoveryCustomerPanels {
         $out .= '</div></div></div>';
         $out .= '</section>';
 
+        $out .= $this->renderCustomerPrivacyPanel($customer, $orders, $commerce, $privacyResult);
+
         $out .= $this->renderCustomerNotesPanel($customer, $noteResult);
         $out .= $this->renderCustomerActivity($this->getCustomerActivity($orders, $customer, 10));
 
@@ -490,6 +492,18 @@ trait ProcessMercatoRecoveryCustomerPanels {
         $out .= '</section>';
 
         return $out;
+    }
+
+    protected function renderCustomerPrivacyPanel(array $customer, PageArray $orders, Mercato $commerce, array $result = []): string {
+        $key = (string) ($customer['key'] ?? ''); $canManage = $this->hasCommercePermission(self::PERMISSION_MANAGE_PRIVACY);
+        $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Privacy operations')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Portable export, dry-run review, legal holds, and guarded anonymization. Financial totals and line items are preserved.')) . '</p></div>';
+        if ($canManage) $out .= '<a class="uk-button uk-button-default" href="' . $this->e($this->exportUrl('privacy-customer', ['key' => $key])) . '"><i class="fa fa-download uk-margin-small-right"></i>' . $this->e($this->_('Portable JSON export')) . '</a>';
+        $out .= '</div>';
+        if ($result) { $out .= '<div class="uk-alert ' . (!empty($result['errors']) ? 'uk-alert-danger' : 'uk-alert-success') . '"><p><strong>' . $this->e((string) ($result['summary'] ?? '')) . '</strong></p>'; foreach ((array) ($result['errors'] ?? []) as $error) $out .= '<p>' . $this->e((string) $error) . '</p>'; if (!empty($result['review'])) { $review = $result['review']; $out .= '<p>' . $this->e(sprintf($this->_('%d eligible order(s), %d blocked order(s), %d quote(s).'), (int) $review['eligible'], (int) $review['blocked'], (int) $review['quotes'])) . '</p>'; } $out .= '</div>'; }
+        if (!$canManage) return $out . '<p class="uk-text-muted">' . $this->e($this->_('Privacy-management permission is required.')) . '</p></section>';
+        $action = $this->customerDetailUrl($customer); $out .= '<div class="mrc-admin-panel-head"><form method="post" action="' . $this->e($action) . '" class="mrc-inline-form">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_privacy_action" value="review"><button class="uk-button uk-button-default" type="submit">' . $this->e($this->_('Dry-run review')) . '</button></form></div>';
+        $out .= '<form method="post" action="' . $this->e($action) . '" class="mrc-order-note-form">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_privacy_action" value="anonymize"><textarea class="uk-textarea" name="privacy_reason" required placeholder="' . $this->e($this->_('Request/legal review reason')) . '"></textarea><label><input class="uk-checkbox" type="checkbox" name="privacy_confirmed" value="1" required> ' . $this->e($this->_('I reviewed the dry-run and understand signed links will be invalidated.')) . '</label><button class="uk-button uk-button-danger" type="submit">' . $this->e($this->_('Anonymize customer data')) . '</button></form>';
+        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Order')) . '</th><th>' . $this->e($this->_('Legal hold')) . '</th><th>' . $this->e($this->_('Action')) . '</th></tr></thead><tbody>'; foreach ($orders as $order) { $hold = (bool) ($order->mrc_privacy_legal_hold ?? false); $out .= '<tr><td>' . $this->e((string) ($order->mrc_invoice_number ?: $order->title)) . '</td><td>' . ($hold ? $this->e($this->_('Active')) : $this->e($this->_('None'))) . '</td><td><form method="post" action="' . $this->e($action) . '" class="mrc-inline-form">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_privacy_action" value="' . ($hold ? 'release_hold' : 'hold') . '"><input type="hidden" name="order_id" value="' . (int) $order->id . '"><input class="uk-input" name="privacy_reason" required placeholder="' . $this->e($this->_('Reason')) . '"><button class="uk-button uk-button-default" type="submit">' . $this->e($hold ? $this->_('Release') : $this->_('Hold')) . '</button></form></td></tr>'; } return $out . '</tbody></table></div></section>';
     }
 
     protected function renderCustomerNotesPanel(array $customer, array $result = []): string {

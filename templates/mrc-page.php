@@ -150,11 +150,12 @@ $cta = match (true) {
     default => ['A showroom for the whole Mercato system.', 'The site is designed to test the storefront, cart, checkout, orders, fulfilment, refunds, discounts, and digital delivery in one believable shop.'],
 };
 
+$seoHead = $commerce->seoService()->render($page, ['type' => 'content']);
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title><?= $sanitizer->entities($page->title) ?></title>
+    <?= $seoHead ?>
     <?= $frameworkAssets ?>
     <?= mrc_storefront_assets($isVanilla) ?>
 </head>

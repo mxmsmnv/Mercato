@@ -85,6 +85,9 @@ final class MercatoRefundService extends Wire {
         if ($isFull && $isConfirmed) {
             $inventory = $this->commerce->orderRepository()->restoreStockAfterFullRefundOnce($order);
         }
+        if ($isConfirmed) {
+            $this->commerce->taxService()->refund($order, $amount, (string) ($refund['id'] ?? sha1($reason . '|' . $amount)));
+        }
 
         $this->eventLog->setWire($this->wire());
         $this->eventLog->issued($order, $refund, $amount, $refundedAmount, $pendingAmount, $newStatus, $reason, $userName);
@@ -179,6 +182,9 @@ final class MercatoRefundService extends Wire {
         if ($isFull) {
             $inventory = $this->commerce->orderRepository()->restoreStockAfterFullRefundOnce($order);
         }
+        if ($isConfirmed && !$isRejected) {
+            $this->commerce->taxService()->refund($order, $amount, (string) ($refund['id'] ?? $refundId));
+        }
         $this->eventLog->setWire($this->wire());
         $this->eventLog->reconciled(
             $order,
@@ -190,6 +196,7 @@ final class MercatoRefundService extends Wire {
             $isRejected ? 'Gateway rejected the pending refund.' : 'Gateway confirmed the refund.',
             $userName
         );
+        if ($isConfirmed && !$isRejected) $this->commerce->paymentRefunded($order, ['order' => $order, 'amount' => $amount, 'total_refunded' => $refundedAmount, 'status' => $newStatus, 'gateway_refund' => $refund]);
         $this->commerce->emitOrderStatusChanged($order, $previousOrderStatus, [
             'source' => 'reconcileRefund',
             'payment_status' => $newStatus,

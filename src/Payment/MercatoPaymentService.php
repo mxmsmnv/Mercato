@@ -16,6 +16,7 @@ class MercatoPaymentService extends Wire {
     }
 
     public function initializePayment(array $data): string {
+        if (!$this->commerce->operationalService()->isCheckoutAvailable()) throw new WireException($this->commerce->operationalService()->checkoutMessage(), 503);
         $session = $this->wire('session');
         $cart = $this->commerce->cart();
         $data = $this->commerce->normalizeOrderData($data);
@@ -93,18 +94,33 @@ class MercatoPaymentService extends Wire {
         $shipping = (float) $fulfilment['amount'];
         $discount = $this->commerce->discountService()->applyFinalShippingAmount($discount, $shipping);
         $discountAmount = round((float) ($discount['amount'] ?? 0), 2);
-        $total = round(max(0, $subtotal + $shipping - $discountAmount), 2);
+        $taxQuote = $this->commerce->taxService()->estimate($cart, $data, $fulfilment, $discount);
+        $taxAmount = round(max(0, (float) ($taxQuote['total_tax'] ?? 0)), 2);
+        $taxAddedToTotal = (string) ($taxQuote['provider'] ?? 'manual') !== 'manual'
+            && (string) ($taxQuote['display_mode'] ?? 'included') === 'excluded';
+        $taxQuote['tax_added_to_total'] = $taxAddedToTotal;
+        $total = round(max(0, $subtotal + $shipping - $discountAmount + ($taxAddedToTotal ? $taxAmount : 0)), 2);
 
         $data['mrc_items'] = json_encode($cart->toArray());
         $data['mrc_currency'] = MercatoCurrency::normalizeCode((string) $this->commerce->currency);
         $data['mrc_subtotal_amount'] = $subtotal;
         $data['mrc_shipping_amount'] = $shipping;
+        $data['mrc_tax_amount'] = $taxAmount;
+        $data['mrc_tax_details'] = json_encode(['quote' => $taxQuote], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $data['mrc_tax_provider_reference'] = (string) ($taxQuote['provider_reference'] ?? '');
+        $data['mrc_tax_committed'] = 0;
         $data['fulfilment_method'] = $fulfilment['type'];
         $data['mrc_fulfilment_label'] = $fulfilment['label'];
         $data['mrc_fulfilment_details'] = json_encode($fulfilment, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $data['mrc_billing_address'] = json_encode($addresses['billing'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $data['mrc_shipping_address'] = json_encode($addresses['shipping'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $data['mrc_receipt_details'] = json_encode($this->commerce->buildReceiptDetailsSnapshot($cart, $shipping), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $receiptDetails = $this->commerce->buildReceiptDetailsSnapshot($cart, $shipping);
+        $receiptDetails['tax_provider'] = (string) ($taxQuote['provider'] ?? 'manual');
+        $receiptDetails['tax_amount'] = $taxAmount;
+        $receiptDetails['tax_breakdown'] = array_map(static fn(array $line): array => [
+            'tax_rate' => (float) ($line['rate'] ?? 0), 'sum' => (float) ($line['tax'] ?? 0), 'jurisdiction' => (string) ($line['jurisdiction'] ?? ''),
+        ], (array) ($taxQuote['lines'] ?? []));
+        $data['mrc_receipt_details'] = json_encode($receiptDetails, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $data = $this->applyDiscountSnapshot($data, $discount, $discountAmount);
         $data['mrc_total_amount'] = $total;
         $data['payment_status'] = Mercato::PAYMENT_STATUS_PENDING;
@@ -116,7 +132,7 @@ class MercatoPaymentService extends Wire {
 
         $errors = array_merge(
             $this->commerce->validateOrderData($data),
-            $this->validateCheckoutData($data, $cart, $fulfilment, $subtotal, $shipping, $discountAmount, $total)
+            $this->validateCheckoutData($data, $cart, $fulfilment, $subtotal, $shipping, $discountAmount, $total, $taxAddedToTotal ? $taxAmount : 0.0)
         );
         if (count($errors) > 0) {
             throw new WireException(implode(' ', $errors), 422);
@@ -128,6 +144,8 @@ class MercatoPaymentService extends Wire {
 
         $pendingOrder = $data;
         $pendingPage = $this->commerce->orderRepository()->savePendingOrder($pendingOrder);
+        $this->commerce->analyticsService()->trackOrder($pendingPage, 'checkout_start', [], 'checkout_start:' . (int) $pendingPage->id);
+        $this->commerce->analyticsService()->trackOrder($pendingPage, 'shipping_selection', ['shipping_method' => (string) ($fulfilment['type'] ?? '')], 'shipping_selection:' . (int) $pendingPage->id . ':' . (string) ($fulfilment['type'] ?? ''));
         $this->commerce->recordEvent('mercato-events', [
             'event' => 'checkout_created',
             'order_id' => (int) $pendingPage->id,
@@ -296,7 +314,8 @@ class MercatoPaymentService extends Wire {
         float $subtotal,
         float $shipping,
         float $discountAmount,
-        float $total
+        float $total,
+        float $addedTax = 0.0
     ): array {
         $errors = [];
 
@@ -378,12 +397,12 @@ class MercatoPaymentService extends Wire {
             }
         }
 
-        foreach (['subtotal' => $subtotal, 'shipping' => $shipping, 'discount' => $discountAmount, 'total' => $total] as $label => $amount) {
+        foreach (['subtotal' => $subtotal, 'shipping' => $shipping, 'discount' => $discountAmount, 'tax' => $addedTax, 'total' => $total] as $label => $amount) {
             if (!is_finite($amount) || $amount < 0) {
                 $errors[] = sprintf($this->commerce->_('Checkout %s amount is invalid.'), $label);
             }
         }
-        $expectedTotal = round(max(0, $subtotal + $shipping - $discountAmount), 2);
+        $expectedTotal = round(max(0, $subtotal + $shipping - $discountAmount + $addedTax), 2);
         if (round($total, 2) !== $expectedTotal) {
             $errors[] = $this->commerce->_('Checkout total could not be validated.');
         }

@@ -49,6 +49,7 @@ if ($catalogAction === 'catalog_clear_cart') {
 
         $commerce->clearPendingCheckoutSession();
         $cart->delete();
+        $commerce->analyticsService()->track('cart_change', ['action' => 'clear', 'currency' => (string) $commerce->currency, 'value' => 0]);
         $commerce->setMessage('Cart cleared.');
     } catch (WireException $e) {
         $commerce->setMessage('Error: ' . $e->getMessage());
@@ -79,11 +80,17 @@ if ($catalogAction === 'catalog_add_to_cart') {
             'id' => $product->path,
             'quantity' => $quantity,
         ]);
+        $commerce->analyticsService()->track('cart_change', ['action' => 'add', 'product_id' => (int) $product->id, 'quantity' => $quantity, 'price' => round((float) ($purchaseCheck['resolved_price'] ?? $product->mrc_price), 2), 'currency' => (string) $commerce->currency]);
         $commerce->setMessage('Added to cart.');
     } catch (WireException $e) {
         $commerce->setMessage('Error: ' . $e->getMessage());
     }
     $session->redirect($page->url);
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+    $searchTerm = trim((string) $input->get->text('q'));
+    $commerce->analyticsService()->track($searchTerm !== '' ? 'search' : 'collection_view', ['query_length' => strlen($searchTerm), 'result_count' => $products->count(), 'collection_id' => 0]);
 }
 
 $message = $commerce->getMessage();
@@ -126,7 +133,7 @@ $productCardImageClass = $isVanilla
     : 'block h-full w-full object-cover';
 $productCardPlaceholderClass = $isVanilla
     ? 'mrc-product-card-placeholder'
-    : 'flex h-full items-center justify-center text-xs font-semibold uppercase tracking-[0.24em] text-[#9d8b7b]';
+    : 'flex h-full items-center justify-center text-xs font-semibold uppercase tracking-[0.24em] text-[#6b5848]';
 $productCardTitleClass = $isVanilla
     ? 'mrc-product-card-title'
     : 'flex flex-wrap items-start justify-between gap-2';
@@ -154,12 +161,13 @@ if ($featuredProduct && $featuredProduct->hasField('mrc_images') && $featuredPro
     $featuredImageUrl = $featuredProduct->mrc_images->first()->url;
 }
 $heroSlides = $pages->find('template=mrc-product, mrc_images.count>0, sort=sort, sort=title, limit=4');
+$seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_num' => (int) $input->pageNum, 'image' => $featuredImageUrl]);
 
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title><?= $sanitizer->entities($documentTitle) ?></title>
+    <?= $seoHead ?>
     <?= $frameworkAssets ?>
     <?= mrc_storefront_assets($isVanilla) ?>
     <?php if (!$isVanilla): ?>
@@ -474,7 +482,10 @@ $heroSlides = $pages->find('template=mrc-product, mrc_images.count>0, sort=sort,
                         $imageUrl = $product->mrc_images->first()->url;
                     }
                     $inCartQuantity = (float) ($cartProductQuantities[(int) $product->id] ?? 0);
-                    $purchasability = $commerce->getProductPurchasability($product, 1, $inCartQuantity);
+                    $cardVariants = $commerce->variantService()->getDefinition($product)['variants'];
+                    $cardVariant = current(array_filter($cardVariants, static fn(array $variant): bool => $variant['status'] === 'active')) ?: null;
+                    $hasVariants = $cardVariants !== [];
+                    $purchasability = $commerce->getProductPurchasability($product, 1, $inCartQuantity, 0, $cardVariant ? (string) $cardVariant['id'] : null);
                     $allowsOversell = (bool) $purchasability['allows_oversell'];
                     $remainingStock = (int) $purchasability['remaining_stock'];
                     $available = (bool) $purchasability['ok'];
@@ -518,7 +529,9 @@ $heroSlides = $pages->find('template=mrc-product, mrc_images.count>0, sort=sort,
                             <p class="<?= $productMetaClass ?>"><?= $sanitizer->entities($stockLabel) ?></p>
                         </div>
                         <div class="<?= $productCardActionsClass ?>">
-                            <?php if ($available): ?>
+                            <?php if ($hasVariants): ?>
+                                <a class="<?= $ui['button'] ?> mrc-cart-button" href="<?= $sanitizer->entities($product->url) ?>"><span>Choose options</span></a>
+                            <?php elseif ($available): ?>
                                 <form class="mrc-card-purchase-form" method="post" action="<?= $sanitizer->entities($page->url) ?>">
                                     <input type="hidden" name="mrc_action" value="catalog_add_to_cart">
                                     <input type="hidden" name="product_id" value="<?= (int) $product->id ?>">

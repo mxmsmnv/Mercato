@@ -159,6 +159,21 @@ class MercatoWebhookService extends Wire {
                 ];
             }
 
+            $incomingStatus = $gateway->mapExternalStatus((string) ($payment['status'] ?? 'open'));
+            if (MercatoPaymentStatus::wouldRegressSettled((string) $order->mrc_payment_status, $incomingStatus)) {
+                $context['status'] = $incomingStatus;
+                $this->eventLog->ignored('mollie', 'payment.status', 'Delayed webhook would regress a settled payment.', $context);
+                return [
+                    'received' => true,
+                    'payment_id' => $paymentId,
+                    'order_id' => $order->id,
+                    'status' => (string) $order->mrc_payment_status,
+                    'processed' => false,
+                    'out_of_order' => true,
+                ];
+            }
+
+            $previousOrderStatus = $this->commerce->getDerivedOrderStatus($order);
             $pending = $this->commerce->orderRepository()->pageToPendingData($order);
             $pending = $gateway->applyPaymentToOrder($pending, $payment);
             $updated = $this->commerce->orderRepository()->savePendingOrder($pending);
@@ -167,7 +182,9 @@ class MercatoWebhookService extends Wire {
                 $this->commerce->paymentCompleted($updated, MercatoPaymentStatus::PAID);
             } elseif (MercatoPaymentStatus::isFailureOutcome((string) ($pending['payment_status'] ?? ''))) {
                 $this->commerce->orderRepository()->releaseStockReservation($updated);
+                $this->commerce->paymentFailed($updated, (string) $pending['payment_status']);
             }
+            $this->commerce->emitOrderStatusChanged($updated, $previousOrderStatus, ['source' => 'mollie_webhook', 'payment_status' => (string) ($pending['payment_status'] ?? '')]);
             $context['status'] = (string) ($pending['payment_status'] ?? Mercato::PAYMENT_STATUS_PENDING);
             $this->eventLog->processed('mollie', 'payment.status', $context);
         } catch (\Throwable $e) {
@@ -251,6 +268,20 @@ class MercatoWebhookService extends Wire {
         }
 
         $context['order_page_id'] = (int) $order->id;
+        if (MercatoPaymentStatus::wouldRegressSettled((string) $order->mrc_payment_status, $status)) {
+            $context['status'] = $status;
+            $this->eventLog->ignored('paypal', $eventType, 'Delayed webhook would regress a settled payment.', $context);
+            return [
+                'received' => true,
+                'processed' => false,
+                'out_of_order' => true,
+                'verified' => $verified,
+                'type' => $eventType,
+                'order_id' => (int) $order->id,
+                'status' => (string) $order->mrc_payment_status,
+            ];
+        }
+        $previousOrderStatus = $this->commerce->getDerivedOrderStatus($order);
         $pending = $this->commerce->orderRepository()->pageToPendingData($order);
         $pending['payment_method'] = 'paypal';
         $pending['payment_status'] = $status;
@@ -266,7 +297,9 @@ class MercatoWebhookService extends Wire {
             $this->commerce->paymentCompleted($updated, MercatoPaymentStatus::PAID);
         } elseif (MercatoPaymentStatus::isFailureOutcome($status)) {
             $this->commerce->orderRepository()->releaseStockReservation($updated);
+            $this->commerce->paymentFailed($updated, $status);
         }
+        $this->commerce->emitOrderStatusChanged($updated, $previousOrderStatus, ['source' => 'paypal_webhook', 'payment_status' => $status]);
 
         $context['status'] = $status;
         $this->eventLog->processed('paypal', $eventType, $context);
@@ -380,6 +413,16 @@ class MercatoWebhookService extends Wire {
             'external_payment_id' => $externalId,
             'inventory' => $inventory,
         ];
+    }
+
+    public function simulateDuplicateCallback(Page $order, string $gateway, string $userName = ''): array {
+        if (!empty($this->commerce->production)) throw new WireException($this->commerce->_('Webhook simulation is available only in test mode.'));
+        if (!$order || !$order->id) throw new WireException($this->commerce->_('Order not found.'));
+        $gateway = strtolower(trim($gateway)); $eventType = $this->getSimulatedEventType($gateway, MercatoPaymentStatus::PROCESSING);
+        $context = ['event_id' => 'sim_duplicate_' . $gateway . '_' . (int) $order->id, 'order_page_id' => (int) $order->id, 'external_payment_id' => $this->getSimulatedExternalPaymentId($order, $gateway), 'simulated' => true, 'user' => $userName];
+        if ($this->isProcessedDuplicate($gateway, $eventType, $context)) return ['duplicate' => true, 'order' => $order, 'gateway' => $gateway, 'event_type' => $eventType, 'from' => (string) $order->mrc_payment_status, 'to' => (string) $order->mrc_payment_status, 'inventory' => ['errors' => []]];
+        $this->eventLog->received($gateway, $eventType, $context); $this->eventLog->processed($gateway, $eventType, $context);
+        return ['duplicate' => false, 'order' => $order, 'gateway' => $gateway, 'event_type' => $eventType, 'from' => (string) $order->mrc_payment_status, 'to' => (string) $order->mrc_payment_status, 'inventory' => ['errors' => []]];
     }
 
     protected function getMolliePaymentIdFromRequest(): string {
@@ -539,8 +582,7 @@ class MercatoWebhookService extends Wire {
             return false;
         }
 
-        $this->saveStripeOrderStatus($order, $status, $pi);
-        return true;
+        return $this->saveStripeOrderStatus($order, $status, $pi);
     }
 
     protected function getStripeEventContext(\Stripe\Event $stripeEvent): array {
@@ -603,8 +645,7 @@ class MercatoWebhookService extends Wire {
         }
 
         $this->saveStripeCheckoutSessionSubscription($order, $session);
-        $this->saveStripeOrderStatus($order, $status, $session);
-        return true;
+        return $this->saveStripeOrderStatus($order, $status, $session);
     }
 
     protected function isStripeRefundEvent(string $eventType): bool {
@@ -775,7 +816,10 @@ class MercatoWebhookService extends Wire {
         return $refundService->reconcilePendingFromWebhook($order, $gatewayName);
     }
 
-    protected function saveStripeOrderStatus(Page $order, string $status, object $paymentIntent): void {
+    protected function saveStripeOrderStatus(Page $order, string $status, object $paymentIntent): bool {
+        if (MercatoPaymentStatus::wouldRegressSettled((string) $order->mrc_payment_status, $status)) {
+            return false;
+        }
         $wire = $this->wire();
         $pages = $this->wire('pages');
         $savedUser = $wire->user;
@@ -805,6 +849,7 @@ class MercatoWebhookService extends Wire {
                 $this->commerce->paymentCompleted($order, MercatoPaymentStatus::PAID);
             } elseif (MercatoPaymentStatus::isFailureOutcome($status)) {
                 $this->commerce->orderRepository()->releaseStockReservation($order);
+                $this->commerce->paymentFailed($order, $status);
             }
             $this->commerce->emitOrderStatusChanged($order, $previousOrderStatus, [
                 'source' => 'stripe_webhook',
@@ -813,6 +858,8 @@ class MercatoWebhookService extends Wire {
         } finally {
             $wire->users->setCurrentUser($savedUser);
         }
+
+        return true;
     }
 
     protected function saveStripeSubscriptionStatus(Page $order, object $subscription): void {

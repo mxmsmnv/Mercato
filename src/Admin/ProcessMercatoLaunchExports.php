@@ -28,8 +28,34 @@ trait ProcessMercatoLaunchExports {
                 (string) ($recoveryUnsubscribeQuery['email'] ?? ''),
                 (string) ($recoveryUnsubscribeQuery['token'] ?? '')
             );
+        $runtime = $commerce->getRuntimeCompatibilityReport();
+        $backup = $commerce->operationalService()->backupStatus();
 
         $checks = [
+            [
+                'area' => 'setup',
+                'item' => 'Runtime dependencies',
+                'ready' => !empty($runtime['ready']),
+                'warning' => false,
+                'detail' => !empty($runtime['ready']) ? 'PHP, ProcessWire, extensions, and enabled integration packages are compatible.' : implode(' ', (array) ($runtime['errors'] ?? [])),
+                'action' => $settingsUrl,
+            ],
+            [
+                'area' => 'operations',
+                'item' => 'Backup and restore evidence',
+                'ready' => !empty($backup['fresh']) && !empty($backup['restore_verified']),
+                'warning' => true,
+                'detail' => empty($backup['recorded']) ? 'No backup evidence recorded.' : ('Backup age: ' . $backup['age_hours'] . ' hours; restore ' . (!empty($backup['restore_verified']) ? 'verified' : 'not verified') . '; destination: ' . ($backup['destination_category'] ?: 'not recorded') . '.'),
+                'action' => $settingsUrl,
+            ],
+            [
+                'area' => 'operations',
+                'item' => 'Checkout availability',
+                'ready' => $commerce->operationalService()->isCheckoutAvailable(),
+                'warning' => false,
+                'detail' => $commerce->operationalService()->isCheckoutAvailable() ? 'Checkout accepts new payment and quote submissions.' : 'Checkout is fail-closed while catalog and recovery surfaces remain available.',
+                'action' => $settingsUrl,
+            ],
             [
                 'area' => 'setup',
                 'item' => 'Storefront pages',

@@ -2,7 +2,7 @@
 namespace ProcessWire;
 
 trait ProcessMercatoLaunchPanels {
-    protected function renderLaunchChecklist(Mercato $commerce, array $cleanupResult = [], array $demoOrderResult = [], array $demoSetupResult = [], array $demoDiscountResult = []): string {
+    protected function renderLaunchChecklist(Mercato $commerce, array $cleanupResult = [], array $demoOrderResult = [], array $demoSetupResult = [], array $demoDiscountResult = [], array $privacyRetentionResult = []): string {
         $checkoutPage = $this->wire('pages')->get('template=mrc-checkout, include=all');
         $settingsUrl = $this->wire('config')->urls->admin . 'module/edit?name=Mercato';
         $checks = $this->getLaunchChecklistItems($commerce);
@@ -113,8 +113,41 @@ trait ProcessMercatoLaunchPanels {
             $out .= '<a class="uk-button uk-button-default" href="' . $this->e($settingsUrl) . '">' . $this->e($this->_('Review mode settings')) . '</a>';
         }
         $out .= '</div></section>';
+        $out .= $this->renderSeoDiagnostics($commerce);
+        $out .= $this->renderPrivacyRetentionPanel($commerce, $privacyRetentionResult);
+        $out .= $this->renderOperationalStatusPanel($commerce);
+        $out .= $this->renderAnalyticsDiagnostics($commerce);
 
         return $out;
+    }
+
+    protected function renderSeoDiagnostics(Mercato $commerce): string {
+        $rows = $commerce->seoService()->diagnostics(); $issueCount = 0;
+        foreach ($rows as $row) $issueCount += count((array) ($row['issues'] ?? []));
+        $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Storefront SEO diagnostics')) . '</h2><p class="uk-text-muted">' . $this->e(sprintf($this->_('%d catalog pages checked; %d metadata issue(s).'), count($rows), $issueCount)) . '</p></div><a class="uk-button uk-button-default" target="_blank" rel="noopener" href="' . $this->e(rtrim((string) $this->wire('config')->urls->root, '/') . '/sitemap-mercato.xml') . '">' . $this->e($this->_('Open sitemap')) . '</a></div>';
+        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Page')) . '</th><th>' . $this->e($this->_('Robots')) . '</th><th>' . $this->e($this->_('Sitemap')) . '</th><th>' . $this->e($this->_('Issues')) . '</th></tr></thead><tbody>';
+        foreach ($rows as $row) { $issues = (array) ($row['issues'] ?? []); if (!$issues && $issueCount > 0) continue; $out .= '<tr><td><a href="' . $this->e((string) $row['url']) . '" target="_blank" rel="noopener">' . $this->e((string) $row['title']) . '</a></td><td>' . $this->e((string) $row['robots']) . '</td><td>' . (!empty($row['sitemap']) ? $this->e($this->_('Included')) : $this->e($this->_('Excluded'))) . '</td><td>' . $this->e($issues ? implode(', ', $issues) : $this->_('None')) . '</td></tr>'; }
+        return $out . '</tbody></table></div></section>';
+    }
+
+    protected function renderPrivacyRetentionPanel(Mercato $commerce, array $result = []): string {
+        $canManage = $this->hasCommercePermission(self::PERMISSION_MANAGE_PRIVACY); $report = (array) ($result['report'] ?? []);
+        $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Privacy retention')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Bounded, retry-safe cleanup. Always inspect the dry-run before execution. Legal holds and active commerce workflows are blocked.')) . '</p></div></div>';
+        if ($result) { $out .= '<div class="uk-alert ' . (!empty($result['errors']) ? 'uk-alert-danger' : 'uk-alert-success') . '"><p><strong>' . $this->e((string) ($result['summary'] ?? '')) . '</strong></p>'; foreach ((array) ($result['errors'] ?? []) as $error) $out .= '<p>' . $this->e((string) $error) . '</p>'; if ($report) $out .= '<pre style="white-space:pre-wrap">' . $this->e(json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '') . '</pre>'; $out .= '</div>'; }
+        if ($canManage) { $action = $this->adminUrl('launch/'); $out .= '<div class="mrc-panel-actions"><form method="post" action="' . $this->e($action) . '" class="mrc-inline-form">' . $this->renderCsrfInput() . '<button class="uk-button uk-button-default" name="mrc_privacy_retention_action" value="dry_run" type="submit">' . $this->e($this->_('Dry-run report')) . '</button></form><form method="post" action="' . $this->e($action) . '" class="mrc-inline-form">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_privacy_retention_action" value="run"><label><input class="uk-checkbox" type="checkbox" name="privacy_retention_confirmed" value="1" required> ' . $this->e($this->_('Execute reviewed batch')) . '</label><button class="uk-button uk-button-danger" type="submit">' . $this->e($this->_('Run retention')) . '</button></form></div>'; }
+        return $out . '</section>';
+    }
+
+    protected function renderOperationalStatusPanel(Mercato $commerce): string {
+        $health = $commerce->operationalService()->health(true); $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Operational health')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Permissioned, PII-free diagnostics for monitoring and recovery.')) . '</p></div><strong>' . $this->e(strtoupper((string) $health['status'])) . '</strong></div><div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Category')) . '</th><th>' . $this->e($this->_('Status')) . '</th><th>' . $this->e($this->_('Check')) . '</th></tr></thead><tbody>';
+        foreach ((array) ($health['checks'] ?? []) as $check) $out .= '<tr><td>' . $this->e((string) ($check['category'] ?? '')) . '</td><td>' . $this->e(strtoupper((string) ($check['status'] ?? ''))) . '</td><td>' . $this->e((string) ($check['message'] ?? '')) . '</td></tr>';
+        return $out . '</tbody></table></div><p><code>GET /api/mercato/health</code> ' . $this->e($this->_('is the minimal uptime endpoint. Add ?details=1 with the configured Authorization bearer token for category diagnostics.')) . '</p></section>';
+    }
+
+    protected function renderAnalyticsDiagnostics(Mercato $commerce): string {
+        $diagnostics = $commerce->analyticsService()->diagnostics(20); $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Analytics diagnostics')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Consent-aware adapters and recent minimized delivery events.')) . '</p></div><strong>' . $this->e(!empty($diagnostics['enabled']) ? $this->_('ENABLED') : $this->_('DISABLED')) . '</strong></div>';
+        $out .= '<p><strong>' . $this->e($this->_('Configured adapters')) . ':</strong> ' . $this->e(implode(', ', (array) $diagnostics['configured_adapters']) ?: $this->_('None')) . '<br><strong>' . $this->e($this->_('Registered adapters')) . ':</strong> ' . $this->e(implode(', ', (array) $diagnostics['registered_adapters']) ?: $this->_('None')) . '</p>';
+        if (!empty($diagnostics['recent'])) $out .= '<pre style="white-space:pre-wrap;max-height:24rem;overflow:auto">' . $this->e(json_encode($diagnostics['recent'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '') . '</pre>'; else $out .= '<p class="uk-text-muted">' . $this->e($this->_('No analytics delivery events recorded.')) . '</p>'; return $out . '</section>';
     }
 
     protected function renderLaunchSetupPath(array $checks): string {
@@ -517,6 +550,7 @@ trait ProcessMercatoLaunchPanels {
             self::PERMISSION_VIEW_CUSTOMERS,
             self::PERMISSION_MANAGE_CUSTOMERS,
             self::PERMISSION_MANAGE_RECOVERY,
+            self::PERMISSION_MANAGE_PRIVACY,
             self::PERMISSION_VIEW_REPORTS,
             self::PERMISSION_MANAGE_DISCOUNTS,
             self::PERMISSION_MANAGE_WEBHOOKS,

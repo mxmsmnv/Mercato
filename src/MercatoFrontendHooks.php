@@ -28,6 +28,32 @@ trait MercatoFrontendHooks {
         return $quote;
     }
 
+    public function ___headlessApiResource(array $resource, string $type, array $context = []): array { return $resource; }
+
+    public function ___taxProviders(array $providers): array {
+        return $providers;
+    }
+
+    public function ___shippingProviders(array $providers): array {
+        return $providers;
+    }
+
+    public function ___emailWebhookAdapters(array $adapters): array {
+        return $adapters;
+    }
+
+    public function ___storefrontSeoMetadata(array $metadata, Page $page, array $context = []): array { return $metadata; }
+
+    public function ___storefrontSeoAlternates(array $alternates, Page $page): array { return $alternates; }
+
+    public function ___storefrontSitemapEntries(array $entries): array { return $entries; }
+
+    public function ___privacyRetentionRules(array $rules): array { return $rules; }
+
+    public function ___privacyExport(array $data, string $email): array { return $data; }
+
+    public function ___privacyAnonymized(array $result): void {}
+
     public function ___beforeResolveDiscount(array $context): array {
         return $context;
     }
@@ -53,6 +79,12 @@ trait MercatoFrontendHooks {
     public function ___afterCreateCheckout(array $pendingOrder, Page $orderPage, string $redirect): void {
     }
 
+    public function ___quoteSubmitted(Page $quotePage, array $snapshot): void {
+    }
+
+    public function ___quoteStatusChanged(Page $quotePage, string $from, string $to, array $context = []): void {
+    }
+
     public function ___paymentAuthorized(Page $orderPage, string $status): void {
     }
 
@@ -63,15 +95,27 @@ trait MercatoFrontendHooks {
         if ($status !== MercatoPaymentStatus::PAID) {
             return;
         }
+        $this->taxService()->commit($orderPage);
         $service = new MercatoOrderConfirmationService($this);
         $service->setWire($this->wire());
         $service->send($orderPage);
+        $this->analyticsService()->trackOrder($orderPage, 'payment_result', ['result' => 'paid'], 'payment_result:paid:' . (int) $orderPage->id);
+        $this->analyticsService()->trackOrder($orderPage, 'purchase', [], 'purchase:' . (int) $orderPage->id);
     }
 
     public function ___paymentFailed(Page $orderPage, string $reason): void {
+        $this->taxService()->void($orderPage, $reason);
+        $this->notificationDeliveryService()->sendOrderEvent($orderPage, 'payment_failed', ['reason' => $reason, 'status' => (string) $orderPage->mrc_payment_status]);
+        $this->analyticsService()->trackOrder($orderPage, 'payment_result', ['result' => 'failed'], 'payment_result:failed:' . (int) $orderPage->id);
     }
 
     public function ___paymentRefunded(Page $orderPage, array $refund): void {
+        $this->notificationDeliveryService()->sendOrderEvent($orderPage, 'refund', $refund);
+        $gateway = (array) ($refund['gateway_refund'] ?? []); $gatewayStatus = strtolower((string) ($gateway['status'] ?? '')); $amount = round((float) ($refund['amount'] ?? $refund['refund_amount'] ?? 0), 2);
+        if ($amount > 0 && (in_array($gatewayStatus, ['succeeded', 'refunded'], true) || in_array((string) ($refund['status'] ?? ''), [MercatoPaymentStatus::PARTIALLY_REFUNDED, MercatoPaymentStatus::REFUNDED], true))) {
+            $businessId = 'refund:' . (int) $orderPage->id . ':' . ((string) ($gateway['id'] ?? '') ?: hash('sha256', $amount . '|' . (string) ($refund['total_refunded'] ?? '')));
+            $this->analyticsService()->trackOrder($orderPage, 'refund', ['refund_amount' => $amount], $businessId);
+        }
     }
 
     public function ___returnRequested(Page $orderPage, array $request): array {
@@ -79,6 +123,7 @@ trait MercatoFrontendHooks {
     }
 
     public function ___orderStatusChanged(Page $orderPage, string $from, string $to, array $context = []): void {
+        if ($to === MercatoOrderStatus::CANCELED) $this->notificationDeliveryService()->sendOrderEvent($orderPage, 'cancellation', $context + ['status' => $to]);
     }
 
     public function ___fulfilmentUpdated(Page $orderPage, array $context = []): void {
@@ -123,13 +168,14 @@ trait MercatoFrontendHooks {
     public function ___runBackgroundJob(string $job, array $context = []): array {
         if ($job === 'reservation_cleanup') {
             $count = $this->orderRepository()->cleanupExpiredReservations();
+            $expiredQuotes = $this->quoteService()->expireDueQuotes();
             if ($count > 0) {
                 $this->wire('log')->save('mercato-inventory', sprintf(
                     'Released %d expired inventory reservation(s).',
                     $count
                 ));
             }
-            return ['ok' => true, 'released' => $count];
+            return ['ok' => true, 'released' => $count, 'expired_quotes' => $expiredQuotes];
         }
 
         if ($job === 'stale_draft_expiration') {
@@ -157,6 +203,8 @@ trait MercatoFrontendHooks {
             }
             return $result;
         }
+
+        if ($job === 'privacy_retention') return ['ok' => true] + $this->privacyService()->runRetention(false, (int) ($this->privacy_retention_batch_limit ?? 100));
 
         if ($job === 'recovery_automation') {
             $result = $this->recoveryService()->run();

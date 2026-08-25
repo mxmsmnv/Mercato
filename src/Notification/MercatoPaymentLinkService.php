@@ -63,21 +63,15 @@ final class MercatoPaymentLinkService extends Wire {
         }
 
         try {
-            $mail = wireMail();
-            $mail->to($recipient)
-                ->from($sender, trim((string) $this->commerce->notification_sender_name))
-                ->subject($subject)
-                ->body($body);
-            $replyTo = (string) $this->wire('sanitizer')->email((string) $this->commerce->notification_reply_to);
-            if ($replyTo !== '') {
-                $mail->header('Reply-To', $replyTo);
-            }
-            $mail->header('List-Unsubscribe', '<' . $values['{recovery_unsubscribe_link}'] . '>');
-            $mail->header('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
-            if ((int) $mail->send() < 1) {
-                return $this->record($order, 'failed', 'WireMail did not report a sent message.', $recipient);
-            }
-            return $this->record($order, 'sent', 'Payment link sent.', $recipient);
+            $result = $this->commerce->notificationDeliveryService()->deliver('payment_recovery', $recipient, $values, [
+                'order_id' => (int) $order->id,
+                'invoice' => (string) ($order->mrc_invoice_number ?: $order->title),
+                'business_event_id' => 'payment_link|' . (string) $order->mrc_payment_status,
+                'log_event' => 'payment_link_email',
+                'headers' => ['List-Unsubscribe' => '<' . $values['{recovery_unsubscribe_link}'] . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click'],
+            ], ['subject' => $subject, 'text' => $body]);
+            if (($result['status'] ?? '') === 'sent') $result['message'] = 'Payment link sent.';
+            return $result;
         } catch (\Throwable $e) {
             return $this->record($order, 'failed', $e->getMessage(), $recipient);
         }

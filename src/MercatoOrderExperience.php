@@ -236,7 +236,6 @@ trait MercatoOrderExperience {
             'service' => (string) ($shipment['service'] ?? ''),
             'tracking' => (string) ($shipment['tracking'] ?? ''),
             'tracking_url' => (string) ($shipment['tracking_url'] ?? ''),
-            'label_url' => (string) ($shipment['label_url'] ?? ''),
             'notes' => (string) ($shipment['notes'] ?? ''),
             'items' => $shipment['items'] ?? [],
             'source' => (string) ($shipment['source'] ?? 'api'),
@@ -343,49 +342,8 @@ trait MercatoOrderExperience {
     }
 
     public function getOrderAnalyticsEvent(Page $order, string $event = 'purchase'): array {
-        if (!$order || !$order->id || $order->template->name !== (string) $this->order_template) {
-            return [];
-        }
-
-        $items = json_decode((string) ($order->mrc_items ?? ''), true);
-        $items = is_array($items) ? $items : [];
-        $analyticsItems = [];
-        foreach ($items as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $analyticsItems[] = [
-                'item_id' => (string) ($item['product_id'] ?? $item['id'] ?? ''),
-                'item_name' => (string) ($item['title'] ?? ''),
-                'price' => round((float) ($item['price'] ?? 0), 2),
-                'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
-            ];
-        }
-
-        $cart = $this->productList($items);
-        $shipping = $order->hasField('mrc_shipping_amount') ? (float) $order->mrc_shipping_amount : $cart->getShipping();
-        $discount = $order->hasField('mrc_discount_total') ? (float) $order->mrc_discount_total : 0.0;
-        $total = $order->hasField('mrc_total_amount') ? (float) $order->mrc_total_amount : max(0, $cart->getSubtotal() + $shipping - $discount);
-        $tax = 0.0;
-        foreach ($this->getTaxRatesForOrder($cart, $shipping) as $taxRate) {
-            $tax += (float) ($taxRate['sum'] ?? 0);
-        }
-
-        $payload = [
-            'event' => $event,
-            'ecommerce' => [
-                'transaction_id' => (string) ($order->mrc_invoice_number ?: $order->id),
-                'value' => round($total, 2),
-                'tax' => round($tax, 2),
-                'shipping' => round($shipping, 2),
-                'currency' => MercatoCurrency::normalizeCode((string) ($order->mrc_currency ?: $this->currency)),
-                'coupon' => $order->hasField('mrc_discount_code') ? (string) $order->mrc_discount_code : '',
-                'items' => $analyticsItems,
-            ],
-        ];
-
-        $hooked = $this->analyticsEvent($order, $payload);
-        return is_array($hooked) ? $hooked : $payload;
+        if (!$order || !$order->id || $order->template->name !== (string) $this->order_template) return [];
+        return $this->analyticsService()->consumeOrderEvent($order, $event, 'data_layer');
     }
 
     public function getProductReviewSummary(Page $product): array {
@@ -545,7 +503,7 @@ trait MercatoOrderExperience {
         if (!$order || !$order->id || $order->template->name !== (string) $this->order_template) {
             return false;
         }
-        return $this->isOrderReceiptAvailable($order) && hash_equals($this->getOrderReceiptToken($order), trim($token));
+        return !$this->areOrderSignedLinksExpired($order) && $this->isOrderReceiptAvailable($order) && hash_equals($this->getOrderReceiptToken($order), trim($token));
     }
 
     public function getOrderDownloadToken(Page $order, int $productId, int $fileIndex): string {
@@ -575,7 +533,7 @@ trait MercatoOrderExperience {
         if (!$order || !$order->id || $order->template->name !== (string) $this->order_template) {
             return false;
         }
-        return hash_equals($this->getOrderDownloadToken($order, $productId, $fileIndex), trim($token));
+        return !$this->areOrderSignedLinksExpired($order) && hash_equals($this->getOrderDownloadToken($order, $productId, $fileIndex), trim($token));
     }
 
     public function isOrderReceiptAvailable(Page $order): bool {

@@ -16,6 +16,7 @@ foreach ([
     MercatoEventLog::class => '/src/Logging/MercatoEventLog.php',
     MercatoOrderConfirmationService::class => '/src/Notification/MercatoOrderConfirmationService.php',
     MercatoPaymentLinkService::class => '/src/Notification/MercatoPaymentLinkService.php',
+    MercatoQuoteStatus::class => '/src/Quote/MercatoQuoteStatus.php',
 ] as $class => $file) {
     if (!class_exists($class)) {
         require_once __DIR__ . $file;
@@ -41,6 +42,7 @@ require_once __DIR__ . '/src/Admin/ProcessMercatoOrderFulfilmentActions.php';
 require_once __DIR__ . '/src/Admin/ProcessMercatoPaymentRecoveryActions.php';
 require_once __DIR__ . '/src/Admin/ProcessMercatoImportCustomerReportData.php';
 require_once __DIR__ . '/src/Admin/ProcessMercatoAdminHelpers.php';
+require_once __DIR__ . '/src/Admin/ProcessMercatoQuotePanels.php';
 
 /**
  * ProcessMercato
@@ -68,17 +70,21 @@ class ProcessMercato extends Process implements Module {
     use ProcessMercatoPaymentRecoveryActions;
     use ProcessMercatoImportCustomerReportData;
     use ProcessMercatoAdminHelpers;
+    use ProcessMercatoQuotePanels;
 
     protected const PERMISSION_ADMIN = 'mercato-admin';
     protected const PERMISSION_VIEW_ORDERS = 'mercato-view-orders';
     protected const PERMISSION_EDIT_ORDERS = 'mercato-edit-orders';
     protected const PERMISSION_REFUND_ORDERS = 'mercato-refund-orders';
     protected const PERMISSION_MANUAL_ORDERS = 'mercato-create-manual-orders';
+    protected const PERMISSION_VIEW_QUOTES = 'mercato-view-quotes';
+    protected const PERMISSION_MANAGE_QUOTES = 'mercato-manage-quotes';
     protected const PERMISSION_MANAGE_PRODUCTS = 'mercato-manage-products';
     protected const PERMISSION_MANAGE_INVENTORY = 'mercato-manage-inventory';
     protected const PERMISSION_FULFIL_ORDERS = 'mercato-fulfil-orders';
     protected const PERMISSION_VIEW_CUSTOMERS = 'mercato-view-customers';
     protected const PERMISSION_MANAGE_CUSTOMERS = 'mercato-manage-customers';
+    protected const PERMISSION_MANAGE_PRIVACY = 'mercato-manage-privacy';
     protected const PERMISSION_MANAGE_RECOVERY = 'mercato-manage-recovery';
     protected const PERMISSION_VIEW_REPORTS = 'mercato-view-reports';
     protected const PERMISSION_MANAGE_DISCOUNTS = 'mercato-manage-discounts';
@@ -90,7 +96,7 @@ class ProcessMercato extends Process implements Module {
         return [
             'title' => 'Mercato Dashboard',
             'summary' => 'Admin dashboard for Mercato orders, products, and revenue.',
-            'version' => 120,
+            'version' => 130,
             'author' => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
@@ -104,11 +110,14 @@ class ProcessMercato extends Process implements Module {
                 self::PERMISSION_EDIT_ORDERS => 'Edit Mercato orders and send order emails',
                 self::PERMISSION_REFUND_ORDERS => 'Issue and reconcile Mercato refunds',
                 self::PERMISSION_MANUAL_ORDERS => 'Create Mercato manual orders',
+                self::PERMISSION_VIEW_QUOTES => 'View Mercato quote requests',
+                self::PERMISSION_MANAGE_QUOTES => 'Manage Mercato quote requests',
                 self::PERMISSION_MANAGE_PRODUCTS => 'Manage Mercato products and product imports',
                 self::PERMISSION_MANAGE_INVENTORY => 'Adjust and view Mercato inventory',
                 self::PERMISSION_FULFIL_ORDERS => 'Update Mercato fulfilment and send fulfilment emails',
                 self::PERMISSION_VIEW_CUSTOMERS => 'View Mercato customers',
                 self::PERMISSION_MANAGE_CUSTOMERS => 'Manage Mercato customer notes',
+                self::PERMISSION_MANAGE_PRIVACY => 'Review and execute Mercato privacy actions',
                 self::PERMISSION_MANAGE_RECOVERY => 'Manage Mercato abandoned checkout recovery',
                 self::PERMISSION_VIEW_REPORTS => 'View Mercato reports',
                 self::PERMISSION_MANAGE_DISCOUNTS => 'Manage Mercato discounts',
@@ -179,6 +188,7 @@ class ProcessMercato extends Process implements Module {
         $commerce = $this->wire('modules')->get('Mercato');
         $adjustmentResult = $this->handleStockAdjustment($commerce);
         $quickUpdateResult = $this->handleProductQuickUpdate($commerce);
+        $variantResult = $this->handleProductVariants($commerce);
         $duplicateResult = $this->handleProductDuplicate($commerce);
         $productId = (int) $this->wire('sanitizer')->int($this->wire('input')->get('id'));
         $product = $productId > 0 ? $this->wire('pages')->get($productId) : new NullPage();
@@ -195,7 +205,7 @@ class ProcessMercato extends Process implements Module {
 
         $canViewOrders = $this->hasCommercePermission(self::PERMISSION_VIEW_ORDERS);
         $orders = $canViewOrders ? $this->getOrdersContainingProduct($commerce, $product, 25) : new PageArray();
-        $out .= $this->renderProductDetail($product, $commerce, $orders, $adjustmentResult, $quickUpdateResult, $duplicateResult, $canViewOrders);
+        $out .= $this->renderProductDetail($product, $commerce, $orders, $adjustmentResult, $quickUpdateResult, $duplicateResult, $canViewOrders, $variantResult);
         $out .= '</div>';
         return $out;
     }
@@ -218,6 +228,34 @@ class ProcessMercato extends Process implements Module {
         $out .= '</div>';
 
         return $out;
+    }
+
+    public function ___executeQuotes(): string {
+        $this->headline($this->_('Mercato Quote Requests'));
+        if (!$this->hasCommercePermission(self::PERMISSION_VIEW_QUOTES)) {
+            return $this->renderAccessDenied(self::PERMISSION_VIEW_QUOTES, 'dashboard');
+        }
+        $commerce = $this->wire('modules')->get('Mercato');
+        return $this->renderStyles() . '<div class="mrc-admin-dashboard">'
+            . $this->renderAdminNav('quotes')
+            . $this->renderQuotes($this->getQuotes($commerce), $commerce)
+            . '</div>';
+    }
+
+    public function ___executeQuoteDetail(): string {
+        $this->headline($this->_('Mercato Quote Request'));
+        if (!$this->hasCommercePermission(self::PERMISSION_VIEW_QUOTES)) {
+            return $this->renderAccessDenied(self::PERMISSION_VIEW_QUOTES, 'quotes');
+        }
+        $commerce = $this->wire('modules')->get('Mercato');
+        $quote = $this->wire('pages')->get((int) $this->wire('input')->get('id'));
+        $out = $this->renderStyles() . '<div class="mrc-admin-dashboard">' . $this->renderAdminNav('quotes');
+        if (!$quote || !$quote->id || $quote->template->name !== (string) $commerce->quote_template) {
+            return $out . '<section class="pw-wrap mrc-admin-panel"><p class="uk-alert uk-alert-danger">' . $this->e($this->_('Quote request not found.')) . '</p></section></div>';
+        }
+        $result = $this->handleQuoteUpdate($commerce, $quote);
+        if ($result && empty($result['errors'])) $quote = $this->wire('pages')->getById((int) $quote->id, ['cache' => false])->first();
+        return $out . $this->renderQuoteDetail($quote, $commerce, $result) . '</div>';
     }
 
     public function ___executeManualOrder(): string {
@@ -254,6 +292,8 @@ class ProcessMercato extends Process implements Module {
         $commerce = $this->wire('modules')->get('Mercato');
         $actionResult = $this->handleFulfilmentUpdate($commerce);
         $notificationResult = $this->handleShippingNotification($commerce);
+        $retryResult = $this->handleNotificationRetry($commerce);
+        if ($retryResult) $notificationResult = $retryResult;
         $method = $this->getRequestedFulfilmentMethod();
         $queueFilter = $this->getRequestedFulfilmentQueueFilter();
         $notificationFilters = $this->getRequestedNotificationFilters();
@@ -330,6 +370,10 @@ class ProcessMercato extends Process implements Module {
         $paymentLinkResult = $this->handlePaymentLinkEmail($commerce, $order);
         $cancelResult = $this->handleUnpaidOrderCancellation($commerce, $order);
         $actionResult = $this->handlePaymentReconciliation($commerce, $order);
+        $paymentAuditResult = $this->handlePaymentAuditAction($commerce, $order);
+        if (!$actionResult && $paymentAuditResult) $actionResult = $paymentAuditResult;
+        $shippingActionResult = $this->handleShippingProviderAction($commerce, $order);
+        if (!$actionResult && $shippingActionResult) $actionResult = $shippingActionResult;
         $refundResult = $this->handleRefund($commerce, $order);
         $confirmationResult = $this->handleOrderConfirmation($commerce, $order);
         $statusLinkResult = $this->handleOrderStatusLinkRegeneration($commerce, $order);
@@ -429,8 +473,10 @@ class ProcessMercato extends Process implements Module {
         if (!$customer) {
             return $out . '<section class="pw-wrap mrc-admin-panel"><p class="uk-alert uk-alert-danger">' . $this->e($this->_('Customer not found.')) . '</p></section></div>';
         }
-        $noteResult = $this->handleCustomerNote($customer);
-        $out .= $this->renderCustomerDetail($customer, $this->getCustomerOrders($commerce, $customer), $commerce, $noteResult);
+        $privacyResult = $this->handleCustomerPrivacyAction($commerce, $customer);
+        $noteResult = $privacyResult ? [] : $this->handleCustomerNote($customer);
+        if (($privacyResult['status'] ?? '') === 'completed') { $customer = $this->getCustomerByKey($commerce, (string) ($privacyResult['new_customer_key'] ?? '')) ?: $customer; }
+        $out .= $this->renderCustomerDetail($customer, $this->getCustomerOrders($commerce, $customer), $commerce, $noteResult, $privacyResult);
         $out .= '</div>';
 
         return $out;
@@ -531,6 +577,7 @@ class ProcessMercato extends Process implements Module {
         $out = $this->renderStyles();
         $out .= '<div class="mrc-admin-dashboard">';
         $out .= $this->renderAdminNav('payment-attempts');
+        $out .= $this->renderPaymentReconciliationQueue($commerce, $this->getPaymentAttemptEvents(10000));
         $out .= $this->renderPaymentAttempts($events, $commerce, $filters);
         $out .= '</div>';
 
@@ -591,11 +638,12 @@ class ProcessMercato extends Process implements Module {
         $demoSetupResult = $this->handleDemoStorefrontSetup($commerce);
         $demoDiscountResult = $this->handleDemoDiscountSetup($commerce);
         $demoOrderResult = $this->handleDemoOrderCreation($commerce);
+        $privacyRetentionResult = $this->handlePrivacyRetention($commerce);
 
         $out = $this->renderStyles();
         $out .= '<div class="mrc-admin-dashboard">';
         $out .= $this->renderAdminNav('launch');
-        $out .= $this->renderLaunchChecklist($commerce, $cleanupResult, $demoOrderResult, $demoSetupResult, $demoDiscountResult);
+        $out .= $this->renderLaunchChecklist($commerce, $cleanupResult, $demoOrderResult, $demoSetupResult, $demoDiscountResult, $privacyRetentionResult);
         $out .= '</div>';
 
         return $out;
@@ -609,6 +657,12 @@ class ProcessMercato extends Process implements Module {
         $permission = $this->getExportPermission($type);
         if (!$this->hasCommercePermission($permission)) {
             throw new WirePermissionException(sprintf('Missing permission: %s', $permission));
+        }
+        if ($type === 'privacy-customer') {
+            $customer = $this->getCustomerByKey($commerce, $this->getRequestedCustomerKey());
+            if (!$customer || trim((string) ($customer['email'] ?? '')) === '') throw new WireException('Customer privacy export subject was not found.');
+            $this->sendJson('mercato-customer-privacy-' . date('Y-m-d') . '.json', $commerce->privacyService()->exportCustomer((string) $customer['email']));
+            return '';
         }
 
         [$filename, $rows] = match ($type) {

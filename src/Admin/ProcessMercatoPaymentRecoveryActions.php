@@ -3,6 +3,26 @@ namespace ProcessWire;
 
 trait ProcessMercatoPaymentRecoveryActions {
 
+    protected function handlePaymentAuditAction(Mercato $commerce, Page $order): array {
+        $action = trim((string) $this->wire('input')->post->text('mrc_payment_audit_action'));
+        if ($action === '') return [];
+        if (!$this->hasCommercePermission(self::PERMISSION_MANAGE_WEBHOOKS)) return $this->permissionError(self::PERMISSION_MANAGE_WEBHOOKS, $this->_('Payment audit action was blocked.'));
+        if (!$this->validateCsrf()) return ['summary' => $this->_('Payment audit action was blocked.'), 'errors' => [$this->_('CSRF token validation failed.')]];
+        try {
+            $service = $commerce->paymentReconciliationAuditService();
+            if ($action === 'verify_remote') {
+                $remote = $service->verifyRemote($order);
+                $summary = sprintf($this->_('Remote payment verified as %s.'), (string) $remote['status']);
+            } else {
+                if ((string) $this->wire('input')->post->text('repair_confirmed') !== '1') throw new WireException($this->_('Confirm the reconciliation repair.'));
+                $service->repair($order, $action, (string) $this->wire('input')->post->textarea('repair_reason'), (string) ($this->wire('user')->name ?? ''));
+                $summary = $this->_('Payment reconciliation repair completed and audited.');
+            }
+            $this->wire('session')->message($summary);
+            return ['summary' => $summary, 'errors' => []];
+        } catch (\Throwable $e) { return ['summary' => $this->_('Payment audit action failed.'), 'errors' => [$e->getMessage()]]; }
+    }
+
     protected function handlePaymentReconciliation(Mercato $commerce, Page $order): array {
         if ((string) $this->wire('input')->post->text('mrc_reconcile_payment') !== '1') {
             return [];
@@ -235,15 +255,16 @@ trait ProcessMercatoPaymentRecoveryActions {
         $orderId = (int) $this->wire('sanitizer')->int($this->wire('input')->post('order_id'));
         $order = $this->wire('pages')->get($orderId);
         $gateway = strtolower(trim((string) $this->wire('input')->post->text('gateway')));
-        $targetStatus = strtolower(trim((string) $this->wire('input')->post->text('payment_status')));
+        $scenario = strtolower(trim((string) $this->wire('input')->post->text('verification_scenario')));
+        $targetStatus = ['success' => MercatoPaymentStatus::PAID, 'decline' => MercatoPaymentStatus::FAILED, 'cancellation' => MercatoPaymentStatus::CANCELED, 'delayed_webhook' => MercatoPaymentStatus::PROCESSING, 'retry_success' => MercatoPaymentStatus::PAID][$scenario] ?? strtolower(trim((string) $this->wire('input')->post->text('payment_status')));
 
         try {
-            $result = $commerce->webhookService()->simulatePaymentStatus(
-                $order,
-                $gateway,
-                $targetStatus,
-                (string) ($this->wire('user')->name ?? '')
-            );
+            if ($scenario === 'duplicate_callback') {
+                $commerce->webhookService()->simulateDuplicateCallback($order, $gateway, (string) ($this->wire('user')->name ?? ''));
+                $result = $commerce->webhookService()->simulateDuplicateCallback($order, $gateway, (string) ($this->wire('user')->name ?? ''));
+            } else {
+                $result = $commerce->webhookService()->simulatePaymentStatus($order, $gateway, $targetStatus, (string) ($this->wire('user')->name ?? ''));
+            }
             $updated = $result['order'];
             $summary = sprintf(
                 $this->_('Simulated %s webhook for order %s: %s → %s.'),
@@ -252,6 +273,7 @@ trait ProcessMercatoPaymentRecoveryActions {
                 ucfirst(str_replace('_', ' ', (string) $result['from'])),
                 ucfirst(str_replace('_', ' ', (string) $result['to']))
             );
+            if ($scenario === 'duplicate_callback' && !empty($result['duplicate'])) $summary = $this->_('Duplicate callback replay was detected and produced no order, inventory, or notification side effects.');
             $errors = (array) ($result['inventory']['errors'] ?? []);
             if ($errors) {
                 $summary .= ' ' . $this->_('Inventory needs attention.');
@@ -394,6 +416,31 @@ trait ProcessMercatoPaymentRecoveryActions {
             'summary' => $summary,
             'errors' => $success ? [] : [(string) ($result['message'] ?? $this->_('Unknown mail error.'))],
         ];
+    }
+
+    protected function handleNotificationRetry(Mercato $commerce): array {
+        if ((string) $this->wire('input')->post->text('mrc_retry_notification') !== '1') return [];
+        if (!$this->hasCommercePermission(self::PERMISSION_FULFIL_ORDERS)) return $this->permissionError(self::PERMISSION_FULFIL_ORDERS, $this->_('Email retry was blocked.'));
+        if (!$this->validateCsrf()) return ['summary' => $this->_('Email retry was blocked.'), 'errors' => [$this->_('CSRF token validation failed.')]];
+        $order = $this->wire('pages')->get((int) $this->wire('input')->post->int('order_id'));
+        $loggedEvent = strtolower((string) $this->wire('input')->post->text('notification_event'));
+        if (!$order->id || $order->template->name !== $commerce->order_template) return ['summary' => $this->_('Email retry failed.'), 'errors' => [$this->_('Order not found.')]];
+        $event = match ($loggedEvent) {
+            'order_confirmation_email' => 'order_confirmation',
+            'payment_link_email', 'payment_recovery_email' => 'payment_recovery',
+            'payment_failed_email' => 'payment_failed',
+            'refund_email' => 'refund',
+            'cancellation_email' => 'cancellation',
+            'shipping_email', 'shipment_tracking_email' => 'shipment_tracking',
+            'pickup_ready_email' => 'pickup_ready',
+            'local_delivery_email' => 'local_delivery',
+            default => '',
+        };
+        if ($event === '') return ['summary' => $this->_('Email retry failed.'), 'errors' => [$this->_('This email event is not retryable from an order.')]];
+        $result = $commerce->notificationDeliveryService()->sendOrderEvent($order, $event, ['event_id' => 'manual-retry|' . $loggedEvent], true);
+        $ok = ($result['status'] ?? '') === 'sent';
+        if ($ok) $this->wire('session')->message($this->_('Transactional email retry sent.'));
+        return ['summary' => $ok ? $this->_('Transactional email retry sent.') : $this->_('Email retry failed.'), 'errors' => $ok ? [] : [(string) ($result['message'] ?? $this->_('Unknown mail error.'))]];
     }
 
     protected function handleOrderConfirmation(Mercato $commerce, Page $order): array {
@@ -768,6 +815,19 @@ trait ProcessMercatoPaymentRecoveryActions {
         $summary = $this->_('Customer note saved.');
         $this->wire('session')->message($summary);
         return ['summary' => $summary, 'errors' => []];
+    }
+
+    protected function handleCustomerPrivacyAction(Mercato $commerce, array $customer): array {
+        $action = (string) $this->wire('input')->post->text('mrc_privacy_action'); if ($action === '') return [];
+        if (!$this->hasCommercePermission(self::PERMISSION_MANAGE_PRIVACY)) return $this->permissionError(self::PERMISSION_MANAGE_PRIVACY, $this->_('Privacy action was blocked.'));
+        if (!$this->validateCsrf()) return ['summary' => $this->_('Privacy action was blocked.'), 'errors' => [$this->_('CSRF token validation failed.')]];
+        $email = (string) ($customer['email'] ?? ''); if ($email === '') return ['summary' => $this->_('Privacy action failed.'), 'errors' => [$this->_('Customer has no valid email subject key.')]];
+        try {
+            if ($action === 'review') { $review = $commerce->privacyService()->reviewCustomer($email); return ['summary' => $this->_('Privacy dry-run completed.'), 'review' => $review, 'errors' => []]; }
+            if ($action === 'anonymize') { if ((string) $this->wire('input')->post->text('privacy_confirmed') !== '1') throw new WireException('Explicit anonymization confirmation is required.'); $reason = trim((string) $this->wire('input')->post->textarea('privacy_reason')); $result = $commerce->privacyService()->deleteCustomerData($email, $reason, (string) $commerce->privacy_policy_version); $result['summary'] = $this->_('Deletion request fulfilled by anonymization; financial records were preserved.'); $result['new_customer_key'] = 'anonymous-' . substr(hash('sha256', strtolower($email)), 0, 20) . '@privacy.invalid'; $this->wire('session')->message($result['summary']); return $result + ['errors' => []]; }
+            if (in_array($action, ['hold', 'release_hold'], true)) { $order = $this->wire('pages')->get((int) $this->wire('input')->post->int('order_id')); $reason = trim((string) $this->wire('input')->post->textarea('privacy_reason')); if (!$order->id || $reason === '') throw new WireException('Order and reason are required for legal-hold changes.'); $hold = $action === 'hold'; $result = $commerce->privacyService()->setLegalHold($order, $hold, $reason); return ['summary' => $hold ? $this->_('Legal hold enabled.') : $this->_('Legal hold released.'), 'hold' => $result, 'errors' => []]; }
+            throw new WireException('Unsupported privacy action.');
+        } catch (\Throwable $e) { return ['summary' => $this->_('Privacy action failed.'), 'errors' => [$e->getMessage()]]; }
     }
 
     protected function handleUnpaidOrderTotalsUpdate(Mercato $commerce, Page $order): array {

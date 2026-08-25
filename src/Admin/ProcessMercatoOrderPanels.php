@@ -588,12 +588,25 @@ trait ProcessMercatoOrderPanels {
             'pickup_ready_email' => $this->_('Pickup ready'),
             'local_delivery_email' => $this->_('Local delivery'),
             'payment_link_email' => $this->_('Payment link'),
+            'payment_failed_email' => $this->_('Payment failed'),
+            'payment_recovery_email' => $this->_('Payment recovery'),
+            'refund_email' => $this->_('Refund'),
+            'cancellation_email' => $this->_('Cancellation'),
+            'shipment_tracking_email' => $this->_('Shipment tracking'),
+            'account_created_email' => $this->_('Account created'),
+            'account_security_email' => $this->_('Account security'),
+            'email_delivery_bounce' => $this->_('Bounce'),
+            'email_delivery_complaint' => $this->_('Complaint'),
             'test_email' => $this->_('Test email'),
         ];
         $statusOptions = [
             'all' => $this->_('All statuses'),
             'sent' => $this->_('Sent'),
             'failed' => $this->_('Failed'),
+            'retrying' => $this->_('Retrying'),
+            'skipped' => $this->_('Skipped'),
+            'bounce' => $this->_('Bounced'),
+            'complaint' => $this->_('Complaint'),
         ];
         $out = '<section class="pw-wrap mrc-admin-panel">';
         $out .= '<div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Customer Emails')) . '</h2>';
@@ -621,12 +634,12 @@ trait ProcessMercatoOrderPanels {
         $out .= '</form>';
         $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
-        foreach ([$this->_('Time'), $this->_('Order'), $this->_('Type'), $this->_('Email'), $this->_('Status'), $this->_('Discount'), $this->_('Message')] as $heading) {
+        foreach ([$this->_('Time'), $this->_('Order'), $this->_('Type'), $this->_('Email'), $this->_('Status'), $this->_('Discount'), $this->_('Message'), $this->_('Actions')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
         }
         $out .= '</tr></thead><tbody>';
         if (!$events) {
-            $out .= $this->renderSkeletonRows(3, 7);
+            $out .= $this->renderSkeletonRows(3, 8);
             $out .= '</tbody></table></div>';
             return $out . '<p class="uk-text-muted mrc-admin-empty-note">' . $this->e($this->_('No customer notifications logged yet.')) . '</p></section>';
         }
@@ -648,7 +661,11 @@ trait ProcessMercatoOrderPanels {
             $out .= '<td>' . $this->e((string) ($event['recipient'] ?? '-')) . '</td>';
             $out .= '<td><span class="uk-label mrc-admin-status ' . $class . '">' . $this->e($status) . '</span></td>';
             $out .= '<td>' . $this->e((string) (($event['recovery_discount_code'] ?? '') ?: '-')) . '</td>';
-            $out .= '<td>' . $this->e((string) ($event['message'] ?? '')) . '</td></tr>';
+            $out .= '<td>' . $this->e((string) ($event['message'] ?? '')) . '</td><td>';
+            if ($status === 'failed' && $orderId > 0 && !str_starts_with((string) ($event['event'] ?? ''), 'email_delivery_')) {
+                $out .= '<form method="post">' . $this->csrfInput() . '<input type="hidden" name="mrc_retry_notification" value="1"><input type="hidden" name="order_id" value="' . $orderId . '"><input type="hidden" name="notification_event" value="' . $this->e((string) ($event['event'] ?? '')) . '"><button class="uk-button uk-button-small uk-button-default" type="submit">' . $this->e($this->_('Retry')) . '</button></form>';
+            } else $out .= '-';
+            $out .= '</td></tr>';
         }
         $out .= '</tbody></table></div></section>';
         return $out;

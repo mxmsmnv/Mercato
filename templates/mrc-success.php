@@ -117,15 +117,17 @@ if ($orderPage && $orderPage->id && ($isPaid || $isProcessing)) {
     $orderTotal = ($orderPage->hasField('mrc_total_amount') && ((float) $orderPage->mrc_total_amount > 0 || $hasFulfilmentSnapshot))
         ? (float) $orderPage->mrc_total_amount
         : max(0, $cart->getSubtotal() + $shippingTotal - $discountTotal);
-    $taxRates = $commerce->getTaxRatesForOrder($cart, $shippingTotal);
+    $taxRates = $commerce->taxService()->getStoredBreakdown($orderPage);
+    if (!$taxRates) $taxRates = $commerce->getTaxRatesForOrder($cart, $shippingTotal);
     $taxLabel = $commerce->getTaxLabel($orderPage);
 }
 
+$seoHead = $commerce->seoService()->render($page, ['private' => true]);
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Order Confirmed</title>
+    <?= $seoHead ?>
     <?= $frameworkAssets ?>
     <?= mrc_storefront_assets($isVanilla) ?>
 	    <?php if ($isVanilla): ?>
@@ -383,7 +385,7 @@ if ($orderPage && $orderPage->id && ($isPaid || $isProcessing)) {
 	        }
 	        .mrc-success-item-placeholder {
 	            align-items: center;
-	            color: var(--mrc-muted);
+	            color: var(--mrc-ink);
 	            display: flex;
 	            font-size: 11px;
 	            font-weight: 800;
@@ -503,7 +505,7 @@ if ($orderPage && $orderPage->id && ($isPaid || $isProcessing)) {
             <tbody>
             <?php foreach ($formattedItems as $item): ?>
                 <tr>
-                    <td><?= $sanitizer->entities($item['title']) ?></td>
+                    <td><?= $sanitizer->entities($item['title']) ?><?= !empty($item['variant_label']) ? '<br><small>' . $sanitizer->entities((string) $item['variant_label']) . '</small>' : '' ?></td>
                     <td><?= (int) $item['quantity'] ?></td>
                     <td><?= $item['price'] ?></td>
                     <td><?= $item['sum'] ?></td>
@@ -613,8 +615,8 @@ if ($orderPage && $orderPage->id && ($isPaid || $isProcessing)) {
                         <?php
                         $productId = (int) ($item['product_id'] ?? 0);
                         $product = $productId > 0 ? $pages->get($productId) : null;
-                        $imageUrl = '';
-                        if ($product && $product->id && $product->hasField('mrc_images') && $product->mrc_images && $product->mrc_images->count()) {
+                        $imageUrl = (string) ($item['image_url'] ?? '');
+                        if ($imageUrl === '' && $product && $product->id && $product->hasField('mrc_images') && $product->mrc_images && $product->mrc_images->count()) {
                             $imageUrl = $product->mrc_images->first()->url;
                         }
                         ?>
@@ -628,6 +630,7 @@ if ($orderPage && $orderPage->id && ($isPaid || $isProcessing)) {
                             </div>
                             <div>
                                 <p class="mrc-success-item-title"><?= $sanitizer->entities($item['title'] ?? $item['id']) ?></p>
+                                <?php if (!empty($item['variant_label'])): ?><p><?= $sanitizer->entities((string) $item['variant_label']) ?><?= !empty($item['sku']) ? ' · ' . $sanitizer->entities((string) $item['sku']) : '' ?></p><?php endif; ?>
                                 <div class="mrc-success-item-meta">Qty <?= (int) $item['quantity'] ?> / <?= $item['price'] ?> each</div>
                             </div>
                             <div class="mrc-success-item-sum"><?= $item['sum'] ?></div>

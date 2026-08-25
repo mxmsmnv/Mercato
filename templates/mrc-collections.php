@@ -49,6 +49,7 @@ $heroImageUrl = '';
 if ($heroProduct && $heroProduct->id && $heroProduct->hasField('mrc_images') && $heroProduct->mrc_images->count()) {
     $heroImageUrl = $heroProduct->mrc_images->first()->url;
 }
+$seoHead = $commerce->seoService()->render($page, ['type' => 'collections', 'page_num' => (int) $input->pageNum, 'image' => $heroImageUrl]);
 $activeFilterCount = 0;
 foreach (['collection', 'availability', 'sort', 'type', 'min_price', 'max_price'] as $filterKey) {
     if (!empty($filterState[$filterKey])) {
@@ -60,7 +61,7 @@ foreach (['collection', 'availability', 'sort', 'type', 'min_price', 'max_price'
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title><?= $sanitizer->entities($page->title ?: 'Collections') ?></title>
+    <?= $seoHead ?>
     <?= $frameworkAssets ?>
     <?= mrc_storefront_assets($isVanilla) ?>
     <?php if (!$isVanilla): ?>

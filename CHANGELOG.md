@@ -7,6 +7,33 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ---
 
+## [Unreleased]
+
+## [1.3.0] - 2026-08-25
+
+### Added
+
+- Provider-neutral address tax estimates with normalized checkout inputs, product tax codes, immutable jurisdiction/exemption snapshots, configurable retry/timeout/failure policies, and headless quote support.
+- Idempotent tax commit, partial/full refund adjustment and void lifecycles, plus stored tax details in order views, receipts, analytics, reports, and CSV exports.
+- Provider-neutral live parcel rates, final quote revalidation, service mapping, handling adjustments, multi-parcel snapshots, explicit fallback policy, and a development reference adapter.
+- Idempotent shipment/label purchase, label reprint and void/refund admin actions, signed duplicate-safe tracking webhooks, non-regressing fulfilment state mapping, and private label URL redaction.
+- Guarded production payment activation with mode-correct credential/HTTPS checks, gateway capability and webhook verification status, configurable request retry/timeout policy, and guided test scenarios.
+- Remote payment verification snapshots, a five-state reconciliation queue, permissioned idempotent repair actions, expanded sensitive payload redaction, and payment launch/rotation/incident runbooks.
+- First-class product options and variants with server-resolved combinations, variant-specific SKU, pricing, stock policy, measurements, images, status, and immutable cart/order snapshots.
+- Variant management, CSV/API round-tripping, exact inventory reservation/sale/refund handling, low-stock reporting, duplicate validation, and a three-option demo product.
+- Optional request-for-quote checkout using dedicated non-order records, immutable pricing and fulfilment snapshots, a seven-state lifecycle, signed status links, merchant/customer notifications, admin management, customer-owned history, and configurable inventory reservation on acceptance.
+- Quote schema installer/repair support, permissions, hooks, and public service methods.
+- Privacy retention policies for carts, drafts, webhooks, notification/payment/operational logs, customer data, provider references, and signed links, with scheduled bounded cleanup and launch dry runs.
+- Permissioned customer JSON export, blocker-aware anonymization/deletion requests, legal-hold workflows, immutable financial preservation, token invalidation, policy-version audit trails, and extension hooks.
+- Provider-neutral transactional email delivery with localized text/HTML overrides, per-event controls, previews and test sends, retry/idempotency auditing, lifecycle notifications, and bounce/complaint hooks.
+- Storefront SEO metadata with canonical, robots, social, Product/Offer JSON-LD, alternate-language hooks, private-page exclusions, sitemap output, and launch diagnostics.
+- Configurable disabled/optional/required account modes, secure hashed expiring identity tokens, login rate limits and session rotation, optimistic profile updates, account deletion integration, hooks, installer migration, and storefront templates.
+- Reproducible complete release artifacts with production-only dependencies, normalized metadata and checksums; supported runtime matrix, missing-package diagnostics, runtime manifest checks, and newer-schema rollback protection.
+- Operational health categories for application, database, storage, email, providers, webhooks, reservations, cron, backup, configuration, and checkout, plus admin readiness and merchant/host/implementer recovery responsibilities.
+- Per-order analytics delivery state and locking, delayed consent activation, dataLayer/first-party adapters, recursive PII filtering, admin diagnostics, and external adapter hooks.
+- Versioned end-to-end coverage and release thresholds for checkout, coupon, inventory, payment replay/retry, refunds, email, signed links, permissions, noindex, analytics, desktop/mobile browsers, and opt-in-only live-provider smoke.
+- Native API pagination/filtering, CORS/HTTPS/body/rate controls, field errors, provider payment instructions, extension hooks, and replay/expiry/price/stock/privacy tests.
+
 ## [1.2.0] - 2026-07-30
 
 ### Added

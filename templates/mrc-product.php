@@ -31,21 +31,32 @@ $cartItems = $cart->values();
 $cartLineCount = $cart->count();
 $cartQuantity = 0.0;
 $cartProductQuantity = 0.0;
+$cartProductTotalQuantity = 0.0;
 $catalogAction = (string) $input->post('mrc_action');
+$variantDefinition = $commerce->variantService()->getDefinition($page);
+$hasVariants = $variantDefinition['variants'] !== [];
+$defaultVariant = null;
+foreach ($variantDefinition['variants'] as $candidateVariant) {
+    if ($candidateVariant['status'] === 'active') { $defaultVariant = $candidateVariant; break; }
+}
+$displayVariantId = (string) ($defaultVariant['id'] ?? '');
 foreach ($cartItems as $cartItem) {
     $itemQuantity = (float) ($cartItem['quantity'] ?? 0);
     $cartQuantity += $itemQuantity;
     if ((int) ($cartItem['product_id'] ?? 0) === (int) $page->id) {
-        $cartProductQuantity += $itemQuantity;
+        $cartProductTotalQuantity += $itemQuantity;
+        if (!$hasVariants || (string) ($cartItem['variant_id'] ?? '') === $displayVariantId) $cartProductQuantity += $itemQuantity;
     }
 }
-$purchasability = $commerce->getProductPurchasability($page, 1, $cartProductQuantity);
+$purchasability = $commerce->getProductPurchasability($page, 1, $cartProductQuantity, 0, $hasVariants ? $displayVariantId : null);
 $stockPolicy = (string) $purchasability['stock_policy'];
 $allowsOversell = (bool) $purchasability['allows_oversell'];
 $remainingStock = (int) $purchasability['remaining_stock'];
 $canAddToCart = (bool) $purchasability['ok'];
 $stockLabel = (string) $purchasability['stock_label'];
 $unavailableLabel = (string) $purchasability['unavailable_label'];
+$resolvedPrice = (float) ($purchasability['resolved_price'] ?? $page->mrc_price);
+$resolvedShipping = $defaultVariant && $defaultVariant['shipping_price'] !== null ? (float) $defaultVariant['shipping_price'] : (float) $page->mrc_shipping_price;
 $reviewSummary = $commerce->getProductReviewSummary($page);
 $relatedProducts = $commerce->getProductRelatedProducts($page, 4);
 
@@ -56,6 +67,7 @@ if ($catalogAction === 'clear_cart') {
         }
         $commerce->clearPendingCheckoutSession();
         $cart->delete();
+        $commerce->analyticsService()->track('cart_change', ['action' => 'clear', 'currency' => (string) $commerce->currency, 'value' => 0]);
         $commerce->setMessage('Cart cleared.');
     } catch (WireException $e) {
         $commerce->setMessage('Error: ' . $e->getMessage());
@@ -66,11 +78,20 @@ if ($catalogAction === 'clear_cart') {
 // Handle add-to-cart POST
 if ($catalogAction === 'add_to_cart') {
     $quantity = max(1, (int) $input->post->int('quantity'));
+    $variantSelection = (array) $input->post('variant_options');
+    $selectedVariant = $hasVariants ? $commerce->variantService()->resolve($page, '', $variantSelection) : null;
+    $selectedVariantId = (string) ($selectedVariant['id'] ?? '');
+    $selectedCartQuantity = 0.0;
+    foreach ($cartItems as $cartItem) {
+        if ((int) ($cartItem['product_id'] ?? 0) === (int) $page->id && (string) ($cartItem['variant_id'] ?? '') === $selectedVariantId) {
+            $selectedCartQuantity += (float) ($cartItem['quantity'] ?? 0);
+        }
+    }
     try {
         if (!$hasValidCsrf()) {
             throw new WireException('Form session expired. Please reload the page and try again.');
         }
-        $purchaseCheck = $commerce->getProductPurchasability($page, $quantity, $cartProductQuantity);
+        $purchaseCheck = $commerce->getProductPurchasability($page, $quantity, $selectedCartQuantity, 0, $hasVariants ? $variantSelection : null);
         if (empty($purchaseCheck['ok'])) {
             throw new WireException((string) ($purchaseCheck['first_error'] ?: 'This product is not available.'));
         }
@@ -78,13 +99,17 @@ if ($catalogAction === 'add_to_cart') {
         $cart->add([
             'id'       => $page->path,
             'quantity' => $quantity,
+            'variant_options' => $hasVariants ? $variantSelection : [],
         ]);
+        $commerce->analyticsService()->track('cart_change', ['action' => 'add', 'product_id' => (int) $page->id, 'variant_id' => $selectedVariantId, 'quantity' => $quantity, 'price' => round((float) ($purchaseCheck['resolved_price'] ?? $page->mrc_price), 2), 'currency' => (string) $commerce->currency]);
         $commerce->setMessage('Added to cart.');
     } catch (WireException $e) {
         $commerce->setMessage('Error: ' . $e->getMessage());
     }
     $session->redirect($input->url(true));
 }
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') $commerce->analyticsService()->track('product_view', ['product_id' => (int) $page->id, 'variant_id' => $displayVariantId, 'sku' => (string) ($defaultVariant['sku'] ?? $page->mrc_sku), 'name' => (string) $page->title, 'price' => round($resolvedPrice, 2), 'currency' => (string) $commerce->currency]);
 
 $message = $commerce->getMessage();
 $productPanelClass = $isVanilla
@@ -124,12 +149,15 @@ $relatedCardTitleClass = $isVanilla
     ? 'mrc-related-card-title'
     : 'font-semibold';
 $productImage = ($page->hasField('mrc_images') && count($page->mrc_images)) ? $page->mrc_images->first() : null;
+$variantImageUrls = $defaultVariant ? $commerce->variantService()->resolveImageUrls($page, (array) $defaultVariant['images']) : [];
+$productImageUrl = (string) ($variantImageUrls[0] ?? ($productImage ? $productImage->url : ''));
+$seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' => $productImageUrl]);
 
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title><?= $sanitizer->entities($page->title) ?></title>
+    <?= $seoHead ?>
     <?= $frameworkAssets ?>
     <?= mrc_storefront_assets($isVanilla) ?>
     <?php if (!$isVanilla): ?>
@@ -346,8 +374,8 @@ $productImage = ($page->hasField('mrc_images') && count($page->mrc_images)) ? $p
 <?php if (!$isVanilla): ?>
 <section class="mrc-section-reveal grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-start">
     <div class="overflow-hidden rounded-md bg-[#d8cdbc]">
-        <?php if ($productImage): ?>
-            <img class="block aspect-[4/5] w-full object-cover" src="<?= $sanitizer->entities($productImage->url) ?>" alt="<?= $sanitizer->entities($page->title) ?>">
+        <?php if ($productImageUrl !== ''): ?>
+            <img class="block aspect-[4/5] w-full object-cover" src="<?= $sanitizer->entities($productImageUrl) ?>" alt="<?= $sanitizer->entities($page->title) ?>">
         <?php endif; ?>
     </div>
     <aside class="rounded-md border border-[#d8cdbc] bg-[#fffaf2] p-5 shadow-[0_22px_70px_rgba(62,43,31,0.08)] md:p-8 lg:sticky lg:top-6">
@@ -360,10 +388,10 @@ $productImage = ($page->hasField('mrc_images') && count($page->mrc_images)) ? $p
                 <?php endif; ?>
             </p>
         <?php endif; ?>
-        <p class="<?= $ui['price'] ?>"><?= $commerce->formatPrice($page->mrc_price) ?></p>
+        <p class="<?= $ui['price'] ?>"><?= $commerce->formatPrice($resolvedPrice) ?></p>
         <?php if ($page->hasField('mrc_shipping_price')): ?>
             <p class="<?= $ui['shipping'] ?>">
-                Shipping: <?= ((float) $page->mrc_shipping_price > 0) ? $commerce->formatPrice((float) $page->mrc_shipping_price) : 'Free' ?>
+                Shipping: <?= $resolvedShipping > 0 ? $commerce->formatPrice($resolvedShipping) : 'Free' ?>
                 <?php if ($page->hasField('mrc_shipping_note') && $page->mrc_shipping_note): ?>
                     &middot; <?= $sanitizer->entities($page->mrc_shipping_note) ?>
                 <?php endif; ?>
@@ -372,8 +400,8 @@ $productImage = ($page->hasField('mrc_images') && count($page->mrc_images)) ? $p
         <?php if ($page->hasField('mrc_stock')): ?>
             <p class="<?= $ui['shipping'] ?>"><?= $sanitizer->entities($stockLabel) ?></p>
         <?php endif; ?>
-        <?php if ($cartProductQuantity > 0): ?>
-            <p><span class="<?= $inCartClass ?>"><?= (int) $cartProductQuantity ?> in cart</span></p>
+        <?php if ($cartProductTotalQuantity > 0): ?>
+            <p><span class="<?= $inCartClass ?>"><?= (int) $cartProductTotalQuantity ?> in cart</span></p>
         <?php endif; ?>
 
         <?php if ($page->mrc_description): ?>
@@ -383,6 +411,16 @@ $productImage = ($page->hasField('mrc_images') && count($page->mrc_images)) ? $p
         <form class="<?= $ui['form'] ?>" method="post" action="">
             <input type="hidden" name="mrc_action" value="add_to_cart">
             <?= $csrfInput ?>
+            <?php foreach ($variantDefinition['options'] as $option): ?>
+                <label class="grid gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#8a4b3e]">
+                    <?= $sanitizer->entities((string) $option['label']) ?>
+                    <select class="<?= $ui['input'] ?>" name="variant_options[<?= $sanitizer->entities((string) $option['id']) ?>]" required>
+                        <?php foreach ($option['values'] as $value): ?>
+                            <option value="<?= $sanitizer->entities((string) $value['id']) ?>" <?= (($defaultVariant['options'][$option['id']] ?? '') === $value['id']) ? 'selected' : '' ?>><?= $sanitizer->entities((string) $value['label']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            <?php endforeach; ?>
             <label class="grid gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#8a4b3e]">
                 Quantity
                 <input class="<?= $ui['input'] ?>" type="number" name="quantity" value="1" min="1" <?= !$allowsOversell && $remainingStock > 0 ? 'max="' . (int) $remainingStock . '"' : '' ?> <?= !$canAddToCart ? 'disabled' : '' ?>>
@@ -407,15 +445,15 @@ $productImage = ($page->hasField('mrc_images') && count($page->mrc_images)) ? $p
             <?php endif; ?>
         </p>
     <?php endif; ?>
-    <?php if ($productImage): ?>
+    <?php if ($productImageUrl !== ''): ?>
         <div class="<?= $ui['imageWrap'] ?>">
-            <img class="<?= $ui['image'] ?>" src="<?= $sanitizer->entities($productImage->url) ?>" alt="<?= $sanitizer->entities($page->title) ?>">
+            <img class="<?= $ui['image'] ?>" src="<?= $sanitizer->entities($productImageUrl) ?>" alt="<?= $sanitizer->entities($page->title) ?>">
         </div>
     <?php endif; ?>
-    <p class="<?= $ui['price'] ?>"><?= $commerce->formatPrice($page->mrc_price) ?></p>
+    <p class="<?= $ui['price'] ?>"><?= $commerce->formatPrice($resolvedPrice) ?></p>
     <?php if ($page->hasField('mrc_shipping_price')): ?>
         <p class="<?= $ui['shipping'] ?>">
-            Shipping: <?= ((float) $page->mrc_shipping_price > 0) ? $commerce->formatPrice((float) $page->mrc_shipping_price) : 'Free' ?>
+            Shipping: <?= $resolvedShipping > 0 ? $commerce->formatPrice($resolvedShipping) : 'Free' ?>
             <?php if ($page->hasField('mrc_shipping_note') && $page->mrc_shipping_note): ?>
                 &middot; <?= $sanitizer->entities($page->mrc_shipping_note) ?>
             <?php endif; ?>
@@ -424,8 +462,8 @@ $productImage = ($page->hasField('mrc_images') && count($page->mrc_images)) ? $p
     <?php if ($page->hasField('mrc_stock')): ?>
         <p class="<?= $ui['shipping'] ?>"><?= $sanitizer->entities($stockLabel) ?></p>
     <?php endif; ?>
-    <?php if ($cartProductQuantity > 0): ?>
-        <p><span class="<?= $inCartClass ?>"><?= (int) $cartProductQuantity ?> in cart</span></p>
+    <?php if ($cartProductTotalQuantity > 0): ?>
+        <p><span class="<?= $inCartClass ?>"><?= (int) $cartProductTotalQuantity ?> in cart</span></p>
     <?php endif; ?>
     <?php if ($page->mrc_description): ?>
         <div class="<?= $ui['description'] ?>"><?= $page->mrc_description ?></div>
@@ -433,6 +471,15 @@ $productImage = ($page->hasField('mrc_images') && count($page->mrc_images)) ? $p
     <form class="<?= $ui['form'] ?>" method="post" action="">
         <input type="hidden" name="mrc_action" value="add_to_cart">
         <?= $csrfInput ?>
+        <?php foreach ($variantDefinition['options'] as $option): ?>
+            <label><?= $sanitizer->entities((string) $option['label']) ?>:
+                <select class="<?= $ui['input'] ?>" name="variant_options[<?= $sanitizer->entities((string) $option['id']) ?>]" required>
+                    <?php foreach ($option['values'] as $value): ?>
+                        <option value="<?= $sanitizer->entities((string) $value['id']) ?>" <?= (($defaultVariant['options'][$option['id']] ?? '') === $value['id']) ? 'selected' : '' ?>><?= $sanitizer->entities((string) $value['label']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        <?php endforeach; ?>
         <label>
             Quantity:
             <input class="<?= $ui['input'] ?>" type="number" name="quantity" value="1" min="1" <?= !$allowsOversell && $remainingStock > 0 ? 'max="' . (int) $remainingStock . '"' : '' ?> <?= !$canAddToCart ? 'disabled' : '' ?>>

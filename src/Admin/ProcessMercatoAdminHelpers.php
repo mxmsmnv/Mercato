@@ -34,6 +34,11 @@ trait ProcessMercatoAdminHelpers {
                 'path' => 'orders/',
                 'permission' => self::PERMISSION_VIEW_ORDERS,
             ],
+            'quotes' => [
+                'label' => $this->_('Quotes'),
+                'path' => 'quotes/',
+                'permission' => self::PERMISSION_VIEW_QUOTES,
+            ],
             'manual-order' => [
                 'label' => $this->_('Manual Order'),
                 'path' => 'manual-order/',
@@ -135,6 +140,7 @@ trait ProcessMercatoAdminHelpers {
         return match ($type) {
             'products', 'product-events' => self::PERMISSION_MANAGE_PRODUCTS,
             'customers', 'customer-orders', 'customer-notes' => self::PERMISSION_VIEW_CUSTOMERS,
+            'privacy-customer' => self::PERMISSION_MANAGE_PRIVACY,
             'recovery', 'recovery-events' => self::PERMISSION_MANAGE_RECOVERY,
             'discounts', 'discount-events' => self::PERMISSION_MANAGE_DISCOUNTS,
             'webhooks', 'payments', 'payment-attempts', 'refunds' => self::PERMISSION_MANAGE_WEBHOOKS,

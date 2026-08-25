@@ -3,6 +3,36 @@ namespace ProcessWire;
 
 trait ProcessMercatoProductActions {
 
+    protected function handleProductVariants(Mercato $commerce): array {
+        if ((string) $this->wire('input')->post->text('mrc_save_variants') !== '1') return [];
+        if (!$this->hasCommercePermission(self::PERMISSION_MANAGE_PRODUCTS)) {
+            return $this->permissionError(self::PERMISSION_MANAGE_PRODUCTS, $this->_('Variant update was blocked.'));
+        }
+        if (!$this->validateCsrf()) {
+            return ['summary' => $this->_('Variant update was blocked.'), 'errors' => [$this->_('CSRF token validation failed.')]];
+        }
+        $product = $this->wire('pages')->get((int) $this->wire('input')->post->int('product_id'));
+        if (!$product || !$product->id || $product->template->name !== 'mrc-product') {
+            return ['summary' => $this->_('Variant update failed.'), 'errors' => [$this->_('Product not found.')]];
+        }
+        $options = json_decode((string) $this->wire('input')->post('variant_options_json'), true);
+        $variants = json_decode((string) $this->wire('input')->post('variants_json'), true);
+        if (!is_array($options) || !is_array($variants)) {
+            return ['summary' => $this->_('Variant update failed.'), 'errors' => [$this->_('Options and variants must be valid JSON arrays.')]];
+        }
+        try {
+            $result = $commerce->variantService()->saveDefinition($product, $options, $variants);
+            $summary = sprintf($this->_('Saved %d option group(s) and %d variant(s).'), count($result['options']), count($result['variants']));
+            $this->recordProductEvent('product_variants_updated', $product, [
+                'option_groups' => count($result['options']), 'variants' => count($result['variants']),
+            ]);
+            $this->wire('session')->message($summary);
+            return ['summary' => $summary, 'errors' => []];
+        } catch (WireException $e) {
+            return ['summary' => $this->_('Variant update failed.'), 'errors' => [$e->getMessage()]];
+        }
+    }
+
     protected function handleProductImport(Mercato $commerce): array {
         $action = (string) $this->wire('input')->post->text('mrc_import_products');
         if (!in_array($action, ['preview', 'import'], true)) {

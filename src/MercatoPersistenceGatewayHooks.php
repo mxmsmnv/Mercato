@@ -285,8 +285,8 @@ trait MercatoPersistenceGatewayHooks {
         return $result;
     }
 
-    public function getProductPurchasability(Page $product, int $requestedQuantity = 1, float $cartQuantity = 0.0, int $excludeOrderId = 0): array {
-        return $this->purchasabilityService()->evaluate($product, $requestedQuantity, $cartQuantity, $excludeOrderId);
+    public function getProductPurchasability(Page $product, int $requestedQuantity = 1, float $cartQuantity = 0.0, int $excludeOrderId = 0, string|array|null $variantReference = null): array {
+        return $this->purchasabilityService()->evaluate($product, $requestedQuantity, $cartQuantity, $excludeOrderId, $variantReference);
     }
 
     // -----------------------------------------------------------------------

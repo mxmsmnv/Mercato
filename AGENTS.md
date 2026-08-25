@@ -11,6 +11,8 @@ Mercato is a ProcessWire ecommerce module with an installable demo storefront. A
 ## Important Files
 
 - `Mercato.module.php`: main module configuration, public API, payment flow, checkout/order helpers, frontend framework helpers.
+- `composer.json`, `composer.lock`, and `DEPLOYMENT.md`: runtime dependency graph and the authoritative install/upgrade/rollback contract.
+- `ANALYTICS.md`: versioned event names, consent, payload minimization, delivery guarantees, and adapter contract.
 - `ProcessMercato.module.php`: admin process UI.
 - `install/install.php`: creates required fields, templates, pages, demo content, discounts, and copies storefront template files into `/site/templates/`.
 - `templates/mrc-storefront.php`: shared storefront styling, header, footer, filters, cart icon, and helper functions.
@@ -34,13 +36,35 @@ Use these module methods instead of inventing APIs:
 - `$commerce->clearPendingCheckoutSession(bool $releaseReservation = true)`: clear pending checkout state.
 - `$commerce->orderRepository()`: access order persistence helpers.
 - `$commerce->fulfilmentService()`: access fulfilment methods and checkout delivery logic.
-- `$commerce->getProductPurchasability(Page $product, int $requestedQuantity = 1, float $cartQuantity = 0.0, int $excludeOrderId = 0)`: check stock, preorder, backorder, and availability rules.
+- `$commerce->getProductPurchasability(Page $product, int $requestedQuantity = 1, float $cartQuantity = 0.0, int $excludeOrderId = 0, string|array|null $variantReference = null)`: check product or exact-variant stock, preorder, backorder, and availability rules.
+- `$commerce->variantService()`: validate option/variant definitions, resolve selections, create canonical cart snapshots, and update exact-variant inventory.
 - `$commerce->getOrderAnalyticsEvent(Page $order, string $event = 'purchase')`: build storefront analytics payloads.
 - `$commerce->getFrontendFramework()`: read the selected frontend framework.
 - `$commerce->renderFrontendFrameworkAssets()`: output configured frontend framework assets.
 - `$commerce->getFrontendUiClasses()`: get CSS class names for the active frontend mode.
 - `$commerce->getStorefrontTemplateOverridePath(string $template)`: resolve site-level storefront template overrides.
+- `$commerce->privacyService()`: access portable customer export, deletion/anonymization review, legal holds, and bounded retention cleanup.
+- `$commerce->areOrderSignedLinksExpired(Page $order, ?int $now = null)`: enforce the configured age limit for public order links.
+- `$commerce->customerAccountService()`: access customer registration, verification, authentication, profile/address updates, owned order history, and guest-order claim workflows.
+- `$commerce->getRuntimeCompatibilityReport()`: inspect supported runtime/extensions and enabled integration dependency readiness.
+- `$commerce->operationalService()`: access checkout maintenance state, backup/restore evidence, pre-upgrade checks, and PII-free health diagnostics.
+- `$commerce->analyticsService()` and `$commerce->setAnalyticsConsent(array $categories)`: emit/consume minimized analytics events and manage session consent.
 - `$commerce->setMessage($message)` and `$commerce->getMessage()`: set/read storefront feedback messages.
+- `$commerce->notificationDeliveryService()`: preview or deliver lifecycle email events through the configured transport with retry, redaction, and idempotency controls.
+- `$commerce->seoService()`: build/render canonical, robots, social, structured-data, sitemap, and diagnostic output from server-authoritative storefront state.
+- `$commerce->submitQuoteRequest(array $data, ?array $items = null)`: create a dedicated non-payment quote request from the current cart or explicit product requests.
+- `$commerce->updateQuoteStatus(Page $quote, string $status, string $note = '', ?float $amount = null)`: perform a validated quote lifecycle transition.
+- `$commerce->quoteService()`: access signed quote status, customer ownership, expiry, and notification helpers.
+- `$commerce->taxService()`: estimate address-based tax and access stored order tax snapshots/lifecycle helpers.
+- `$commerce->shippingProviderService()`: quote live parcel services and manage provider shipment, label, tracking webhook, void, and refund lifecycles.
+- `$commerce->paymentReconciliationAuditService()`: inspect local/remote payment mismatch states, explicitly verify provider state, and run narrowly scoped audited repairs.
+- `$commerce->headlessApiService()`: access v1 native catalog, quote, opaque checkout, completion, and order resources without duplicating commerce calculations.
+
+Custom tax-provider modules implement `MercatoTaxProviderInterface` and register an instance with the `taxProviders` hook. Preserve estimate idempotency, stored calculation snapshots, commit-once locking, refund/void adjustments, and configured provider failure behavior. Tax configuration is not accounting or legal advice.
+
+Custom live-carrier modules implement `MercatoShippingProviderInterface` and register with `shippingProviders`. Keep credentials in the adapter, revalidate final-address quotes, preserve shipment/label idempotency, verify tracking signatures, prevent status regression, and never log or export private label URLs.
+
+Never bypass `MercatoProductionGuard` or enable production merely because credential fields are non-empty. Use mode-correct keys, HTTPS, required webhook events, the non-production verification scenarios, remote reconciliation checks, and an explicit rollback plan. Repair payment mismatches only after provider verification and preserve all audit records.
 
 Shared storefront helper functions are defined in `templates/mrc-storefront.php` and are safe to use from Mercato storefront templates after requiring that file:
 
@@ -65,6 +89,10 @@ Shared storefront helper functions are defined in `templates/mrc-storefront.php`
 - Storefront pages should demonstrate real ecommerce behavior: collections, filters, cart, stock states, discounts, shipping/pickup/local delivery, digital goods, policy links, checkout validation, and order confirmation.
 - Product cards should show real product imagery when available, clear price/stock information, and working add-to-cart controls where appropriate.
 - Checkout and success pages must preserve payment, fulfilment, tax, discount, order snapshot, and analytics behavior.
+- Transactional email overrides belong in `/site/templates/mercato/emails/{locale}/` (or the locale-free fallback) as non-executable `.txt` and `.html` files. Preserve signed links and use the delivery service instead of calling `wireMail()` directly.
+- Keep exactly one SEO renderer call in each public storefront `<head>`. Private/tokenized commerce pages must remain noindex and outside sitemap hooks; product structured prices and availability must come from Mercato services rather than duplicated template calculations.
+- Run `php scripts/run-acceptance.php` only against an isolated non-production site. Preserve fixture run-ID scoping, settings restoration, browser/accessibility coverage, reports, and the explicit live-provider opt-in gate.
+- Keep `/api/mercato/v1` compatible within v1. Treat client totals as untrusted; preserve token scope/expiry and idempotency; never serialize PII, gateway secrets, logs, filesystem paths, or unrestricted internal IDs.
 
 ## Installable Demo Rules
 
@@ -87,6 +115,8 @@ Shared storefront helper functions are defined in `templates/mrc-storefront.php`
 - Changing payment method availability, webhook verification, order totals, tax behavior, inventory reservation, refund behavior, or email recipients.
 - Overwriting existing `/site/templates/` files on a user's site.
 - Deleting orders, customers, products, refunds, webhook logs, payment attempts, or audit data.
+- Exporting or anonymizing customer data, changing legal holds, or executing a live privacy-retention batch. Run a dry-run first and preserve financial/audit records.
+- Linking or merging an account with guest orders. Require verified control of the exact destination and never replace an existing non-zero owner ID.
 - Changing public API behavior used by external templates or hooks.
 
 ## Avoid

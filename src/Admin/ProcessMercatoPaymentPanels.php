@@ -2,6 +2,22 @@
 namespace ProcessWire;
 
 trait ProcessMercatoPaymentPanels {
+    protected function renderPaymentReconciliationQueue(Mercato $commerce, array $attempts): string {
+        $orders = $this->wire('pages')->find('template=' . $this->wire('sanitizer')->selectorValue((string) $commerce->order_template) . ', include=all, sort=-created, limit=100');
+        $byOrder = [];
+        foreach ($attempts as $attempt) $byOrder[(int) ($attempt['order_page_id'] ?? 0)][] = $attempt;
+        $rows = [];
+        foreach ($orders as $order) {
+            $audit = $commerce->paymentReconciliationAuditService()->inspect($order, $byOrder[(int) $order->id] ?? []);
+            if (!empty($audit['issues'])) $rows[] = [$order, $audit];
+        }
+        $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Reconciliation Queue')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Paid/unfinalized, finalized/unpaid, duplicate-attempt, missing-webhook, and refund mismatch states. Remote state changes only after an authorized verification.')) . '</p></div></div>';
+        if (!$rows) return $out . '<p class="uk-alert uk-alert-success">' . $this->e($this->_('No mismatch states detected in the latest 100 orders.')) . '</p></section>';
+        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Order')) . '</th><th>' . $this->e($this->_('Local')) . '</th><th>' . $this->e($this->_('Remote')) . '</th><th>' . $this->e($this->_('Issues')) . '</th><th></th></tr></thead><tbody>';
+        foreach ($rows as [$order, $audit]) $out .= '<tr><td>' . $this->e((string) ($order->mrc_invoice_number ?: $order->title)) . '</td><td>' . $this->e((string) $audit['local_status']) . '</td><td>' . $this->e((string) $audit['remote_status']) . '</td><td>' . $this->e(implode(', ', (array) $audit['issues'])) . '</td><td><a class="uk-button uk-button-default" href="' . $this->e($this->orderDetailUrl($order)) . '">' . $this->e($this->_('Inspect')) . '</a></td></tr>';
+        return $out . '</tbody></table></div></section>';
+    }
+
     protected function renderPaymentAttemptsPanel(Page $order, Mercato $commerce): string {
         $attempts = array_values(array_filter($this->getPaymentAttemptEvents(10000), static fn(array $event): bool => (int) ($event['order_page_id'] ?? 0) === (int) $order->id));
         $out = '<section class="pw-wrap mrc-admin-panel mrc-payment-attempts">';

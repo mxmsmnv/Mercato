@@ -12,6 +12,12 @@ trait MercatoConfigInputfields {
         $data['enabled_fulfilment_methods'] = self::normalizeEnabledFulfilmentMethods($data['enabled_fulfilment_methods'] ?? []);
         $data['default_fulfilment_method'] = self::normalizeDefaultFulfilmentMethod($data['default_fulfilment_method'] ?? '', $data['enabled_fulfilment_methods']);
         $data['invoice_prefix'] = self::normalizeInvoicePrefix($data['invoice_prefix'] ?? '');
+        $data['quotes_parent'] = self::normalizePagePathConfig($data['quotes_parent'] ?? 'quotes', 'quotes');
+        $data['quote_requests_enabled'] = !empty($data['quote_requests_enabled']);
+        $data['quote_expiry_days'] = max(1, min(365, (int) ($data['quote_expiry_days'] ?? 30)));
+        $data['quote_inventory_policy'] = in_array((string) ($data['quote_inventory_policy'] ?? 'none'), ['none', 'on_acceptance'], true)
+            ? (string) $data['quote_inventory_policy']
+            : 'none';
         $data['frontend_framework'] = self::normalizeFrontendFramework($data['frontend_framework'] ?? self::getDefaultConfig()['frontend_framework']);
         $data['frontend_auto_assets'] = !empty($data['frontend_auto_assets']);
         foreach (['tailwind', 'bootstrap', 'uikit'] as $frontendAssetFramework) {
@@ -24,15 +30,72 @@ trait MercatoConfigInputfields {
         $data['cart_retention_days'] = self::normalizeRetentionDays($data['cart_retention_days'] ?? 30, 30, 1);
         $data['draft_order_retention_days'] = self::normalizeRetentionDays($data['draft_order_retention_days'] ?? 14, 14, 1);
         $data['webhook_payload_retention_days'] = self::normalizeRetentionDays($data['webhook_payload_retention_days'] ?? 90, 90, 1);
+        $data['gateway_timeout_seconds'] = max(3, min(120, (int) ($data['gateway_timeout_seconds'] ?? 30)));
+        $data['gateway_retries'] = max(0, min(3, (int) ($data['gateway_retries'] ?? 2)));
         $data['customer_data_retention_days'] = self::normalizeRetentionDays($data['customer_data_retention_days'] ?? 0, 0, 0);
+        $data['email_log_retention_days'] = self::normalizeRetentionDays($data['email_log_retention_days'] ?? 180, 180, 1);
+        $data['payment_attempt_retention_days'] = self::normalizeRetentionDays($data['payment_attempt_retention_days'] ?? 180, 180, 1);
+        $data['operational_log_retention_days'] = self::normalizeRetentionDays($data['operational_log_retention_days'] ?? 365, 365, 1);
+        $data['provider_reference_retention_days'] = self::normalizeRetentionDays($data['provider_reference_retention_days'] ?? 0, 0, 0);
+        $data['signed_link_retention_days'] = self::normalizeRetentionDays($data['signed_link_retention_days'] ?? 3650, 3650, 0);
+        $data['privacy_retention_schedule'] = self::normalizeReservationCleanupSchedule($data['privacy_retention_schedule'] ?? 'everyDay');
+        $data['privacy_retention_batch_limit'] = max(1, min(500, (int) ($data['privacy_retention_batch_limit'] ?? 100)));
+        $data['privacy_policy_version'] = substr(preg_replace('/[^a-zA-Z0-9._-]+/', '', trim((string) ($data['privacy_policy_version'] ?? '1.0'))) ?: '1.0', 0, 40);
+        $data['customer_accounts_mode'] = MercatoAccountPolicy::normalizeMode($data['customer_accounts_mode'] ?? 'disabled');
+        $data['account_claim_guest_orders'] = !empty($data['account_claim_guest_orders']);
+        $data['account_token_ttl_minutes'] = max(5, min(1440, (int) ($data['account_token_ttl_minutes'] ?? 60)));
+        $data['account_login_attempts'] = max(1, min(20, (int) ($data['account_login_attempts'] ?? 5)));
+        $data['account_login_window_seconds'] = max(60, min(86400, (int) ($data['account_login_window_seconds'] ?? 900)));
+        $data['account_orders_per_page'] = max(1, min(100, (int) ($data['account_orders_per_page'] ?? 10)));
+        $data['checkout_enabled'] = !empty($data['checkout_enabled']);
+        $data['checkout_maintenance_message'] = substr(trim((string) ($data['checkout_maintenance_message'] ?? '')), 0, 500);
+        $data['headless_api_enabled'] = !empty($data['headless_api_enabled']);
+        $data['headless_api_token_ttl_minutes'] = max(5, min(10080, (int) ($data['headless_api_token_ttl_minutes'] ?? 60)));
+        $data['headless_api_rate_limit_per_minute'] = max(1, min(1000, (int) ($data['headless_api_rate_limit_per_minute'] ?? 60)));
+        $data['headless_api_max_body_bytes'] = max(1024, min(1048576, (int) ($data['headless_api_max_body_bytes'] ?? 65536)));
+        $data['headless_api_allowed_origins'] = trim((string) ($data['headless_api_allowed_origins'] ?? ''));
+        $data['preupgrade_backup_required'] = !empty($data['preupgrade_backup_required']);
+        $data['backup_max_age_hours'] = max(1, min(8760, (int) ($data['backup_max_age_hours'] ?? 24)));
+        $data['health_storage_min_bytes'] = max(1048576, (int) ($data['health_storage_min_bytes'] ?? 104857600));
+        $data['health_cron_max_age_seconds'] = max(3600, min(2592000, (int) ($data['health_cron_max_age_seconds'] ?? 172800)));
+        $data['analytics_enabled'] = !empty($data['analytics_enabled']);
+        $data['analytics_adapters'] = array_values(array_unique(array_filter(array_map(static fn($value) => preg_replace('/[^a-z0-9_-]+/', '', strtolower((string) $value)), (array) ($data['analytics_adapters'] ?? ['data_layer', 'first_party'])))));
+        $data['analytics_default_consent'] = (string) ($data['analytics_default_consent'] ?? 'denied') === 'granted' ? 'granted' : 'denied';
+        $data['analytics_order_identifier'] = in_array((string) ($data['analytics_order_identifier'] ?? 'invoice'), ['invoice', 'hash', 'omit'], true) ? (string) $data['analytics_order_identifier'] : 'invoice';
+        $data['analytics_account_identifier'] = (string) ($data['analytics_account_identifier'] ?? 'omit') === 'hash' ? 'hash' : 'omit';
         $data['low_stock_threshold'] = self::normalizeLowStockThreshold($data['low_stock_threshold'] ?? 5);
+        $data['notification_locale'] = MercatoEmailTemplateRenderer::normalizeLocale((string) ($data['notification_locale'] ?? 'en'));
+        $data['notification_brand_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', trim((string) ($data['notification_brand_color'] ?? ''))) ? strtolower(trim((string) $data['notification_brand_color'])) : '#6b4f3a';
+        $data['notification_logo_url'] = trim((string) ($data['notification_logo_url'] ?? ''));
+        $data['notification_retries'] = max(0, min(5, (int) ($data['notification_retries'] ?? 2)));
+        $data['enabled_notification_events'] = array_values(array_intersect(MercatoEmailEventCatalog::EVENTS, array_map('strval', (array) ($data['enabled_notification_events'] ?? MercatoEmailEventCatalog::EVENTS))));
+        $data['seo_site_name'] = MercatoSeoRules::safeText((string) ($data['seo_site_name'] ?? 'Mercato Store'), 80);
+        $data['seo_default_description'] = MercatoSeoRules::safeText((string) ($data['seo_default_description'] ?? ''), 160);
+        $data['seo_default_robots'] = MercatoSeoRules::normalizeRobots((string) ($data['seo_default_robots'] ?? 'index,follow,max-image-preview:large'));
         $data['free_shipping_threshold'] = self::normalizeMoneyAmount($data['free_shipping_threshold'] ?? 0);
         $data['shipping_dimensions_enabled'] = !empty($data['shipping_dimensions_enabled']);
         $data['shipping_dimensions_field'] = self::normalizeShippingDimensionsField($data['shipping_dimensions_field'] ?? 'mrc_dimensions');
         $data['shipping_calculation_mode'] = self::normalizeShippingCalculationMode($data['shipping_calculation_mode'] ?? 'flat');
         $data['shipping_missing_measurements'] = self::normalizeMissingMeasurementsPolicy($data['shipping_missing_measurements'] ?? 'flat');
+        $data['shipping_provider'] = trim((string) ($data['shipping_provider'] ?? 'manual')) ?: 'manual';
+        $data['shipping_provider_failure_policy'] = in_array((string) ($data['shipping_provider_failure_policy'] ?? 'manual_fallback'), ['fail_closed', 'manual_fallback'], true) ? (string) $data['shipping_provider_failure_policy'] : 'manual_fallback';
+        $data['shipping_provider_timeout_seconds'] = max(1, min(30, (int) ($data['shipping_provider_timeout_seconds'] ?? 5)));
+        $data['shipping_provider_retries'] = max(0, min(3, (int) ($data['shipping_provider_retries'] ?? 1)));
+        $data['shipping_provider_quote_ttl_seconds'] = max(60, min(86400, (int) ($data['shipping_provider_quote_ttl_seconds'] ?? 900)));
+        $data['shipping_provider_origin'] = trim((string) ($data['shipping_provider_origin'] ?? ''));
+        $data['shipping_provider_service_map'] = trim((string) ($data['shipping_provider_service_map'] ?? ''));
+        $data['shipping_provider_handling_fixed'] = self::normalizeMoneyAmount($data['shipping_provider_handling_fixed'] ?? 0);
+        $data['shipping_provider_handling_percent'] = max(-100, min(1000, (float) ($data['shipping_provider_handling_percent'] ?? 0)));
+        $data['shipping_provider_allowed_regions'] = trim((string) ($data['shipping_provider_allowed_regions'] ?? ''));
+        $data['shipping_provider_package_mode'] = in_array((string) ($data['shipping_provider_package_mode'] ?? 'combined'), ['combined', 'per_item'], true) ? (string) $data['shipping_provider_package_mode'] : 'combined';
+        $data['shipping_provider_include_manual_rates'] = !empty($data['shipping_provider_include_manual_rates']);
+        $data['shipping_provider_webhook_secret'] = trim((string) ($data['shipping_provider_webhook_secret'] ?? ''));
         $data['tax_shipping'] = !empty($data['tax_shipping']);
         $data['shipping_tax_rate'] = self::normalizeTaxRate($data['shipping_tax_rate'] ?? 20);
+        $data['tax_provider'] = trim((string) ($data['tax_provider'] ?? 'manual')) ?: 'manual';
+        $data['tax_provider_failure_policy'] = in_array((string) ($data['tax_provider_failure_policy'] ?? 'fail_closed'), ['fail_closed', 'manual_fallback', 'zero_tax'], true) ? (string) $data['tax_provider_failure_policy'] : 'fail_closed';
+        $data['tax_provider_timeout_seconds'] = max(1, min(30, (int) ($data['tax_provider_timeout_seconds'] ?? 5)));
+        $data['tax_provider_retries'] = max(0, min(3, (int) ($data['tax_provider_retries'] ?? 1)));
         $data['allowed_delivery_countries'] = self::normalizeCountryCodes($data['allowed_delivery_countries'] ?? '');
         $data['delivery_regions'] = self::normalizeDeliveryRegions($data['delivery_regions'] ?? '');
         $data['delivery_windows'] = self::normalizeDeliveryWindows($data['delivery_windows'] ?? '');
@@ -90,6 +153,45 @@ trait MercatoConfigInputfields {
         $f->columnWidth = 34;
         $fs->add($f);
 
+        $f = $modules->get('InputfieldText');
+        $f->name = 'quotes_parent';
+        $f->label = __('Quote requests parent page path');
+        $f->description = __('Hidden storage path for dedicated quote records. Quote requests are not orders and are excluded from revenue and fulfilment.');
+        $f->value = $data['quotes_parent'];
+        $f->required = true;
+        $f->columnWidth = 34;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldCheckbox');
+        $f->name = 'quote_requests_enabled';
+        $f->label = __('Enable request-for-quote checkout');
+        $f->description = __('Customers can submit the cart for merchant review without initializing payment or reserving inventory.');
+        $f->attr('value', 1);
+        if (!empty($data['quote_requests_enabled'])) $f->attr('checked', 'checked');
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldSelect');
+        $f->name = 'quote_inventory_policy';
+        $f->label = __('Quote inventory policy');
+        $f->description = __('Default is no reservation. Optionally reserve stock only after staff/customer acceptance and release it when the quote expires or converts.');
+        $f->addOptions([
+            'none' => __('Do not reserve inventory'),
+            'on_acceptance' => __('Reserve when accepted'),
+        ]);
+        $f->value = $data['quote_inventory_policy'];
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldInteger');
+        $f->name = 'quote_expiry_days';
+        $f->label = __('Quote expiry days');
+        $f->value = $data['quote_expiry_days'];
+        $f->min = 1;
+        $f->max = 365;
+        $f->columnWidth = 33;
+        $fs->add($f);
+
         $f = $modules->get('InputfieldAsmSelect');
         $f->name  = 'success_page';
         $f->label = __('Success page');
@@ -130,6 +232,31 @@ trait MercatoConfigInputfields {
         $f->columnWidth = 25;
         $fs->add($f);
 
+        foreach (['email_log_retention_days' => __('Email log retention'), 'payment_attempt_retention_days' => __('Payment-attempt log retention'), 'operational_log_retention_days' => __('Operational log retention')] as $name => $label) { $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->description = __('Rows older than this are redacted while event status and financial linkage remain.'); $f->value = $data[$name]; $f->min = 1; $f->max = 3650; $f->columnWidth = 25; $fs->add($f); }
+        foreach (['provider_reference_retention_days' => __('Failed provider-reference retention'), 'signed_link_retention_days' => __('Signed customer-link lifetime')] as $name => $label) { $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->description = __('Days; use 0 to retain without automatic expiry. Paid financial references are not automatically removed.'); $f->value = $data[$name]; $f->min = 0; $f->max = 3650; $f->columnWidth = 25; $fs->add($f); }
+        $f = $modules->get('InputfieldSelect'); $f->name = 'privacy_retention_schedule'; $f->label = __('Privacy retention schedule'); foreach (self::getReservationCleanupScheduleOptions() as $value => $label) $f->addOption($value, __($label)); $f->value = $data['privacy_retention_schedule']; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldInteger'); $f->name = 'privacy_retention_batch_limit'; $f->label = __('Privacy batch limit'); $f->value = $data['privacy_retention_batch_limit']; $f->min = 1; $f->max = 500; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldText'); $f->name = 'privacy_policy_version'; $f->label = __('Privacy policy version'); $f->value = $data['privacy_policy_version']; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldTextarea'); $f->name = 'privacy_backup_retention_note'; $f->label = __('Backup/export retention policy note'); $f->description = __('Document backup deletion windows, processor copies, cached exports, and restoration procedures. Technical cleanup cannot erase external backups.'); $f->value = (string) ($data['privacy_backup_retention_note'] ?? ''); $f->rows = 3; $f->columnWidth = 75; $fs->add($f);
+
+        $f = $modules->get('InputfieldSelect'); $f->name = 'customer_accounts_mode'; $f->label = __('Customer accounts'); $f->addOption('disabled', __('Disabled')); $f->addOption('optional', __('Optional; guest checkout remains available')); $f->addOption('required_verified', __('Verified account required at checkout')); $f->value = $data['customer_accounts_mode']; $f->columnWidth = 33; $fs->add($f);
+        $f = $modules->get('InputfieldCheckbox'); $f->name = 'account_claim_guest_orders'; $f->label = __('Allow verified guest-order claims'); $f->description = __('Requires a one-time confirmation sent to the exact order email address.'); $f->checked = $data['account_claim_guest_orders']; $f->columnWidth = 33; $fs->add($f);
+        foreach (['account_token_ttl_minutes' => __('Account link lifetime (minutes)'), 'account_login_attempts' => __('Login attempts per window'), 'account_login_window_seconds' => __('Login rate-limit window (seconds)'), 'account_orders_per_page' => __('Orders per account page')] as $name => $label) { $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->value = $data[$name]; $f->min = 1; $f->columnWidth = 25; $fs->add($f); }
+        $f = $modules->get('InputfieldCheckbox'); $f->name = 'checkout_enabled'; $f->label = __('Checkout enabled'); $f->description = __('Disable checkout independently while keeping catalog, signed order pages, webhooks, and admin recovery available.'); $f->checked = $data['checkout_enabled']; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldText'); $f->name = 'checkout_maintenance_message'; $f->label = __('Checkout maintenance message'); $f->value = $data['checkout_maintenance_message']; $f->columnWidth = 75; $fs->add($f);
+        $f = $modules->get('InputfieldCheckbox'); $f->name = 'headless_api_enabled'; $f->label = __('Headless API v1 enabled'); $f->description = __('Versioned JSON catalog, quote, guest checkout, payment and order-status resources.'); $f->checked = $data['headless_api_enabled']; $f->columnWidth = 25; $fs->add($f);
+        foreach (['headless_api_token_ttl_minutes'=>__('API token lifetime (minutes)'), 'headless_api_rate_limit_per_minute'=>__('API requests per minute'), 'headless_api_max_body_bytes'=>__('API maximum JSON bytes')] as $name=>$label) { $f=$modules->get('InputfieldInteger'); $f->name=$name; $f->label=$label; $f->value=$data[$name]; $f->min=1; $f->columnWidth=25; $fs->add($f); }
+        $f=$modules->get('InputfieldTextarea'); $f->name='headless_api_allowed_origins'; $f->label=__('Headless API browser origins'); $f->description=__('One exact HTTPS origin per line. Leave blank for native/server clients only; wildcard origins are rejected.'); $f->value=$data['headless_api_allowed_origins']; $f->rows=3; $f->columnWidth=100; $fs->add($f);
+        $f = $modules->get('InputfieldCheckbox'); $f->name = 'preupgrade_backup_required'; $f->label = __('Require fresh evidence before schema upgrades'); $f->checked = $data['preupgrade_backup_required']; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldInteger'); $f->name = 'backup_max_age_hours'; $f->label = __('Maximum backup age (hours)'); $f->value = $data['backup_max_age_hours']; $f->min = 1; $f->max = 8760; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldText'); $f->name = 'health_check_token'; $f->label = __('Detailed health bearer token'); $f->description = __('Send as Authorization: Bearer; never put it in the URL or monitoring output.'); $f->value = (string) ($data['health_check_token'] ?? ''); $f->attr('type', 'password'); $f->columnWidth = 50; $fs->add($f);
+        foreach (['health_storage_min_bytes' => __('Minimum free storage bytes'), 'health_cron_max_age_seconds' => __('Maximum scheduler silence (seconds)')] as $name => $label) { $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->value = $data[$name]; $f->min = 1; $f->columnWidth = 25; $fs->add($f); }
+        $f = $modules->get('InputfieldCheckbox'); $f->name = 'analytics_enabled'; $f->label = __('Consent-aware analytics'); $f->description = __('Commerce continues when analytics is disabled, denied, or an adapter fails.'); $f->checked = $data['analytics_enabled']; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldCheckboxes'); $f->name = 'analytics_adapters'; $f->label = __('Analytics adapters'); $f->addOption('data_layer', __('Browser dataLayer')); $f->addOption('first_party', __('Redacted first-party log')); $f->value = $data['analytics_adapters']; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldSelect'); $f->name = 'analytics_default_consent'; $f->label = __('Default analytics consent'); $f->addOption('denied', __('Denied until customer choice')); $f->addOption('granted', __('Granted (only where lawful)')); $f->value = $data['analytics_default_consent']; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldSelect'); $f->name = 'analytics_order_identifier'; $f->label = __('Analytics order identifier'); foreach (['invoice' => __('Invoice/public reference'), 'hash' => __('SHA-256 hash'), 'omit' => __('Omit')] as $value => $label) $f->addOption($value, $label); $f->value = $data['analytics_order_identifier']; $f->columnWidth = 25; $fs->add($f);
+        $f = $modules->get('InputfieldSelect'); $f->name = 'analytics_account_identifier'; $f->label = __('Analytics account identifier'); $f->addOption('omit', __('Omit')); $f->addOption('hash', __('Salted SHA-256 hash')); $f->value = $data['analytics_account_identifier']; $f->columnWidth = 25; $fs->add($f);
+
         $f = $modules->get('InputfieldText');
         $f->name  = 'currency_symbol';
         $f->label = __('Currency symbol');
@@ -162,6 +289,19 @@ trait MercatoConfigInputfields {
         if (!empty($data['production'])) $f->attr('checked', 'checked');
         $f->columnWidth = 50;
         $fs->add($f);
+
+        $f = $modules->get('InputfieldCheckbox');
+        $f->name = 'production_activation_confirmed';
+        $f->label = __('Production activation confirmation');
+        $f->label2 = __('I reviewed live credentials, HTTPS webhooks, required events, smoke tests, reconciliation, and rollback.');
+        $f->description = __('Required only when changing production mode from off to on. This confirmation is not stored.');
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldInteger');
+        $f->name = 'gateway_timeout_seconds'; $f->label = __('Gateway request timeout (seconds)'); $f->value = $data['gateway_timeout_seconds']; $f->min = 3; $f->max = 120; $f->columnWidth = 50; $fs->add($f);
+        $f = $modules->get('InputfieldInteger');
+        $f->name = 'gateway_retries'; $f->label = __('Gateway transient retries'); $f->value = $data['gateway_retries']; $f->min = 0; $f->max = 3; $f->columnWidth = 50; $fs->add($f);
 
         $f = $modules->get('InputfieldInteger');
         $f->name = 'reservation_ttl_minutes';
@@ -279,6 +419,33 @@ trait MercatoConfigInputfields {
         $f->description = __('Review this before enabling production mode. Launch checklist repeats these checks with live site context.');
         $f->columnWidth = 100;
         $fs->add($f);
+
+        $f = $modules->get('InputfieldText');
+        $f->name = 'shipping_provider'; $f->label = __('Live shipping provider key');
+        $f->description = __('Use manual to keep flat/weight-band shipping, reference for the credential-free development adapter, or a key registered through shippingProviders.');
+        $f->value = $data['shipping_provider']; $f->columnWidth = 34; $fs->add($f);
+
+        $f = $modules->get('InputfieldSelect');
+        $f->name = 'shipping_provider_failure_policy'; $f->label = __('Live-rate failure policy');
+        $f->addOptions(['manual_fallback' => __('Use configured manual carrier rate'), 'fail_closed' => __('Make checkout unavailable')]);
+        $f->value = $data['shipping_provider_failure_policy']; $f->columnWidth = 33; $fs->add($f);
+
+        $f = $modules->get('InputfieldCheckbox');
+        $f->name = 'shipping_provider_include_manual_rates'; $f->label = __('Manual carrier option'); $f->label2 = __('Show manual rates alongside successful live rates');
+        $f->checked = !empty($data['shipping_provider_include_manual_rates']); $f->columnWidth = 33; $fs->add($f);
+
+        foreach ([['shipping_provider_timeout_seconds', __('Provider timeout (seconds)'), 1, 30], ['shipping_provider_retries', __('Provider retries'), 0, 3], ['shipping_provider_quote_ttl_seconds', __('Quote TTL (seconds)'), 60, 86400]] as [$name, $label, $min, $max]) {
+            $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->value = $data[$name]; $f->min = $min; $f->max = $max; $f->columnWidth = 33; $fs->add($f);
+        }
+
+        $f = $modules->get('InputfieldSelect'); $f->name = 'shipping_provider_package_mode'; $f->label = __('Parcel strategy');
+        $f->addOptions(['combined' => __('Combine measured items'), 'per_item' => __('One parcel per item quantity')]); $f->value = $data['shipping_provider_package_mode']; $f->columnWidth = 33; $fs->add($f);
+        $f = $modules->get('InputfieldFloat'); $f->name = 'shipping_provider_handling_fixed'; $f->label = __('Fixed handling adjustment'); $f->value = $data['shipping_provider_handling_fixed']; $f->columnWidth = 33; $fs->add($f);
+        $f = $modules->get('InputfieldFloat'); $f->name = 'shipping_provider_handling_percent'; $f->label = __('Handling adjustment (%)'); $f->value = $data['shipping_provider_handling_percent']; $f->columnWidth = 34; $fs->add($f);
+        $f = $modules->get('InputfieldTextarea'); $f->name = 'shipping_provider_origin'; $f->label = __('Shipping origin (JSON)'); $f->description = __('Provider-neutral origin address; do not put credentials here.'); $f->value = $data['shipping_provider_origin']; $f->rows = 4; $f->columnWidth = 50; $fs->add($f);
+        $f = $modules->get('InputfieldTextarea'); $f->name = 'shipping_provider_service_map'; $f->label = __('Service mapping (JSON)'); $f->description = __('Map provider service codes to enabled and label values.'); $f->value = $data['shipping_provider_service_map']; $f->rows = 4; $f->columnWidth = 50; $fs->add($f);
+        $f = $modules->get('InputfieldTextarea'); $f->name = 'shipping_provider_allowed_regions'; $f->label = __('Live-rate countries / regions'); $f->description = __('Optional comma/newline codes such as US or US:NY.'); $f->value = $data['shipping_provider_allowed_regions']; $f->rows = 3; $f->columnWidth = 100; $fs->add($f);
+        $f = $modules->get('InputfieldPassword'); $f->name = 'shipping_provider_webhook_secret'; $f->label = __('Reference tracking webhook secret'); $f->description = __('Used only by the reference adapter fixture. Production adapters should store credentials in their own module configuration.'); $f->value = $data['shipping_provider_webhook_secret']; $f->columnWidth = 100; $fs->add($f);
 
         $f = $modules->get('InputfieldCheckbox');
         $f->name = 'frontend_auto_assets';
@@ -427,6 +594,52 @@ trait MercatoConfigInputfields {
         $f->min = 0;
         $f->max = 100;
         $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldText');
+        $f->name = 'tax_provider';
+        $f->label = __('Tax provider key');
+        $f->description = __('Use manual to preserve product tax rates, or the key registered by a module implementing MercatoTaxProviderInterface. Tax configuration is not accounting or legal advice.');
+        $f->value = $data['tax_provider'];
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldSelect');
+        $f->name = 'tax_provider_failure_policy';
+        $f->label = __('Tax provider failure policy');
+        $f->addOptions(['fail_closed' => __('Block checkout'), 'manual_fallback' => __('Use manual rates and record fallback'), 'zero_tax' => __('Use explicit zero-tax fallback')]);
+        $f->value = $data['tax_provider_failure_policy'];
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldInteger');
+        $f->name = 'tax_provider_timeout_seconds';
+        $f->label = __('Tax timeout (seconds)');
+        $f->value = $data['tax_provider_timeout_seconds'];
+        $f->min = 1; $f->max = 30; $f->columnWidth = 17;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldInteger');
+        $f->name = 'tax_provider_retries';
+        $f->label = __('Tax retries');
+        $f->value = $data['tax_provider_retries'];
+        $f->min = 0; $f->max = 3; $f->columnWidth = 17;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldTextarea');
+        $f->name = 'tax_registrations';
+        $f->label = __('Tax registrations (JSON)');
+        $f->description = __('Provider-neutral merchant registration records. Do not store provider secrets here.');
+        $f->value = $data['tax_registrations'];
+        $f->rows = 4; $f->columnWidth = 50;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldTextarea');
+        $f->name = 'tax_nexus_regions';
+        $f->label = __('Tax nexus / regions');
+        $f->description = __('Comma or newline separated provider-neutral jurisdiction codes.');
+        $f->value = $data['tax_nexus_regions'];
+        $f->rows = 4; $f->columnWidth = 50;
         $fs->add($f);
 
         $f = $modules->get('InputfieldSelect');
@@ -605,6 +818,18 @@ trait MercatoConfigInputfields {
 
         $wrapper->add($fs);
 
+        // --- Storefront SEO ---
+        $fs = $modules->get('InputfieldFieldset');
+        $fs->label = __('Storefront SEO');
+        $fs->collapsed = Inputfield::collapsedBlank;
+
+        $f = $modules->get('InputfieldText'); $f->name = 'seo_site_name'; $f->label = __('Site/organization name'); $f->value = $data['seo_site_name']; $f->columnWidth = 50; $fs->add($f);
+        $f = $modules->get('InputfieldText'); $f->name = 'seo_default_robots'; $f->label = __('Default robots directive'); $f->value = $data['seo_default_robots']; $f->description = __('Private and tokenized commerce pages are always noindex regardless of this value.'); $f->columnWidth = 50; $fs->add($f);
+        $f = $modules->get('InputfieldTextarea'); $f->name = 'seo_default_description'; $f->label = __('Fallback meta description'); $f->value = $data['seo_default_description']; $f->maxlength = 160; $f->rows = 3; $f->columnWidth = 100; $fs->add($f);
+        foreach (['seo_social_image_url' => __('Default social image URL'), 'seo_organization_logo_url' => __('Organization logo URL')] as $name => $label) { $f = $modules->get('InputfieldURL'); if (!$f) $f = $modules->get('InputfieldText'); $f->name = $name; $f->label = $label; $f->description = __('Use a public HTTPS URL.'); $f->value = (string) ($data[$name] ?? ''); $f->columnWidth = 50; $fs->add($f); }
+        $f = $modules->get('InputfieldMarkup'); $f->label = __('Sitemap and overrides'); $f->value = '<p><a href="' . htmlspecialchars(rtrim((string) wire('config')->urls->root, '/') . '/sitemap-mercato.xml', ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener">/sitemap-mercato.xml</a></p><p>Project modules can hook <code>storefrontSeoMetadata</code>, <code>storefrontSeoAlternates</code>, and <code>storefrontSitemapEntries</code>.</p>'; $fs->add($f);
+        $wrapper->add($fs);
+
         // --- Notifications ---
         $fs = $modules->get('InputfieldFieldset');
         $fs->label = __('Email Notifications');
@@ -632,6 +857,106 @@ trait MercatoConfigInputfields {
         $f->label = __('Reply-to email');
         $f->value = $data['notification_reply_to'];
         $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldSelect');
+        $f->name = 'notification_transport';
+        $f->label = __('Email transport');
+        $f->addOption('wiremail', 'ProcessWire WireMail');
+        $f->value = (string) ($data['notification_transport'] ?? 'wiremail');
+        $f->description = __('External providers can replace the transport through the Mercato::emailTransport hook.');
+        $f->columnWidth = 34;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldText');
+        $f->name = 'notification_locale';
+        $f->label = __('Email locale');
+        $f->value = (string) $data['notification_locale'];
+        $f->description = __('Locale used for safe template overrides, for example en or de_de.');
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldText');
+        $f->name = 'notification_brand_color';
+        $f->label = __('Email brand color');
+        $f->value = (string) $data['notification_brand_color'];
+        $f->description = __('Six-digit hex color, for example #6b4f3a.');
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldURL');
+        if (!$f) $f = $modules->get('InputfieldText');
+        $f->name = 'notification_logo_url';
+        $f->label = __('Email logo URL');
+        $f->value = (string) $data['notification_logo_url'];
+        $f->description = __('Optional public HTTPS logo URL.');
+        $f->columnWidth = 67;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldInteger');
+        $f->name = 'notification_retries';
+        $f->label = __('Delivery retries');
+        $f->min = 0; $f->max = 5;
+        $f->value = (int) $data['notification_retries'];
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldCheckboxes');
+        $f->name = 'enabled_notification_events';
+        $f->label = __('Enabled transactional events');
+        foreach (MercatoEmailEventCatalog::EVENTS as $emailEvent) $f->addOption($emailEvent, ucwords(str_replace('_', ' ', $emailEvent)));
+        $f->value = $data['enabled_notification_events'];
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldEmail');
+        if (!$f) $f = $modules->get('InputfieldText');
+        $f->name = 'quote_merchant_email';
+        $f->label = __('Quote request recipient');
+        $f->description = __('Merchant address notified when a customer submits a quote request.');
+        $f->value = $data['quote_merchant_email'];
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldText');
+        $f->name = 'quote_customer_email_subject';
+        $f->label = __('Quote submission subject');
+        $f->description = __('Variables: {quote}, {customer}, {total}, {status_link}.');
+        $f->value = $data['quote_customer_email_subject'];
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldTextarea');
+        $f->name = 'quote_customer_email_body';
+        $f->label = __('Quote submission body');
+        $f->description = __('Variables: {quote}, {customer}, {total}, {status}, {status_link}.');
+        $f->value = $data['quote_customer_email_body'];
+        $f->rows = 5;
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $previewEvent = (string) wire('input')->post->text('mrc_test_email_event');
+        if (!in_array($previewEvent, MercatoEmailEventCatalog::EVENTS, true)) $previewEvent = 'order_confirmation';
+        $f = $modules->get('InputfieldSelect');
+        $f->name = 'mrc_test_email_event';
+        $f->label = __('Preview/test template');
+        foreach (MercatoEmailEventCatalog::EVENTS as $emailEvent) $f->addOption($emailEvent, ucwords(str_replace('_', ' ', $emailEvent)));
+        $f->value = $previewEvent;
+        $f->columnWidth = 34;
+        $fs->add($f);
+
+        $sample = ['invoice' => 'MRC-00123', 'customer' => 'Alex Customer', 'items' => '1 x Sample product', 'total' => '£49.00', 'receipt_link' => 'https://store.example/receipt?signed=preview', 'order_status_link' => 'https://store.example/status?signed=preview', 'payment_link' => 'https://store.example/pay?signed=preview', 'policy_links' => 'https://store.example/policies', 'reason' => 'The payment provider declined the attempt.', 'refund_amount' => '£10.00', 'refund_status' => 'partially refunded', 'tracking' => 'TRACK123', 'tracking_url' => 'https://carrier.example/TRACK123', 'fulfilment_details' => 'Pickup at the selected store.', 'recovery_discount_line' => '', 'recovery_unsubscribe_link' => 'https://store.example/unsubscribe?signed=preview', 'store_name' => (string) ($data['notification_sender_name'] ?: 'Mercato Store'), 'account_link' => 'https://store.example/account', 'security_message' => 'Your password was changed.'];
+        $previewOverrides = ['locale' => (string) $data['notification_locale']];
+        if ($previewEvent === 'order_confirmation') $previewOverrides += ['subject' => (string) $data['confirmation_email_subject'], 'text' => (string) $data['confirmation_email_body']];
+        if ($previewEvent === 'payment_recovery') $previewOverrides += ['subject' => (string) $data['payment_link_email_subject'], 'text' => (string) $data['payment_link_email_body']];
+        if ($previewEvent === 'shipment_tracking') $previewOverrides += ['subject' => (string) $data['shipping_email_subject'], 'text' => (string) $data['shipping_email_body']];
+        if ($previewEvent === 'pickup_ready') $previewOverrides += ['subject' => (string) $data['pickup_ready_email_subject'], 'text' => (string) $data['pickup_ready_email_body']];
+        if ($previewEvent === 'local_delivery') $previewOverrides += ['subject' => (string) $data['local_delivery_email_subject'], 'text' => (string) $data['local_delivery_email_body']];
+        $preview = $module->notificationDeliveryService()->preview($previewEvent, $sample, $previewOverrides);
+        $f = $modules->get('InputfieldMarkup');
+        $f->label = __('Template preview');
+        $f->value = '<p><strong>' . htmlspecialchars((string) $preview['subject'], ENT_QUOTES, 'UTF-8') . '</strong></p><div style="max-width:720px;border:1px solid #ddd;padding:16px;background:#fff">' . (string) $preview['html'] . '</div><details><summary>Plain text</summary><pre style="white-space:pre-wrap">' . htmlspecialchars((string) $preview['text'], ENT_QUOTES, 'UTF-8') . '</pre></details>';
+        $f->columnWidth = 100;
         $fs->add($f);
 
         $f = $modules->get('InputfieldEmail');

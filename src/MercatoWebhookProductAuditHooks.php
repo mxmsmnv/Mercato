@@ -3,6 +3,21 @@ namespace ProcessWire;
 
 trait MercatoWebhookProductAuditHooks {
 
+    public function hookValidateProductVariants(HookEvent $event): void {
+        $product = $event->arguments(0);
+        if (!$product instanceof Page || !$product->template || $product->template->name !== 'mrc-product'
+            || !$product->hasField('mrc_variant_options') || !$product->hasField('mrc_variants')) return;
+        $optionsRaw = trim((string) $product->mrc_variant_options);
+        $variantsRaw = trim((string) $product->mrc_variants);
+        $options = $optionsRaw === '' ? [] : json_decode($optionsRaw, true);
+        $variants = $variantsRaw === '' ? [] : json_decode($variantsRaw, true);
+        if (!is_array($options) || !is_array($variants)) throw new WireException($this->_('Variant options and variants must be valid JSON arrays.'));
+        $result = $this->variantService()->validateDefinition($product, $options, $variants);
+        if (!$result['valid']) throw new WireException(implode(' ', $result['errors']));
+        $product->mrc_variant_options = json_encode($result['options'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $product->mrc_variants = json_encode($result['variants'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
     public function handleStripeWebhook(HookEvent $event): void {
         header('Content-Type: application/json');
 
@@ -207,6 +222,8 @@ trait MercatoWebhookProductAuditHooks {
             'status' => $this->getProductAuditPublicationStatus($product),
             'collections' => $this->getProductAuditCollections($product),
             'images_count' => $product->hasField('mrc_images') ? count($product->mrc_images) : 0,
+            'variant_options_hash' => $product->hasField('mrc_variant_options') ? sha1((string) $product->mrc_variant_options) : '',
+            'variants_hash' => $product->hasField('mrc_variants') ? sha1((string) $product->mrc_variants) : '',
             'description_hash' => $product->hasField('mrc_description') ? sha1((string) $product->mrc_description) : '',
         ];
     }
