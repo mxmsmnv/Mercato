@@ -30,6 +30,7 @@ final class MercatoSeoService extends Wire {
     }
 
     public function render(Page $page, array $context = []): string {
+        if (!$this->commerce->usesBuiltInSeo()) return '';
         $meta = $this->metadata($page, $context); $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $out = '<title>' . $h((string) $meta['title']) . '</title>' . "\n";
         if ((string) $meta['description'] !== '') $out .= '<meta name="description" content="' . $h((string) $meta['description']) . '">' . "\n";
@@ -48,6 +49,7 @@ final class MercatoSeoService extends Wire {
     }
 
     public function sitemapXml(): string {
+        if (!$this->commerce->usesBuiltInSeo()) return '';
         $selector = 'template=home|mrc-home|mrc-products|mrc-product|mrc-collections|mrc-collection|mrc-page, include=all, sort=path';
         $urls = []; foreach ($this->wire('pages')->find($selector) as $page) if ($this->isSitemapEligible($page)) $urls[] = ['loc' => MercatoSeoRules::normalizeUrl((string) $page->httpUrl), 'lastmod' => date('c', (int) $page->modified)];
         $urls = $this->commerce->storefrontSitemapEntries($urls);
@@ -57,6 +59,7 @@ final class MercatoSeoService extends Wire {
     }
 
     public function diagnostics(int $limit = 500): array {
+        if (!$this->commerce->usesBuiltInSeo()) return [];
         $rows = []; foreach ($this->wire('pages')->find('template=mrc-products|mrc-product|mrc-collections|mrc-collection|mrc-page, include=all, limit=' . max(1, $limit)) as $page) { $meta = $this->metadata($page); $issues = []; if (mb_strlen((string) $meta['title']) > 65) $issues[] = 'title_too_long'; if ((string) $meta['description'] === '') $issues[] = 'missing_description'; if ($page->template->name === 'mrc-product' && $this->imageUrl($page, '') === '') $issues[] = 'missing_product_image'; if ((string) $meta['canonical'] === '') $issues[] = 'invalid_canonical'; $rows[] = ['page_id' => (int) $page->id, 'title' => (string) $page->title, 'url' => (string) $page->url, 'robots' => (string) $meta['robots'], 'sitemap' => (bool) $meta['sitemap'], 'issues' => $issues]; }
         return $rows;
     }

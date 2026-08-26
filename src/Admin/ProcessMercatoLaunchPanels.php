@@ -122,6 +122,9 @@ trait ProcessMercatoLaunchPanels {
     }
 
     protected function renderSeoDiagnostics(Mercato $commerce): string {
+        if (!$commerce->usesBuiltInSeo()) {
+            return '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Storefront SEO')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Ichiban is installed and is the authoritative SEO owner. Mercato metadata output, sitemap route, and native diagnostics are disabled to prevent duplicates.')) . '</p></div><strong>' . $this->e($this->_('ICHIBAN')) . '</strong></div></section>';
+        }
         $rows = $commerce->seoService()->diagnostics(); $issueCount = 0;
         foreach ($rows as $row) $issueCount += count((array) ($row['issues'] ?? []));
         $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Storefront SEO diagnostics')) . '</h2><p class="uk-text-muted">' . $this->e(sprintf($this->_('%d catalog pages checked; %d metadata issue(s).'), count($rows), $issueCount)) . '</p></div><a class="uk-button uk-button-default" target="_blank" rel="noopener" href="' . $this->e(rtrim((string) $this->wire('config')->urls->root, '/') . '/sitemap-mercato.xml') . '">' . $this->e($this->_('Open sitemap')) . '</a></div>';

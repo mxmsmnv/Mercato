@@ -395,6 +395,8 @@ Before launch, publish SPF for the sending service, enable DKIM signing, and add
 
 ### Storefront SEO and structured data
 
+SEO ownership is automatic and exclusive. When Ichiban is installed, Mercato delegates publication to Ichiban: `seoService()->render()` returns an empty string, `/sitemap-mercato.xml` is not registered, native SEO controls are replaced by an ownership notice, and Mercato's Launch diagnostics do not claim authority. Existing Mercato SEO values and fields are preserved so the fallback remains available if Ichiban is later removed. Project templates must call Ichiban in that state. When Ichiban is not installed, Mercato's built-in renderer and sitemap operate normally.
+
 Bundled catalog, collection, product, and content templates call `$commerce->seoService()->render($page)` inside `<head>`. The service emits exactly one escaped title, description, canonical URL, robots directive, Open Graph/Twitter metadata, language alternates, breadcrumbs, and applicable Organization, WebSite/SearchAction, Product, Offer, or AggregateOffer JSON-LD. Product price, currency, SKU, images, availability, condition, and canonical URL come from the saved product/variant and purchasability services used by the storefront.
 
 Editors can set `mrc_seo_title`, `mrc_seo_description`, and `mrc_seo_robots`; blank fields fall back to page/product copy and module defaults. Pagination gets a distinct `/pageN/` canonical while filter/tracking query parameters are removed. Archived/discontinued, unpublished, hidden, deleted, and redirected resources are excluded or noindexed; unavailable active products remain explicit `OutOfStock` offers. Checkout, cart/account surfaces, order status/receipt/download pages, quote/customer pages, and any tokenized URL are always `noindex,nofollow,noarchive` and excluded from `/sitemap-mercato.xml`.
@@ -497,7 +499,7 @@ live ProcessWire site.
 | Demo Payment is missing | Confirm production mode is off. Demo Payment is disabled in production mode. |
 | Products are missing from the demo | Run the installer repair action from module settings. Existing merchant products are preserved where possible. |
 | Transactional email is blocked | Validate sender name/email, enabled events, WireMail/provider setup, SPF/DKIM/DMARC, and the latest masked attempt in **Customer Emails**. |
-| SEO metadata is missing or duplicated | Run the Launch SEO diagnostics and ensure the active site template contains exactly one `$commerce->seoService()->render($page)` call. |
+| SEO metadata is missing or duplicated | Check `$commerce->seoOwner()`. With Ichiban installed, configure and render Ichiban exactly once; without it, run Mercato Launch SEO diagnostics and keep exactly one `$commerce->seoService()->render($page)` call. |
 
 ## License
 

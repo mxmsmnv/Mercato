@@ -56,7 +56,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 131,
+            'version'  => 132,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
@@ -323,7 +323,9 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         $this->addHook('/api/mercato/quote-status', $this, 'handleQuoteStatus');
         $this->addHook('/api/mercato/shipping-webhook', $this, 'handleShippingWebhook');
         $this->addHook('/api/mercato/email-webhook', $this, 'handleEmailWebhook');
-        $this->addHook('/sitemap-mercato.xml', $this, 'handleSeoSitemap');
+        if ($this->usesBuiltInSeo()) {
+            $this->addHook('/sitemap-mercato.xml', $this, 'handleSeoSitemap');
+        }
         $this->addHook('/api/mercato/health', $this, 'handleHealthCheck');
         $this->addHook('/api/mercato/analytics-consent', $this, 'handleAnalyticsConsent');
         $this->addHook('/api/mercato/v1/?', $this, 'handleHeadlessApi');
@@ -386,6 +388,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoEmailDeliveryService::class => '/src/Notification/MercatoEmailDeliveryService.php',
             MercatoEmailWebhookAdapterInterface::class => '/src/Notification/MercatoEmailWebhookAdapterInterface.php',
             MercatoEmailWebhookService::class => '/src/Notification/MercatoEmailWebhookService.php',
+            MercatoSeoOwnership::class => '/src/Seo/MercatoSeoOwnership.php',
             MercatoSeoRules::class => '/src/Seo/MercatoSeoRules.php',
             MercatoSeoService::class => '/src/Seo/MercatoSeoService.php',
             MercatoPrivacyRetentionPolicy::class => '/src/Privacy/MercatoPrivacyRetentionPolicy.php',

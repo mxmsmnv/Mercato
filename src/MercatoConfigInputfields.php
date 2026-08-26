@@ -831,11 +831,24 @@ trait MercatoConfigInputfields {
         $fs->label = __('Storefront SEO');
         $fs->collapsed = Inputfield::collapsedBlank;
 
-        $f = $modules->get('InputfieldText'); $f->name = 'seo_site_name'; $f->label = __('Site/organization name'); $f->value = $data['seo_site_name']; $f->columnWidth = 50; $fs->add($f);
-        $f = $modules->get('InputfieldText'); $f->name = 'seo_default_robots'; $f->label = __('Default robots directive'); $f->value = $data['seo_default_robots']; $f->description = __('Private and tokenized commerce pages are always noindex regardless of this value.'); $f->columnWidth = 50; $fs->add($f);
-        $f = $modules->get('InputfieldTextarea'); $f->name = 'seo_default_description'; $f->label = __('Fallback meta description'); $f->value = $data['seo_default_description']; $f->maxlength = 160; $f->rows = 3; $f->columnWidth = 100; $fs->add($f);
-        foreach (['seo_social_image_url' => __('Default social image URL'), 'seo_organization_logo_url' => __('Organization logo URL')] as $name => $label) { $f = $modules->get('InputfieldURL'); if (!$f) $f = $modules->get('InputfieldText'); $f->name = $name; $f->label = $label; $f->description = __('Use a public HTTPS URL.'); $f->value = (string) ($data[$name] ?? ''); $f->columnWidth = 50; $fs->add($f); }
-        $f = $modules->get('InputfieldMarkup'); $f->label = __('Sitemap and overrides'); $f->value = '<p><a href="' . htmlspecialchars(rtrim((string) wire('config')->urls->root, '/') . '/sitemap-mercato.xml', ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener">/sitemap-mercato.xml</a></p><p>Project modules can hook <code>storefrontSeoMetadata</code>, <code>storefrontSeoAlternates</code>, and <code>storefrontSitemapEntries</code>.</p>'; $fs->add($f);
+        if ($modules->isInstalled('Ichiban')) {
+            $f = $modules->get('InputfieldMarkup');
+            $f->label = __('SEO owner: Ichiban');
+            $f->value = '<p>' . __('Ichiban is installed and is authoritative for metadata, canonical URLs, robots directives, structured data, and sitemaps. Mercato native SEO output is disabled automatically to prevent duplicate publication.') . '</p>';
+            $fs->add($f);
+            foreach (['seo_site_name', 'seo_default_robots', 'seo_default_description', 'seo_social_image_url', 'seo_organization_logo_url'] as $hiddenName) {
+                $hidden = $modules->get('InputfieldHidden');
+                $hidden->name = $hiddenName;
+                $hidden->value = (string) ($data[$hiddenName] ?? '');
+                $fs->add($hidden);
+            }
+        } else {
+            $f = $modules->get('InputfieldText'); $f->name = 'seo_site_name'; $f->label = __('Site/organization name'); $f->value = $data['seo_site_name']; $f->columnWidth = 50; $fs->add($f);
+            $f = $modules->get('InputfieldText'); $f->name = 'seo_default_robots'; $f->label = __('Default robots directive'); $f->value = $data['seo_default_robots']; $f->description = __('Private and tokenized commerce pages are always noindex regardless of this value.'); $f->columnWidth = 50; $fs->add($f);
+            $f = $modules->get('InputfieldTextarea'); $f->name = 'seo_default_description'; $f->label = __('Fallback meta description'); $f->value = $data['seo_default_description']; $f->maxlength = 160; $f->rows = 3; $f->columnWidth = 100; $fs->add($f);
+            foreach (['seo_social_image_url' => __('Default social image URL'), 'seo_organization_logo_url' => __('Organization logo URL')] as $name => $label) { $f = $modules->get('InputfieldURL'); if (!$f) $f = $modules->get('InputfieldText'); $f->name = $name; $f->label = $label; $f->description = __('Use a public HTTPS URL.'); $f->value = (string) ($data[$name] ?? ''); $f->columnWidth = 50; $fs->add($f); }
+            $f = $modules->get('InputfieldMarkup'); $f->label = __('Sitemap and overrides'); $f->value = '<p><a href="' . htmlspecialchars(rtrim((string) wire('config')->urls->root, '/') . '/sitemap-mercato.xml', ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener">/sitemap-mercato.xml</a></p><p>Project modules can hook <code>storefrontSeoMetadata</code>, <code>storefrontSeoAlternates</code>, and <code>storefrontSitemapEntries</code>.</p>'; $fs->add($f);
+        }
         $wrapper->add($fs);
 
         // --- Notifications ---

@@ -54,6 +54,7 @@ Use these module methods instead of inventing APIs:
 - `$commerce->notificationTemplates()` / `$commerce->notificationTemplate(string $event)`: read the resolved visual notification definitions and supported variables.
 - `$commerce->saveNotificationTemplate(...)`, `$commerce->resetNotificationTemplate(...)`, and `$commerce->saveNotificationMailLayout(...)`: permissioned visual-template and shared-layout administration; pass the acting ProcessWire user and preserve sanitization/CSRF controls.
 - `$commerce->seoService()`: build/render canonical, robots, social, structured-data, sitemap, and diagnostic output from server-authoritative storefront state.
+- `$commerce->seoOwner()` / `$commerce->usesBuiltInSeo()`: resolve exclusive SEO ownership. Ichiban wins automatically when installed; Mercato is the fallback only when Ichiban is absent.
 - `$commerce->submitQuoteRequest(array $data, ?array $items = null)`: create a dedicated non-payment quote request from the current cart or explicit product requests.
 - `$commerce->updateQuoteStatus(Page $quote, string $status, string $note = '', ?float $amount = null)`: perform a validated quote lifecycle transition.
 - `$commerce->quoteService()`: access signed quote status, customer ownership, expiry, and notification helpers.
@@ -93,6 +94,7 @@ Shared storefront helper functions are defined in `templates/mrc-storefront.php`
 - Checkout and success pages must preserve payment, fulfilment, tax, discount, order snapshot, and analytics behavior.
 - Transactional email overrides belong in the Mercato notification designer or `/site/templates/mercato/emails/{locale}/` (or the locale-free fallback) as non-executable `.txt` and `.html` files. Preserve signed links and plain-text fallbacks, and use the delivery service instead of calling `wireMail()` directly.
 - Keep exactly one SEO renderer call in each public storefront `<head>`. Private/tokenized commerce pages must remain noindex and outside sitemap hooks; product structured prices and availability must come from Mercato services rather than duplicated template calculations.
+- Never publish Mercato SEO beside Ichiban. When Ichiban is installed, Mercato must keep its renderer and sitemap suppressed and preserve stored fallback values without claiming publication ownership.
 - Run `php scripts/run-acceptance.php` only against an isolated non-production site. Preserve fixture run-ID scoping, settings restoration, browser/accessibility coverage, reports, and the explicit live-provider opt-in gate.
 - Keep `/api/mercato/v1` compatible within v1. Treat client totals as untrusted; preserve token scope/expiry and idempotency; never serialize PII, gateway secrets, logs, filesystem paths, or unrestricted internal IDs.
 

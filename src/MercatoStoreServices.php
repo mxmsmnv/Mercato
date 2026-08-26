@@ -306,6 +306,15 @@ trait MercatoStoreServices {
         return $this->seoService;
     }
 
+    public function seoOwner(): string {
+        $modules = $this->wire('modules');
+        return MercatoSeoOwnership::resolve((bool) ($modules && $modules->isInstalled('Ichiban')));
+    }
+
+    public function usesBuiltInSeo(): bool {
+        return $this->seoOwner() === MercatoSeoOwnership::MERCATO;
+    }
+
     public function privacyService(): MercatoPrivacyService {
         if (!$this->privacyService) { $this->privacyService = new MercatoPrivacyService($this); $this->privacyService->setWire($this->wire()); }
         return $this->privacyService;

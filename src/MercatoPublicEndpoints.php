@@ -56,6 +56,13 @@ trait MercatoPublicEndpoints {
     }
 
     public function handleSeoSitemap(HookEvent $event): void {
+        if (!$this->usesBuiltInSeo()) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            header('X-Robots-Tag: noindex, nofollow');
+            echo 'Mercato SEO is delegated to Ichiban.';
+            exit;
+        }
         header('Content-Type: application/xml; charset=utf-8');
         header('X-Robots-Tag: noindex');
         echo $this->seoService()->sitemapXml();
