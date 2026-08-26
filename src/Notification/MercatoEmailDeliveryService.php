@@ -26,9 +26,19 @@ final class MercatoEmailDeliveryService extends Wire {
             $override = $this->findOverride($event, $locale, $extension);
             if ($override !== '') { ${$type} = $override; if ($type === 'html') $hasHtmlOverride = true; }
         }
+        $savedTemplate = $this->commerce->notificationTemplate($event);
+        if (!empty($savedTemplate['customized'])) {
+            $subject = (string) $savedTemplate['subject'];
+            $text = (string) $savedTemplate['text'];
+            $html = (string) $savedTemplate['html'];
+            $hasHtmlOverride = $html !== '';
+        }
+        $layout = $this->commerce->notificationMailLayout();
+        $header = (string) ($layout['header'] ?? '');
+        $footer = (string) ($layout['footer'] ?? '');
         $values += ['store_name' => (string) ($this->commerce->notification_sender_name ?: 'Mercato Store')];
-        $rendered = MercatoEmailTemplateRenderer::render($subject, $text, $html, $values);
-        if (!$hasHtmlOverride && $html === '') {
+        $rendered = MercatoEmailTemplateRenderer::render($subject, $text, $html, $values, $header, $footer);
+        if ($header === '' && $footer === '' && !$hasHtmlOverride && $html === '') {
             $color = preg_match('/^#[0-9a-fA-F]{6}$/', (string) ($this->commerce->notification_brand_color ?? '')) ? (string) $this->commerce->notification_brand_color : '#6b4f3a';
             $logo = trim((string) ($this->commerce->notification_logo_url ?? ''));
             $brand = ($logo !== '' && filter_var($logo, FILTER_VALIDATE_URL) && str_starts_with(strtolower($logo), 'https://') ? '<img src="' . htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') . '" alt="" style="max-height:56px;max-width:220px">' : '')

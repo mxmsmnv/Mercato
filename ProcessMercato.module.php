@@ -43,6 +43,7 @@ require_once __DIR__ . '/src/Admin/ProcessMercatoPaymentRecoveryActions.php';
 require_once __DIR__ . '/src/Admin/ProcessMercatoImportCustomerReportData.php';
 require_once __DIR__ . '/src/Admin/ProcessMercatoAdminHelpers.php';
 require_once __DIR__ . '/src/Admin/ProcessMercatoQuotePanels.php';
+require_once __DIR__ . '/src/Admin/ProcessMercatoNotificationTemplates.php';
 
 /**
  * ProcessMercato
@@ -71,6 +72,7 @@ class ProcessMercato extends Process implements Module {
     use ProcessMercatoImportCustomerReportData;
     use ProcessMercatoAdminHelpers;
     use ProcessMercatoQuotePanels;
+    use ProcessMercatoNotificationTemplates;
 
     protected const PERMISSION_ADMIN = 'mercato-admin';
     protected const PERMISSION_VIEW_ORDERS = 'mercato-view-orders';
@@ -92,11 +94,21 @@ class ProcessMercato extends Process implements Module {
     protected const PERMISSION_LAUNCH_TOOLS = 'mercato-launch-tools';
     protected const DASHBOARD_CACHE_TTL_SECONDS = 60;
 
+    public function init(): void {
+        parent::init();
+        if ((string) $this->wire('input')->urlSegment1 !== 'notifications') return;
+        $editor = $this->wire('modules')->get('InputfieldTinyMCE');
+        if ($editor) $editor->renderReady();
+        $scriptPath = __DIR__ . '/assets/admin-notifications.js';
+        $version = is_file($scriptPath) ? (string) filemtime($scriptPath) : '1';
+        $this->wire('config')->scripts->add($this->wire('config')->urls->Mercato . 'assets/admin-notifications.js?v=' . $version);
+    }
+
     public static function getModuleInfo(): array {
         return [
             'title' => 'Mercato Dashboard',
             'summary' => 'Admin dashboard for Mercato orders, products, and revenue.',
-            'version' => 130,
+            'version' => 131,
             'author' => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,

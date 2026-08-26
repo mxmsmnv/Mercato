@@ -9,6 +9,16 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-26
+
+### Added
+
+- A permissioned visual notification designer with TinyMCE editing, safe event variables, isolated live previews, plain-text fallbacks, per-template reset, and shared email header/footer blocks.
+
+### Changed
+
+- Saved visual templates now participate in the transactional delivery pipeline while preserving existing event enablement, transport retries, idempotency, signed links, and file-based fallback overrides.
+
 ## [1.3.0] - 2026-08-25
 
 ### Added

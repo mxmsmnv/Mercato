@@ -56,7 +56,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 130,
+            'version'  => 131,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
@@ -139,6 +139,9 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'notification_locale'      => 'en',
             'notification_brand_color' => '#6b4f3a',
             'notification_logo_url'    => '',
+            'notification_templates_json' => '{}',
+            'notification_header_html' => '',
+            'notification_footer_html' => '',
             'notification_retries'     => 2,
             'enabled_notification_events' => ['order_confirmation', 'payment_failed', 'payment_recovery', 'refund', 'cancellation', 'shipment_tracking', 'pickup_ready', 'local_delivery', 'account_created', 'account_security'],
             'seo_site_name'          => 'Mercato Store',

@@ -49,6 +49,11 @@ trait ProcessMercatoAdminHelpers {
                 'path' => 'fulfilment/',
                 'permission' => self::PERMISSION_FULFIL_ORDERS,
             ],
+            'notifications' => [
+                'label' => $this->_('Notifications'),
+                'path' => 'notifications/',
+                'permission' => self::PERMISSION_ADMIN,
+            ],
             'products' => [
                 'label' => $this->_('Products'),
                 'path' => 'products/',

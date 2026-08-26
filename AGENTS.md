@@ -51,6 +51,8 @@ Use these module methods instead of inventing APIs:
 - `$commerce->analyticsService()` and `$commerce->setAnalyticsConsent(array $categories)`: emit/consume minimized analytics events and manage session consent.
 - `$commerce->setMessage($message)` and `$commerce->getMessage()`: set/read storefront feedback messages.
 - `$commerce->notificationDeliveryService()`: preview or deliver lifecycle email events through the configured transport with retry, redaction, and idempotency controls.
+- `$commerce->notificationTemplates()` / `$commerce->notificationTemplate(string $event)`: read the resolved visual notification definitions and supported variables.
+- `$commerce->saveNotificationTemplate(...)`, `$commerce->resetNotificationTemplate(...)`, and `$commerce->saveNotificationMailLayout(...)`: permissioned visual-template and shared-layout administration; pass the acting ProcessWire user and preserve sanitization/CSRF controls.
 - `$commerce->seoService()`: build/render canonical, robots, social, structured-data, sitemap, and diagnostic output from server-authoritative storefront state.
 - `$commerce->submitQuoteRequest(array $data, ?array $items = null)`: create a dedicated non-payment quote request from the current cart or explicit product requests.
 - `$commerce->updateQuoteStatus(Page $quote, string $status, string $note = '', ?float $amount = null)`: perform a validated quote lifecycle transition.
@@ -89,7 +91,7 @@ Shared storefront helper functions are defined in `templates/mrc-storefront.php`
 - Storefront pages should demonstrate real ecommerce behavior: collections, filters, cart, stock states, discounts, shipping/pickup/local delivery, digital goods, policy links, checkout validation, and order confirmation.
 - Product cards should show real product imagery when available, clear price/stock information, and working add-to-cart controls where appropriate.
 - Checkout and success pages must preserve payment, fulfilment, tax, discount, order snapshot, and analytics behavior.
-- Transactional email overrides belong in `/site/templates/mercato/emails/{locale}/` (or the locale-free fallback) as non-executable `.txt` and `.html` files. Preserve signed links and use the delivery service instead of calling `wireMail()` directly.
+- Transactional email overrides belong in the Mercato notification designer or `/site/templates/mercato/emails/{locale}/` (or the locale-free fallback) as non-executable `.txt` and `.html` files. Preserve signed links and plain-text fallbacks, and use the delivery service instead of calling `wireMail()` directly.
 - Keep exactly one SEO renderer call in each public storefront `<head>`. Private/tokenized commerce pages must remain noindex and outside sitemap hooks; product structured prices and availability must come from Mercato services rather than duplicated template calculations.
 - Run `php scripts/run-acceptance.php` only against an isolated non-production site. Preserve fixture run-ID scoping, settings restoration, browser/accessibility coverage, reports, and the explicit live-provider opt-in gate.
 - Keep `/api/mercato/v1` compatible within v1. Treat client totals as untrusted; preserve token scope/expiry and idempotency; never serialize PII, gateway secrets, logs, filesystem paths, or unrestricted internal IDs.

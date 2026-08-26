@@ -843,6 +843,19 @@ trait MercatoConfigInputfields {
         $fs->label = __('Email Notifications');
         $fs->collapsed = Inputfield::collapsedBlank;
 
+        $f = $modules->get('InputfieldMarkup');
+        $f->label = __('Visual templates');
+        $f->value = '<p>' . __('Edit every transactional message, shared email layout, variables, plain-text fallback, and live preview in the Mercato workspace.') . '</p><p><a class="ui-button ui-priority-primary" href="' . htmlspecialchars((string) wire('config')->urls->admin . 'setup/mercato/notifications/', ENT_QUOTES, 'UTF-8') . '">' . __('Open notification designer') . '</a></p>';
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        foreach (['notification_templates_json', 'notification_header_html', 'notification_footer_html'] as $hiddenName) {
+            $hidden = $modules->get('InputfieldHidden');
+            $hidden->name = $hiddenName;
+            $hidden->value = (string) ($data[$hiddenName] ?? '');
+            $fs->add($hidden);
+        }
+
         $f = $modules->get('InputfieldText');
         $f->name = 'notification_sender_name';
         $f->label = __('Sender name');
