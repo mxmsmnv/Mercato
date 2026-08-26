@@ -47,20 +47,28 @@ final class MercatoEmailDeliveryService extends Wire {
 
         $idempotencyKey = trim((string) ($context['idempotency_key'] ?? ''));
         if ($idempotencyKey === '') $idempotencyKey = hash('sha256', implode('|', [$event, (int) ($context['order_id'] ?? 0), (string) ($context['business_event_id'] ?? '')]));
-        if (empty($context['force']) && $this->wasDelivered($idempotencyKey)) return $this->record($event, 'skipped', $recipient, $context, ['message' => 'Email was already delivered for this business event.', 'idempotency_key' => $idempotencyKey]);
+        $lock = $this->acquireDeliveryLock($idempotencyKey);
+        if (!is_resource($lock)) return $this->record($event, 'failed', $recipient, $context, ['message' => 'Notification delivery lock could not be acquired.', 'idempotency_key' => $idempotencyKey]);
 
-        $rendered = $this->preview($event, $values, $overrides);
-        $message = $rendered + ['to' => $recipient, 'from_email' => $sender, 'from_name' => (string) $this->commerce->notification_sender_name, 'reply_to' => (string) $this->commerce->notification_reply_to, 'headers' => (array) ($context['headers'] ?? [])];
-        $maxRetries = max(0, min(5, (int) ($this->commerce->notification_retries ?? 2)));
-        $last = [];
-        for ($retry = 0; $retry <= $maxRetries; $retry++) {
-            try { $last = $this->transport->send($message); }
-            catch (\Throwable $e) { $last = ['accepted' => false, 'status' => 'failed', 'message' => $e->getMessage()]; }
-            $status = !empty($last['accepted']) ? 'sent' : ($retry < $maxRetries ? 'retrying' : 'failed');
-            $result = $this->record($event, $status, $recipient, $context, ['message' => (string) ($last['message'] ?? ''), 'idempotency_key' => $idempotencyKey, 'retry_count' => $retry, 'provider' => $this->transport->getName(), 'provider_message_id' => (string) ($last['provider_message_id'] ?? ''), 'provider_status' => (string) ($last['status'] ?? '')]);
-            if (!empty($last['accepted'])) return $result + ['rendered' => $rendered];
+        try {
+            if (empty($context['force']) && $this->wasDelivered($idempotencyKey)) return $this->record($event, 'skipped', $recipient, $context, ['message' => 'Email was already delivered for this business event.', 'idempotency_key' => $idempotencyKey]);
+
+            $rendered = $this->preview($event, $values, $overrides);
+            $message = $rendered + ['to' => $recipient, 'from_email' => $sender, 'from_name' => (string) $this->commerce->notification_sender_name, 'reply_to' => (string) $this->commerce->notification_reply_to, 'headers' => (array) ($context['headers'] ?? [])];
+            $maxRetries = max(0, min(5, (int) ($this->commerce->notification_retries ?? 2)));
+            $last = [];
+            for ($retry = 0; $retry <= $maxRetries; $retry++) {
+                try { $last = $this->transport->send($message); }
+                catch (\Throwable $e) { $last = ['accepted' => false, 'status' => 'failed', 'message' => $e->getMessage()]; }
+                $status = !empty($last['accepted']) ? 'sent' : ($retry < $maxRetries ? 'retrying' : 'failed');
+                $result = $this->record($event, $status, $recipient, $context, ['message' => (string) ($last['message'] ?? ''), 'idempotency_key' => $idempotencyKey, 'retry_count' => $retry, 'provider' => $this->transport->getName(), 'provider_message_id' => (string) ($last['provider_message_id'] ?? ''), 'provider_status' => (string) ($last['status'] ?? '')]);
+                if (!empty($last['accepted'])) return $result + ['rendered' => $rendered];
+            }
+            return $result + ['rendered' => $rendered];
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
         }
-        return $result + ['rendered' => $rendered];
     }
 
     public function getSetupStatus(): array {
@@ -120,6 +128,17 @@ final class MercatoEmailDeliveryService extends Wire {
             if (is_array($row) && hash_equals((string) ($row['idempotency_key'] ?? ''), $key) && (string) ($row['status'] ?? '') === 'sent') return true;
         }
         return false;
+    }
+
+    /** @return resource|null */
+    private function acquireDeliveryLock(string $key) {
+        $bucket = substr(hash('sha256', $key), 0, 2);
+        $path = rtrim((string) $this->wire('config')->paths->logs, '/') . '/mercato-notifications-' . $bucket . '.lock';
+        $handle = @fopen($path, 'c');
+        if (!is_resource($handle)) return null;
+        if (@flock($handle, LOCK_EX)) return $handle;
+        fclose($handle);
+        return null;
     }
 
     private function record(string $event, string $status, string $recipient, array $context, array $data): array {
