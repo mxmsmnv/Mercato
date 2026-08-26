@@ -154,6 +154,9 @@ trait MercatoPublicEndpoints {
         $ok = $this->verifyOrderStatusToken($order, $token);
 
         header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
         http_response_code($ok ? 200 : 404);
         echo $ok ? $this->renderPublicOrderStatus($order) : $this->renderPublicOrderStatusError();
         exit;
@@ -190,6 +193,9 @@ trait MercatoPublicEndpoints {
         $ok = $this->verifyOrderReceiptToken($order, $token);
 
         header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
         http_response_code($ok ? 200 : 404);
         echo $ok ? $this->renderPublicOrderReceipt($order) : $this->renderPublicOrderReceiptError();
         exit;
@@ -210,6 +216,9 @@ trait MercatoPublicEndpoints {
         $invoice = preg_replace('/[^A-Za-z0-9_.-]+/', '-', (string) ($order->mrc_invoice_number ?: $order->title)) ?: 'receipt';
         $pdf = $this->renderPublicOrderReceiptPdf($order);
         header('Content-Type: application/pdf');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
         header('Content-Disposition: inline; filename="receipt-' . $invoice . '.pdf"');
         header('Content-Length: ' . strlen($pdf));
         echo $pdf;
