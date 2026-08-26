@@ -148,6 +148,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'seo_organization_logo_url' => '',
             'merchant_legal_details'   => '',
             'receipt_template_file'    => '',
+            'order_status_template_file' => '',
             'receipt_pdf_url_template' => '',
             'confirmation_email_subject' => 'Order confirmation {invoice}',
             'confirmation_email_body'  => "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\nSubtotal: {subtotal}\n{fulfilment}: {shipping}\n{fulfilment_details}\nDiscount: {discount}\nTotal: {total}\n\nReceipt:\n{receipt_link}\n\nYou can check order status here:\n{order_status_link}\n\nWe will send the next fulfilment update.\n\n{policy_links}",

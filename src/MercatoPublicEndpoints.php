@@ -881,6 +881,30 @@ trait MercatoPublicEndpoints {
         $discountTotal = $order->hasField('mrc_discount_total') ? (float) $order->mrc_discount_total : 0.0;
         $total = $this->orderRepository()->getTotalAmount($order);
         $refund = $this->getPublicRefundSummary($order);
+        $policyLinks = $this->getPolicyLinksText();
+        $receiptUrl = $this->isOrderReceiptAvailable($order) ? $this->getOrderReceiptUrl($order) : '';
+        $retryPaymentUrl = $this->isOrderPaymentRetryAvailable($order) ? $this->getPaymentLinkUrl($order) : '';
+        $customStatus = $this->renderCustomOrderStatus($order, compact(
+            'items',
+            'invoice',
+            'orderStatus',
+            'paymentStatus',
+            'fulfilmentStatus',
+            'fulfilmentLabel',
+            'tracking',
+            'trackingUrl',
+            'detailText',
+            'shippingTotal',
+            'discountTotal',
+            'total',
+            'refund',
+            'policyLinks',
+            'receiptUrl',
+            'retryPaymentUrl'
+        ));
+        if ($customStatus !== '') {
+            return $customStatus;
+        }
 
         $rows = '';
         foreach ($items as $item) {
@@ -896,16 +920,15 @@ trait MercatoPublicEndpoints {
         $trackingHtml = $tracking !== ''
             ? '<p><strong>Tracking:</strong> ' . ($trackingUrl !== '' ? '<a href="' . $this->h($trackingUrl) . '" rel="noopener">' . $this->h($tracking) . '</a>' : $this->h($tracking)) . '</p>'
             : '';
-        $policyLinks = $this->getPolicyLinksText();
         $policyHtml = '';
         if ($policyLinks !== '') {
             $policyHtml = '<section class="mrc-status-card"><h2>Store policies</h2><pre>' . $this->h($policyLinks) . '</pre></section>';
         }
-        $receiptHtml = $this->isOrderReceiptAvailable($order)
-            ? '<p><a href="' . $this->h($this->getOrderReceiptUrl($order)) . '">View receipt</a></p>'
+        $receiptHtml = $receiptUrl !== ''
+            ? '<p><a href="' . $this->h($receiptUrl) . '">View receipt</a></p>'
             : '';
-        $retryHtml = $this->isOrderPaymentRetryAvailable($order)
-            ? '<p class="mrc-status-actions"><a class="mrc-primary-action" href="' . $this->h($this->getPaymentLinkUrl($order)) . '">Retry payment</a></p>'
+        $retryHtml = $retryPaymentUrl !== ''
+            ? '<p class="mrc-status-actions"><a class="mrc-primary-action" href="' . $this->h($retryPaymentUrl) . '">Retry payment</a></p>'
             : '';
 
         return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'

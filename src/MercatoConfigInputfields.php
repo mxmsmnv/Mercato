@@ -809,6 +809,14 @@ trait MercatoConfigInputfields {
         $fs->add($f);
 
         $f = $modules->get('InputfieldText');
+        $f->name = 'order_status_template_file';
+        $f->label = __('Order status template file');
+        $f->description = __('Optional PHP template relative to /site/templates/, e.g. mercato-order-status.php. Leave blank to use the built-in signed order-status page.');
+        $f->value = $data['order_status_template_file'];
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldText');
         $f->name = 'receipt_pdf_url_template';
         $f->label = __('Receipt PDF URL template');
         $f->description = __('Optional external PDF renderer URL. Variables: {order_id}, {invoice}, {token}, {receipt_link}. Leave blank to use printable HTML only.');
