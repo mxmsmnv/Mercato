@@ -9,7 +9,7 @@ final class MercatoEmailEventCatalog {
 
     public static function all(): array {
         return [
-            'order_confirmation' => ['subject' => 'Order confirmation {invoice}', 'text' => "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\nTotal: {total}\n\nReceipt: {receipt_link}\nOrder status: {order_status_link}\n\n{policy_links}"],
+            'order_confirmation' => ['subject' => 'Order confirmation {invoice}', 'text' => "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\nTotal: {total}\n\nReceipt: {receipt_link}\nOrder status: {order_status_link}\nAccess recovery: {access_recovery_link}\n\n{policy_links}"],
             'payment_failed' => ['subject' => 'Payment issue for order {invoice}', 'text' => "Hello {customer},\n\nWe could not complete payment for order {invoice}.\n{reason}\n\nTry again: {payment_link}\nOrder status: {order_status_link}"],
             'payment_recovery' => ['subject' => 'Complete payment for order {invoice}', 'text' => "Hello {customer},\n\nComplete payment for order {invoice}: {payment_link}\n\n{recovery_discount_line}\nUnsubscribe: {recovery_unsubscribe_link}"],
             'refund' => ['subject' => 'Refund update for order {invoice}', 'text' => "Hello {customer},\n\nA refund of {refund_amount} was recorded for order {invoice}.\nRefund status: {refund_status}\n\nOrder status: {order_status_link}"],
@@ -47,7 +47,7 @@ final class MercatoEmailEventCatalog {
         $definition = self::get($event);
         preg_match_all('/\{([a-z_]+)\}/', (string) $definition['subject'] . "\n" . (string) $definition['text'], $matches);
         $available = match ($event) {
-            'order_confirmation' => ['store_name', 'invoice', 'customer', 'items', 'subtotal', 'shipping', 'fulfilment', 'fulfilment_details', 'discount', 'total', 'currency', 'receipt_link', 'order_status_link', 'policy_links'],
+            'order_confirmation' => ['store_name', 'invoice', 'customer', 'items', 'subtotal', 'shipping', 'fulfilment', 'fulfilment_details', 'discount', 'total', 'currency', 'receipt_link', 'order_status_link', 'access_recovery_link', 'policy_links'],
             'payment_failed' => ['store_name', 'invoice', 'customer', 'total', 'reason', 'payment_link', 'order_status_link'],
             'payment_recovery' => ['store_name', 'invoice', 'customer', 'total', 'payment_link', 'recovery_discount_code', 'recovery_discount_line', 'recovery_unsubscribe_link'],
             'refund' => ['store_name', 'invoice', 'customer', 'refund_amount', 'refund_status', 'order_status_link'],
@@ -75,6 +75,7 @@ final class MercatoEmailEventCatalog {
             'currency' => 'USD',
             'receipt_link' => 'https://store.example/receipt?signed=preview',
             'order_status_link' => 'https://store.example/status?signed=preview',
+            'access_recovery_link' => 'https://store.example/access-recovery?signed=preview',
             'payment_link' => 'https://store.example/pay?signed=preview',
             'policy_links' => 'Privacy policy · Terms of service',
             'reason' => 'The payment provider declined the attempt.',

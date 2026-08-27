@@ -63,7 +63,7 @@ as proof that the layer can ship a real storefront.
 - Fulfilment support for carrier delivery, store pickup, and local delivery.
 - Coupon and discount rules with product, collection, customer, usage, and minimum-total targeting.
 - Inventory rules for in-stock, low-stock, sold-out, preorder, and backorder behavior.
-- Public order status, receipt, and download flows.
+- Public order status, receipt, access-recovery, and download flows.
 - Installable demo storefront templates and demo product images.
 
 ## Installation
@@ -386,6 +386,8 @@ The **Mercato → Notifications** workspace provides the visual authoring flow u
 Safe merchant overrides are data files, not executable PHP. Put them at `/site/templates/mercato/emails/{locale}/{event}.txt` and `.html`, or omit the locale directory for a common fallback. Supported event names are `order_confirmation`, `payment_failed`, `payment_recovery`, `refund`, `cancellation`, `shipment_tracking`, `pickup_ready`, `local_delivery`, `account_created`, and `account_security`. Placeholders use `{name}` syntax. Customer/order values are escaped for HTML, unsafe scripts, event attributes, embedded forms, and `javascript:`/`data:` URLs are removed, while signed public links remain escaped and intact.
 
 Template precedence is: a saved visual template for that event, then a locale/file override, then the configured legacy subject/body or built-in event default. Shared header and footer blocks wrap the resulting HTML for all events. Keep critical signed URLs in both HTML and plain text, and use inline styles in shared layout blocks because many email clients strip page-level CSS.
+
+For paid digital access that can be reissued, enable **Signed access recovery** and include `{access_recovery_link}` in the order-confirmation template. Mercato owns the signed `/api/mercato/access-recovery` URL, expiry enforcement, CSRF-protected replacement request, private no-store response, and one-time browser-session delivery. The integrating project supplies domain behavior through `orderAccessRecoveryState` and `replaceOrderAccessCredential`; Mercato does not store the returned plaintext credential on the order or in notification logs. A site can skin the private page with `/site/templates/mercato/mrc-access-recovery.php` while retaining those controls.
 
 ProcessWire WireMail is the default transport. A provider module can implement `MercatoEmailTransportInterface` and replace it through the `Mercato::emailTransport` hook. Delivery attempts are written to `mercato-notifications` with a masked recipient, recipient hash, transport, provider message ID, provider status, retry count, and final result. The idempotency key prevents replayed commerce events from sending duplicates. Failed events remain visible in Customer Emails and can be retried from the corresponding order action without creating a second commerce event.
 

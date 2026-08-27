@@ -6,6 +6,7 @@ require_once __DIR__ . '/src/MercatoConfigSupport.php';
 require_once __DIR__ . '/src/MercatoStoreServices.php';
 require_once __DIR__ . '/src/MercatoFrontendHooks.php';
 require_once __DIR__ . '/src/MercatoOrderApi.php';
+require_once __DIR__ . '/src/MercatoAccessRecovery.php';
 require_once __DIR__ . '/src/MercatoOrderExperience.php';
 require_once __DIR__ . '/src/MercatoPersistenceGatewayHooks.php';
 require_once __DIR__ . '/src/MercatoPublicEndpoints.php';
@@ -22,7 +23,7 @@ require_once __DIR__ . '/src/MercatoBusinessHealthSummaries.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.3.0 (module info version: 130)
+ * @version 1.3.3 (module info version: 133)
  * @license MIT
  */
 
@@ -33,6 +34,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     use MercatoStoreServices;
     use MercatoFrontendHooks;
     use MercatoOrderApi;
+    use MercatoAccessRecovery;
     use MercatoOrderExperience;
     use MercatoPersistenceGatewayHooks;
     use MercatoPublicEndpoints;
@@ -56,7 +58,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 132,
+            'version'  => 133,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
@@ -152,9 +154,10 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'merchant_legal_details'   => '',
             'receipt_template_file'    => '',
             'order_status_template_file' => '',
+            'access_recovery_enabled' => false,
             'receipt_pdf_url_template' => '',
             'confirmation_email_subject' => 'Order confirmation {invoice}',
-            'confirmation_email_body'  => "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\nSubtotal: {subtotal}\n{fulfilment}: {shipping}\n{fulfilment_details}\nDiscount: {discount}\nTotal: {total}\n\nReceipt:\n{receipt_link}\n\nYou can check order status here:\n{order_status_link}\n\nWe will send the next fulfilment update.\n\n{policy_links}",
+            'confirmation_email_body'  => "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\nSubtotal: {subtotal}\n{fulfilment}: {shipping}\n{fulfilment_details}\nDiscount: {discount}\nTotal: {total}\n\nReceipt:\n{receipt_link}\n\nYou can check order status here:\n{order_status_link}\n\nAccess recovery:\n{access_recovery_link}\n\nWe will send the next fulfilment update.\n\n{policy_links}",
             'quote_requests_enabled' => false,
             'quote_expiry_days' => 30,
             'quote_inventory_policy' => 'none',
@@ -316,6 +319,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         $this->addHook('/api/mercato/order-lookup', $this, 'handleOrderLookup');
         $this->addHook('/api/mercato/order-status', $this, 'handleOrderStatus');
         $this->addHook('/api/mercato/order-receipt', $this, 'handleOrderReceipt');
+        $this->addHook('/api/mercato/access-recovery', $this, 'handleOrderAccessRecovery');
         $this->addHook('/api/mercato/order-receipt-pdf', $this, 'handleOrderReceiptPdf');
         $this->addHook('/api/mercato/order-packing-slip-pdf', $this, 'handleOrderPackingSlipPdf');
         $this->addHook('/api/mercato/download', $this, 'handleOrderDownload');

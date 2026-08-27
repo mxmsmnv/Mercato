@@ -108,6 +108,7 @@ final class MercatoEmailDeliveryService extends Wire {
             'total' => $this->commerce->formatPrice($this->commerce->orderRepository()->getTotalAmount($order)),
             'receipt_link' => $this->commerce->getOrderReceiptUrl($order),
             'order_status_link' => $this->commerce->getOrderStatusUrl($order),
+            'access_recovery_link' => $this->commerce->getOrderAccessRecoveryUrl($order),
             'payment_link' => $this->commerce->getPaymentLinkUrl($order),
             'policy_links' => $this->commerce->getPolicyLinksText(),
             'tracking' => (string) ($order->mrc_fulfilment_tracking ?? ''),

@@ -14,7 +14,7 @@ foreach (MercatoEmailEventCatalog::EVENTS as $event) {
     if (!isset(MercatoEmailEventCatalog::metadata()[$event])) throw new RuntimeException('Notification metadata is missing for ' . $event);
     if (!in_array('store_name', MercatoEmailEventCatalog::variables($event), true)) throw new RuntimeException('Shared store variable is missing for ' . $event);
 }
-foreach (['subtotal', 'fulfilment_details', 'discount', 'receipt_link', 'order_status_link'] as $variable) {
+foreach (['subtotal', 'fulfilment_details', 'discount', 'receipt_link', 'order_status_link', 'access_recovery_link'] as $variable) {
     if (!in_array($variable, MercatoEmailEventCatalog::variables('order_confirmation'), true)) throw new RuntimeException('Order confirmation variable is missing: ' . $variable);
 }
 $layout = MercatoEmailTemplateRenderer::render(

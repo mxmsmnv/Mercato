@@ -208,6 +208,61 @@ trait MercatoPublicEndpoints {
         exit;
     }
 
+    public function handleOrderAccessRecovery(HookEvent $event): void {
+        $input = $this->wire('input');
+        $session = $this->wire('session');
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        $order = $this->wire('pages')->get((int) $input->get('order'));
+        $token = (string) $input->get->text('token');
+        $ok = in_array($method, ['GET', 'POST'], true) && $this->verifyOrderAccessRecoveryToken($order, $token);
+
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
+        header('Referrer-Policy: no-referrer');
+        if (!$ok) {
+            if (!in_array($method, ['GET', 'POST'], true)) header('Allow: GET, POST');
+            http_response_code(in_array($method, ['GET', 'POST'], true) ? 404 : 405);
+            echo $this->renderPublicOrderAccessRecoveryError();
+            exit;
+        }
+
+        $state = $this->normalizeOrderAccessRecoveryState((array) $this->orderAccessRecoveryState($order));
+        $recoveryUrl = $this->getOrderAccessRecoveryUrl($order);
+        $error = '';
+        if ($method === 'POST') {
+            $csrf = $session->CSRF ?? null;
+            if (!$csrf || !method_exists($csrf, 'hasValidToken') || !$csrf->hasValidToken()) {
+                $error = $this->_('The recovery form expired. Reload this page and try again.');
+            } elseif (!$state['enabled'] || $state['status'] !== 'recoverable') {
+                $error = $this->_('This order cannot issue a replacement access credential.');
+            } else {
+                $result = $this->normalizeOrderAccessRecoveryResult((array) $this->replaceOrderAccessCredential($order));
+                if ($result['ok']) {
+                    $session->set('mrc_access_recovery_once_' . (int) $order->id, $result);
+                    header('Location: ' . $recoveryUrl, true, 303);
+                    exit;
+                }
+                $error = $result['error'] !== '' ? $result['error'] : $this->_('A replacement access credential could not be created.');
+            }
+        }
+
+        $flashKey = 'mrc_access_recovery_once_' . (int) $order->id;
+        $flash = $session->get($flashKey);
+        $result = is_array($flash) ? $this->normalizeOrderAccessRecoveryResult($flash) : null;
+        $session->remove($flashKey);
+        $csrf = $session->CSRF ?? null;
+        $csrfInput = $csrf && method_exists($csrf, 'renderInput') ? (string) $csrf->renderInput() : '';
+        echo $this->renderPublicOrderAccessRecovery($order, $state, $result, $error, $csrfInput, $recoveryUrl);
+        exit;
+    }
+
+    protected function renderPublicOrderAccessRecoveryError(): string {
+        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>Access recovery unavailable</title>' . $this->renderPublicOrderStatusStyles() . '</head><body><main class="mrc-public-status"><section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Private order link</p><h1>Access recovery unavailable</h1><p>The link is invalid or expired.</p></section></main></body></html>';
+    }
+
     public function handleOrderReceiptPdf(HookEvent $event): void {
         $input = $this->wire('input');
         $order = $this->wire('pages')->get((int) $input->get('order'));

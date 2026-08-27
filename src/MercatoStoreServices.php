@@ -141,6 +141,7 @@ trait MercatoStoreServices {
         $data['recovery_suppressed_emails'] = self::normalizeRecoverySuppressedEmails($data['recovery_suppressed_emails'] ?? '');
         $data['receipt_template_file'] = self::normalizeReceiptTemplateFile($data['receipt_template_file'] ?? '');
         $data['order_status_template_file'] = self::normalizeReceiptTemplateFile($data['order_status_template_file'] ?? '');
+        $data['access_recovery_enabled'] = !empty($data['access_recovery_enabled']);
         $data['receipt_pdf_url_template'] = self::normalizeReceiptPdfUrlTemplate($data['receipt_pdf_url_template'] ?? '');
         if (empty($previousConfig['production']) && !empty($data['production'])) {
             if (!$productionActivationConfirmed) throw new WireException($this->_('Confirm the production activation checklist before enabling production mode.'));
