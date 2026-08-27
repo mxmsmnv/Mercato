@@ -33,7 +33,7 @@ final class MercatoSeoRules {
 
     public static function isPrivatePath(string $path, array $query = []): bool {
         $path = '/' . trim(strtolower($path), '/') . '/';
-        foreach (['/cart/', '/checkout/', '/account/', '/order-status/', '/order-receipt/', '/download/', '/my-quotes/', '/quote-status/', '/recovery-unsubscribe/'] as $private) if (str_contains($path, $private)) return true;
+        foreach (['/cart/', '/checkout/', '/account/', '/order-status/', '/order-receipt/', '/order/status/', '/order/receipt/', '/download/', '/my-quotes/', '/quote-status/', '/recovery-unsubscribe/'] as $private) if (str_contains($path, $private)) return true;
         foreach (['token', 'signature', 'key', 'payment_link'] as $key) if (isset($query[$key]) && trim((string) $query[$key]) !== '') return true;
         return false;
     }

@@ -425,10 +425,7 @@ trait MercatoOrderExperience {
         if ($external !== '') {
             return $external;
         }
-        return $this->getHttpRoot() . '/api/mercato/order-receipt-pdf?' . http_build_query([
-            'order' => (int) $order->id,
-            'token' => $this->getOrderReceiptToken($order),
-        ]);
+        return $this->getHttpRoot() . '/order/receipt/' . rawurlencode($this->getOrderPublicRouteCode($order, 'receipt')) . '/pdf/';
     }
 
     protected function getExternalOrderReceiptPdfUrl(Page $order): string {

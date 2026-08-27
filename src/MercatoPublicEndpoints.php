@@ -156,9 +156,20 @@ trait MercatoPublicEndpoints {
 
     public function handleOrderStatus(HookEvent $event): void {
         $input = $this->wire('input');
-        $order = $this->wire('pages')->get((int) $input->get('order'));
-        $token = (string) $input->get->text('token');
-        $ok = $this->verifyOrderStatusToken($order, $token);
+        $code = trim((string) $event->arguments('code'));
+        $order = $code !== ''
+            ? $this->resolveOrderPublicRouteCode($code, 'status')
+            : $this->wire('pages')->get((int) $input->get('order'));
+        $ok = $code !== ''
+            ? $order instanceof Page
+            : $this->verifyOrderStatusToken($order, (string) $input->get->text('token'));
+
+        if ($code === '' && $ok) {
+            header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+            header('Referrer-Policy: no-referrer');
+            header('Location: ' . $this->getOrderStatusUrl($order), true, 302);
+            exit;
+        }
 
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: private, no-store, max-age=0, must-revalidate');
@@ -195,9 +206,20 @@ trait MercatoPublicEndpoints {
 
     public function handleOrderReceipt(HookEvent $event): void {
         $input = $this->wire('input');
-        $order = $this->wire('pages')->get((int) $input->get('order'));
-        $token = (string) $input->get->text('token');
-        $ok = $this->verifyOrderReceiptToken($order, $token);
+        $code = trim((string) $event->arguments('code'));
+        $order = $code !== ''
+            ? $this->resolveOrderPublicRouteCode($code, 'receipt')
+            : $this->wire('pages')->get((int) $input->get('order'));
+        $ok = $code !== ''
+            ? $order instanceof Page
+            : $this->verifyOrderReceiptToken($order, (string) $input->get->text('token'));
+
+        if ($code === '' && $ok) {
+            header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+            header('Referrer-Policy: no-referrer');
+            header('Location: ' . $this->getOrderReceiptUrl($order), true, 302);
+            exit;
+        }
 
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: private, no-store, max-age=0, must-revalidate');
@@ -282,9 +304,19 @@ trait MercatoPublicEndpoints {
 
     public function handleOrderReceiptPdf(HookEvent $event): void {
         $input = $this->wire('input');
-        $order = $this->wire('pages')->get((int) $input->get('order'));
-        $token = (string) $input->get->text('token');
-        $ok = $this->verifyOrderReceiptToken($order, $token);
+        $code = trim((string) $event->arguments('code'));
+        $order = $code !== ''
+            ? $this->resolveOrderPublicRouteCode($code, 'receipt')
+            : $this->wire('pages')->get((int) $input->get('order'));
+        $ok = $code !== ''
+            ? $order instanceof Page
+            : $this->verifyOrderReceiptToken($order, (string) $input->get->text('token'));
+        if ($code === '' && $ok) {
+            header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+            header('Referrer-Policy: no-referrer');
+            header('Location: ' . $this->getOrderReceiptPdfUrl($order), true, 302);
+            exit;
+        }
         if (!$ok) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');

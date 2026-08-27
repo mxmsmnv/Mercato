@@ -5,6 +5,7 @@ require_once __DIR__ . '/src/MercatoHealthSummaries.php';
 require_once __DIR__ . '/src/MercatoConfigSupport.php';
 require_once __DIR__ . '/src/MercatoStoreServices.php';
 require_once __DIR__ . '/src/MercatoFrontendHooks.php';
+require_once __DIR__ . '/src/MercatoPublicOrderRoutes.php';
 require_once __DIR__ . '/src/MercatoOrderApi.php';
 require_once __DIR__ . '/src/MercatoAccessRecovery.php';
 require_once __DIR__ . '/src/MercatoOrderExperience.php';
@@ -23,7 +24,7 @@ require_once __DIR__ . '/src/MercatoBusinessHealthSummaries.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.3.6 (module info version: 136)
+ * @version 1.3.7 (module info version: 137)
  * @license MIT
  */
 
@@ -33,6 +34,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     use MercatoConfigSupport;
     use MercatoStoreServices;
     use MercatoFrontendHooks;
+    use MercatoPublicOrderRoutes;
     use MercatoOrderApi;
     use MercatoAccessRecovery;
     use MercatoOrderExperience;
@@ -58,7 +60,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 136,
+            'version'  => 137,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
@@ -319,6 +321,9 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         $this->addHook('/api/mercato/order-lookup', $this, 'handleOrderLookup');
         $this->addHook('/api/mercato/order-status', $this, 'handleOrderStatus');
         $this->addHook('/api/mercato/order-receipt', $this, 'handleOrderReceipt');
+        $this->addHook('/order/status/{code}/?', $this, 'handleOrderStatus');
+        $this->addHook('/order/receipt/{code}/?', $this, 'handleOrderReceipt');
+        $this->addHook('/order/receipt/{code}/pdf/?', $this, 'handleOrderReceiptPdf');
         $this->addHook('/access/recovery/{code}/?', $this, 'handleOrderAccessRecovery');
         $this->addHook('/api/mercato/access-recovery', $this, 'handleLegacyOrderAccessRecovery');
         $this->addHook('/api/mercato/order-receipt-pdf', $this, 'handleOrderReceiptPdf');

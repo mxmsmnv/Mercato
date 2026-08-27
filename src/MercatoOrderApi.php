@@ -263,10 +263,7 @@ trait MercatoOrderApi {
     }
 
     public function getOrderStatusUrl(Page $order): string {
-        return $this->getHttpRoot() . '/api/mercato/order-status?' . http_build_query([
-            'order' => (int) $order->id,
-            'token' => $this->getOrderStatusToken($order),
-        ]);
+        return $this->getHttpRoot() . '/order/status/' . rawurlencode($this->getOrderPublicRouteCode($order, 'status')) . '/';
     }
 
     public function getOrderLookupUrl(): string {
@@ -326,10 +323,7 @@ trait MercatoOrderApi {
     }
 
     public function getOrderReceiptUrl(Page $order): string {
-        return $this->getHttpRoot() . '/api/mercato/order-receipt?' . http_build_query([
-            'order' => (int) $order->id,
-            'token' => $this->getOrderReceiptToken($order),
-        ]);
+        return $this->getHttpRoot() . '/order/receipt/' . rawurlencode($this->getOrderPublicRouteCode($order, 'receipt')) . '/';
     }
 
     public function getOrderPackingSlipPdfUrl(Page $order): string {
