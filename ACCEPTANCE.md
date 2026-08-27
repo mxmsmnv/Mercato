@@ -1,6 +1,6 @@
 # Production-readiness acceptance suite
 
-The acceptance suite combines the deterministic PHP lifecycle tests with real-browser storefront journeys. It creates a uniquely named product and coupon in a non-production ProcessWire installation, switches only the settings needed for Demo Payment, runs the suite, and restores those settings and deletes run-owned pages/orders in a `finally` cleanup.
+The acceptance suite combines the deterministic PHP lifecycle tests with real-browser storefront journeys. It creates a uniquely named product and coupon in a non-production ProcessWire installation, switches only the settings needed for Demo Payment, runs the suite, and restores those settings and deletes run-owned pages/orders in a `finally` cleanup. Backend coverage also validates the optional McpServer provider contract, PII minimization, exact-variant inventory, payment verification, mutation idempotency, label redaction, tracking, non-regressing fulfilment, transactional email, and structured failures.
 
 ## Local command
 
@@ -27,7 +27,7 @@ Reports are written to `artifacts/e2e/acceptance.json` (machine-readable), `arti
 
 ## Browser and accessibility contract
 
-The blocking matrix is Chromium desktop, Chromium/Pixel 7, Firefox desktop, and WebKit/iPhone 15. Catalog, product, checkout, private account, validation, and order-success surfaces are checked for horizontal overflow and axe-core serious/critical violations. The checkout journey covers a deterministic coupon and Demo Payment. Backend integration scenarios cover stock races, reservation/release/restock, address/tax/shipping rejection, decline/retry, delayed and duplicate webhook replay, cancellation, refunds, email, exports, signed links, permissions, noindex, and analytics.
+The blocking matrix is Chromium desktop, Chromium/Pixel 7, Firefox desktop, and WebKit/iPhone 15. Catalog, product, checkout, private account, validation, and order-success surfaces are checked for horizontal overflow and axe-core serious/critical violations. The checkout journey covers a deterministic coupon and Demo Payment. Backend integration scenarios cover stock races, reservation/release/restock, address/tax/shipping rejection, decline/retry, delayed and duplicate webhook replay, cancellation, refunds, email, exports, signed links, permissions, noindex, analytics, and governed MCP commerce operations.
 
 ## CI and release threshold
 

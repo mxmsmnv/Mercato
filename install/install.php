@@ -33,6 +33,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
     }
     if ($module->getInstalledSchemaVersion() > 0 && $module->getInstalledSchemaVersion() < Mercato::SCHEMA_VERSION) $module->operationalService()->assertPreUpgradeBackup();
 
+    $module->ensureMcpOperationsSchema();
     mercato_store_schema_version($module);
     mercato_ensure_permissions();
     mercato_ensure_roles();

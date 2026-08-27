@@ -13,6 +13,7 @@ Mercato is a ProcessWire ecommerce module with an installable demo storefront. A
 - `Mercato.module.php`: main module configuration, public API, payment flow, checkout/order helpers, frontend framework helpers.
 - `composer.json`, `composer.lock`, and `DEPLOYMENT.md`: runtime dependency graph and the authoritative install/upgrade/rollback contract.
 - `ANALYTICS.md`: versioned event names, consent, payload minimization, delivery guarantees, and adapter contract.
+- `MCP.md`: McpServer provider tools, scopes, confirmations, structured failures, idempotency, rollout, and orchestration examples.
 - `ProcessMercato.module.php`: admin process UI.
 - `install/install.php`: creates required fields, templates, pages, demo content, discounts, and copies storefront template files into `/site/templates/`.
 - `templates/mrc-storefront.php`: shared storefront styling, header, footer, filters, cart icon, and helper functions.
@@ -59,12 +60,16 @@ Use these module methods instead of inventing APIs:
 - `$commerce->shippingProviderService()`: quote live parcel services and manage provider shipment, label, tracking webhook, void, and refund lifecycles.
 - `$commerce->paymentReconciliationAuditService()`: inspect local/remote payment mismatch states, explicitly verify provider state, and run narrowly scoped audited repairs.
 - `$commerce->headlessApiService()`: access v1 native catalog, quote, opaque checkout, completion, and order resources without duplicating commerce calculations.
+- `$commerce->mcpProviderInfo()` and `$commerce->mcpTools()`: expose the documented bounded provider contract to McpServer discovery.
+- `$commerce->ensureMcpOperationsSchema()`: idempotently create the durable MCP mutation ledger during install/repair.
 
 Custom tax-provider modules implement `MercatoTaxProviderInterface` and register an instance with the `taxProviders` hook. Preserve estimate idempotency, stored calculation snapshots, commit-once locking, refund/void adjustments, and configured provider failure behavior. Tax configuration is not accounting or legal advice.
 
 Custom live-carrier modules implement `MercatoShippingProviderInterface` and register with `shippingProviders`. Keep credentials in the adapter, revalidate final-address quotes, preserve shipment/label idempotency, verify tracking signatures, prevent status regression, and never log or export private label URLs.
 
 Never bypass `MercatoProductionGuard` or enable production merely because credential fields are non-empty. Use mode-correct keys, HTTPS, required webhook events, the non-production verification scenarios, remote reconciliation checks, and an explicit rollback plan. Repair payment mismatches only after provider verification and preserve all audit records.
+
+McpServer owns client credentials, site namespaces, transport scopes, rate limits, and gateway audit. Mercato MCP handlers own commerce validation, PII minimization, exact confirmations, durable idempotency, and domain audit. Do not expose generic ProcessWire editing, refunds, reconciliation repairs, secrets, private label URLs, or customer contact/address data through MCP. Label purchases require `admin` scope and the exact cost confirmation. Stop on every structured error; never turn `human_review_required` into an automatic repair.
 
 Shared storefront helper functions are defined in `templates/mrc-storefront.php` and are safe to use from Mercato storefront templates after requiring that file:
 
@@ -118,6 +123,7 @@ Shared storefront helper functions are defined in `templates/mrc-storefront.php`
 - Exporting or anonymizing customer data, changing legal holds, or executing a live privacy-retention batch. Run a dry-run first and preserve financial/audit records.
 - Linking or merging an account with guest orders. Require verified control of the exact destination and never replace an existing non-zero owner ID.
 - Changing public API behavior used by external templates or hooks.
+- Enabling the McpServer endpoint, issuing production MCP credentials, or granting `publish`/`admin` scopes.
 
 ## Avoid
 

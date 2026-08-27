@@ -9,6 +9,17 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-27
+
+### Added
+
+- McpServer provider discovery with 11 bounded commerce tools for PII-minimized order, fulfilment, inventory, and operational reads plus validated payment verification, shipment, label, tracking, fulfilment, and transactional-email operations.
+- Hierarchical scope policy, exact confirmations for mutations and carrier costs, durable idempotency results, provider-local success/failure audit, structured human-review exceptions, and MCP/n8n orchestration documentation.
+
+### Changed
+
+- Shipment item normalization now rejects products outside the order snapshot and preserves exact variant IDs and labels.
+
 ## [1.3.0] - 2026-08-25
 
 ### Added

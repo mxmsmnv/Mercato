@@ -145,7 +145,7 @@ trait MercatoOrderExperience {
             }
             $key = $this->partialFulfilmentItemKey($item);
             if ($key !== '') {
-                $available[$key] = max(1, (int) ($item['quantity'] ?? 1));
+                $available[$key] = $item + ['quantity' => 1];
             }
         }
 
@@ -155,17 +155,18 @@ trait MercatoOrderExperience {
                 continue;
             }
             $key = $this->partialFulfilmentItemKey($item);
-            if ($key === '') {
+            if ($key === '' || !isset($available[$key])) {
                 continue;
             }
+            $snapshot = $available[$key];
             $quantity = max(1, (int) ($item['quantity'] ?? 1));
-            if (isset($available[$key])) {
-                $quantity = min($quantity, $available[$key]);
-            }
+            $quantity = min($quantity, max(1, (int) ($snapshot['quantity'] ?? 1)));
             $normalized[] = [
-                'product_id' => max(0, (int) ($item['product_id'] ?? $item['id'] ?? 0)),
-                'title' => $sanitizer->text((string) ($item['title'] ?? $item['name'] ?? '')),
-                'sku' => $sanitizer->text((string) ($item['sku'] ?? '')),
+                'product_id' => max(0, (int) ($snapshot['product_id'] ?? $snapshot['id'] ?? 0)),
+                'title' => $sanitizer->text((string) ($snapshot['title'] ?? $snapshot['name'] ?? '')),
+                'sku' => $sanitizer->text((string) ($snapshot['sku'] ?? '')),
+                'variant_id' => $sanitizer->text((string) ($snapshot['variant_id'] ?? '')),
+                'variant_label' => $sanitizer->text((string) ($snapshot['variant_label'] ?? '')),
                 'quantity' => $quantity,
             ];
         }
@@ -176,7 +177,8 @@ trait MercatoOrderExperience {
     protected function partialFulfilmentItemKey(array $item): string {
         $productId = max(0, (int) ($item['product_id'] ?? $item['id'] ?? 0));
         if ($productId > 0) {
-            return 'id:' . $productId;
+            $variantId = MercatoVariantDefinition::slug((string) ($item['variant_id'] ?? ''));
+            return 'id:' . $productId . ($variantId !== '' ? ':variant:' . $variantId : '');
         }
         $sku = trim((string) ($item['sku'] ?? ''));
         if ($sku !== '') {

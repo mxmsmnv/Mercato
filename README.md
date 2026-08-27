@@ -49,6 +49,7 @@ Use Mercato when you want:
 - checkout, payments, refunds, fulfilment, recovery, audit logs, and reports in one module;
 - storefront templates that can be replaced or extended at site level;
 - headless/read API support for custom interfaces, including native iOS guest checkout through `/api/mercato/v1`.
+- governed McpServer tools for scoped, audited agent or n8n commerce automation.
 
 In short: Mercato is a commerce layer for ProcessWire, with a complete demo shop
 as proof that the layer can ship a real storefront.
@@ -122,6 +123,13 @@ php scripts/run-acceptance.php
 The release threshold is zero failed scenarios, zero serious/critical axe violations, successful fixture cleanup, and retained JSON/Markdown and Playwright diagnostics. See [ACCEPTANCE.md](ACCEPTANCE.md) for setup, browser versions, coverage, report paths, and the separately gated live-provider smoke policy.
 
 Native clients use `/api/mercato/v1`; see [HEADLESS_API.md](HEADLESS_API.md) for resources, SDK/redirect flows, opaque credentials, errors, deep links, and compatibility.
+
+MCP-compatible agents and automation systems use the optional ProcessWire
+McpServer provider. It exposes bounded PII-minimized order and inventory reads,
+validated payment/fulfilment/email operations, stronger confirmation for label
+costs, durable idempotency, and structured stop-for-review failures. It does
+not expose generic ProcessWire editing, refunds, or reconciliation repairs. See
+[MCP.md](MCP.md) for tool schemas, scopes, rollout, and an n8n workflow example.
 
 ## Demo Storefront
 

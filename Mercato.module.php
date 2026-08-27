@@ -13,6 +13,7 @@ require_once __DIR__ . '/src/MercatoWebhookProductAuditHooks.php';
 require_once __DIR__ . '/src/MercatoConfigInputfields.php';
 require_once __DIR__ . '/src/MercatoConfigReadiness.php';
 require_once __DIR__ . '/src/MercatoBusinessHealthSummaries.php';
+require_once __DIR__ . '/src/Mcp/MercatoMcpProviderTrait.php';
 
 /**
  * Mercato
@@ -22,7 +23,7 @@ require_once __DIR__ . '/src/MercatoBusinessHealthSummaries.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.3.0 (module info version: 130)
+ * @version 1.4.0 (module info version: 140)
  * @license MIT
  */
 
@@ -40,6 +41,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     use MercatoConfigInputfields;
     use MercatoConfigReadiness;
     use MercatoBusinessHealthSummaries;
+    use MercatoMcpProviderTrait;
 
     public const PAYMENT_STATUS_PENDING = 'pending';
     public const PAYMENT_STATUS_REQUIRES_CONFIRMATION = 'requires_confirmation';
@@ -50,18 +52,19 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const PAYMENT_STATUS_CANCELED = 'canceled';
 
     public const SUBSCRIPTION_STATUS_NONE = 'none';
-    public const SCHEMA_VERSION = 9;
+    public const SCHEMA_VERSION = 10;
 
     public static function getModuleInfo(): array {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 130,
+            'version'  => 140,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
             'autoload' => true,
             'icon'     => 'shopping-cart',
+            'mcpProvider' => true,
             'requires' => ['ProcessWire>=3.0.200', 'PHP>=8.1.0'],
             'installs' => ['ProcessMercato'],
         ];
