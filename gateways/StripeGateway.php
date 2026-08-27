@@ -261,6 +261,11 @@ class StripeGateway extends MercatoGatewayBase {
             'metadata'       => $this->getOrderMetadata($pendingOrder),
         ];
 
+        $billingDetails = $this->getCustomerBillingDetails($pendingOrder);
+        if (!empty($billingDetails['email'])) {
+            $params['receipt_email'] = $billingDetails['email'];
+        }
+
         if (!empty($this->commerce->stripe_automatic_payment_methods)) {
             $params['automatic_payment_methods'] = ['enabled' => true];
         } else {
@@ -268,6 +273,14 @@ class StripeGateway extends MercatoGatewayBase {
         }
 
         return $params;
+    }
+
+    /**
+     * Customer data suitable for Stripe Payment Element billing_details.
+     * PII must be passed through Stripe's dedicated fields, never metadata.
+     */
+    public function getCustomerBillingDetails(array $pendingOrder): array {
+        return MercatoStripeCustomerData::fromPendingOrder($pendingOrder);
     }
 
     protected function initializeKlarnaPayment(array $pendingOrder, float $sum): array {

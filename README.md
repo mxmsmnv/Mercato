@@ -222,6 +222,15 @@ Mercato includes these payment methods:
 - **Bank transfer** for offline invoice-style orders.
 - **Demo Payment** for test workflows while production mode is off.
 
+Stripe PaymentIntent checkout sends a valid buyer email through Stripe's
+dedicated `receipt_email` field. The bundled Payment Element also pre-fills and
+confirms checkout-owned name, email, phone, and available billing-address data
+as `billing_details`, so the Stripe payment and guest-customer views are useful
+without copying customer PII into metadata. Site-level checkout overrides must
+preserve this behavior by using
+`$commerce->getGateway('stripe')->getCustomerBillingDetails($pendingOrder)` for
+the Payment Element defaults and confirmation parameters.
+
 Production mode disables Demo Payment and expects live gateway configuration.
 Always configure provider webhooks before taking live orders.
 
