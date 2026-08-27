@@ -64,6 +64,7 @@ Use these module methods instead of inventing APIs:
 - `$commerce->paymentReconciliationAuditService()`: inspect local/remote payment mismatch states, explicitly verify provider state, and run narrowly scoped audited repairs.
 - `$commerce->headlessApiService()`: access v1 native catalog, quote, opaque checkout, completion, and order resources without duplicating commerce calculations.
 - `$commerce->getGateway('stripe')->getCustomerBillingDetails($pendingOrder)`: normalize checkout-owned name, email, phone and billing-address values for Stripe Payment Element `billing_details`; keep this PII out of Stripe metadata.
+- `$commerce->getGateway('stripe')->getStripeOrderData($pendingOrder)`: build the generic, bounded PaymentIntent description and PII-free metadata from the saved Mercato order/cart snapshot; do not add project-specific product assumptions in the Stripe gateway.
 
 Custom tax-provider modules implement `MercatoTaxProviderInterface` and register an instance with the `taxProviders` hook. Preserve estimate idempotency, stored calculation snapshots, commit-once locking, refund/void adjustments, and configured provider failure behavior. Tax configuration is not accounting or legal advice.
 

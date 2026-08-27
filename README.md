@@ -229,7 +229,14 @@ as `billing_details`, so the Stripe payment and guest-customer views are useful
 without copying customer PII into metadata. Site-level checkout overrides must
 preserve this behavior by using
 `$commerce->getGateway('stripe')->getCustomerBillingDetails($pendingOrder)` for
-the Payment Element defaults and confirmation parameters.
+the Payment Element defaults and confirmation parameters. Mercato also projects
+the saved order snapshot into every one-time Stripe PaymentIntent: the
+description contains the invoice reference, total quantity, and bounded product
+titles, while metadata contains the Mercato order/invoice references, line and
+quantity counts, bounded SKU list, and product types. This projection is generic
+to Mercato and never includes customer PII. Use
+`$commerce->getGateway('stripe')->getStripeOrderData($pendingOrder)` when a
+site-level integration needs the same provider-safe projection.
 
 Production mode disables Demo Payment and expects live gateway configuration.
 Always configure provider webhooks before taking live orders.
