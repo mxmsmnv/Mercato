@@ -209,12 +209,10 @@ trait MercatoPublicEndpoints {
     }
 
     public function handleOrderAccessRecovery(HookEvent $event): void {
-        $input = $this->wire('input');
         $session = $this->wire('session');
         $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-        $order = $this->wire('pages')->get((int) $input->get('order'));
-        $token = (string) $input->get->text('token');
-        $ok = in_array($method, ['GET', 'POST'], true) && $this->verifyOrderAccessRecoveryToken($order, $token);
+        $order = $this->resolveOrderAccessRecoveryCode((string) $event->arguments('code'));
+        $ok = in_array($method, ['GET', 'POST'], true) && $order instanceof Page && !$this->areOrderSignedLinksExpired($order) && $this->isOrderReceiptAvailable($order);
 
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: private, no-store, max-age=0, must-revalidate');
@@ -256,6 +254,25 @@ trait MercatoPublicEndpoints {
         $csrf = $session->CSRF ?? null;
         $csrfInput = $csrf && method_exists($csrf, 'renderInput') ? (string) $csrf->renderInput() : '';
         echo $this->renderPublicOrderAccessRecovery($order, $state, $result, $error, $csrfInput, $recoveryUrl);
+        exit;
+    }
+
+    public function handleLegacyOrderAccessRecovery(HookEvent $event): void {
+        $input = $this->wire('input');
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        $order = $this->wire('pages')->get((int) $input->get('order'));
+        $token = (string) $input->get->text('token');
+        if ($method === 'GET' && $this->verifyOrderAccessRecoveryToken($order, $token)) {
+            header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+            header('Referrer-Policy: no-referrer');
+            header('Location: ' . $this->getOrderAccessRecoveryUrl($order), true, 302);
+            exit;
+        }
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
+        http_response_code($method === 'GET' ? 404 : 405);
+        echo $this->renderPublicOrderAccessRecoveryError();
         exit;
     }
 

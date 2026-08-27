@@ -23,7 +23,7 @@ require_once __DIR__ . '/src/MercatoBusinessHealthSummaries.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.3.3 (module info version: 133)
+ * @version 1.3.4 (module info version: 134)
  * @license MIT
  */
 
@@ -58,7 +58,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 133,
+            'version'  => 134,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
@@ -319,7 +319,8 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         $this->addHook('/api/mercato/order-lookup', $this, 'handleOrderLookup');
         $this->addHook('/api/mercato/order-status', $this, 'handleOrderStatus');
         $this->addHook('/api/mercato/order-receipt', $this, 'handleOrderReceipt');
-        $this->addHook('/api/mercato/access-recovery', $this, 'handleOrderAccessRecovery');
+        $this->addHook('/access/recovery/{code}/?', $this, 'handleOrderAccessRecovery');
+        $this->addHook('/api/mercato/access-recovery', $this, 'handleLegacyOrderAccessRecovery');
         $this->addHook('/api/mercato/order-receipt-pdf', $this, 'handleOrderReceiptPdf');
         $this->addHook('/api/mercato/order-packing-slip-pdf', $this, 'handleOrderPackingSlipPdf');
         $this->addHook('/api/mercato/download', $this, 'handleOrderDownload');

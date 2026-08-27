@@ -5,6 +5,7 @@ $endpoint = (string) file_get_contents(__DIR__ . '/../src/MercatoPublicEndpoints
 $delivery = (string) file_get_contents(__DIR__ . '/../src/Notification/MercatoOrderConfirmationService.php');
 
 foreach ([
+    "'/access/recovery/{code}/?'",
     "'/api/mercato/access-recovery'",
     "'access_recovery_enabled' => false",
     'use MercatoAccessRecovery',
@@ -13,6 +14,8 @@ foreach ([
 }
 foreach ([
     'getOrderAccessRecoveryUrl',
+    'getOrderAccessRecoveryCode',
+    'resolveOrderAccessRecoveryCode',
     'verifyOrderAccessRecoveryToken',
     '___orderAccessRecoveryState',
     '___replaceOrderAccessCredential',

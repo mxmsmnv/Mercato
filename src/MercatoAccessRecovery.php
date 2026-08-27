@@ -5,14 +5,30 @@ trait MercatoAccessRecovery {
 
     public function getOrderAccessRecoveryUrl(Page $order): string {
         if (empty($this->access_recovery_enabled) || !$this->isOrderReceiptAvailable($order)) return '';
-        return $this->getHttpRoot() . '/api/mercato/access-recovery?' . http_build_query([
-            'order' => (int) $order->id,
-            'token' => $this->getOrderAccessRecoveryToken($order),
-        ]);
+        return $this->getHttpRoot() . '/access/recovery/' . rawurlencode($this->getOrderAccessRecoveryCode($order)) . '/';
+    }
+
+    protected function getOrderAccessRecoveryCode(Page $order): string {
+        $orderId = (string) (int) $order->id;
+        if ($orderId === '0') return '';
+        $signature = hash_hmac('sha256', 'mercato-access-recovery-route|' . $orderId . '|' . $this->getOrderAccessRecoveryToken($order), $this->accessRecoverySecret(), true);
+        return rtrim(strtr(base64_encode($orderId . '.' . $signature), '+/', '-_'), '=');
+    }
+
+    protected function resolveOrderAccessRecoveryCode(string $code): ?Page {
+        if (!preg_match('/^[A-Za-z0-9_-]{32,128}$/', $code)) return null;
+        $padding = (4 - strlen($code) % 4) % 4;
+        $decoded = base64_decode(strtr($code . str_repeat('=', $padding), '-_', '+/'), true);
+        if (!is_string($decoded) || !str_contains($decoded, '.')) return null;
+        [$orderId, $signature] = explode('.', $decoded, 2);
+        if (!ctype_digit($orderId) || strlen($signature) !== 32) return null;
+        $order = $this->wire('pages')->get((int) $orderId);
+        if (!$order || !$order->id || !hash_equals($this->getOrderAccessRecoveryCode($order), $code)) return null;
+        return $order;
     }
 
     public function getOrderAccessRecoveryToken(Page $order): string {
-        $secret = (string) ($this->wire('config')->userAuthSalt ?: $this->wire('config')->userAuthHashType ?: __FILE__);
+        $secret = $this->accessRecoverySecret();
         $seed = $order->hasField('mrc_status_token_seed') ? trim((string) $order->mrc_status_token_seed) : '';
         return hash_hmac('sha256', implode('|', [
             'mercato-order-access-recovery',
@@ -31,6 +47,10 @@ trait MercatoAccessRecovery {
             && !$this->areOrderSignedLinksExpired($order)
             && $this->isOrderReceiptAvailable($order)
             && hash_equals($this->getOrderAccessRecoveryToken($order), trim($token));
+    }
+
+    protected function accessRecoverySecret(): string {
+        return (string) ($this->wire('config')->userAuthSalt ?: $this->wire('config')->userAuthHashType ?: __FILE__);
     }
 
     public function ___orderAccessRecoveryState(Page $order): array {
