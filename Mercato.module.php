@@ -54,6 +54,9 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const SUBSCRIPTION_STATUS_NONE = 'none';
     public const SCHEMA_VERSION = 10;
 
+    private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';
+    private const MCP_OPERATION_TABLE = 'mercato_mcp_operations';
+
     public static function getModuleInfo(): array {
         return [
             'title'    => 'Mercato',

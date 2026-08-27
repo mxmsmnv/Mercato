@@ -9,9 +9,6 @@ namespace ProcessWire;
  */
 trait MercatoMcpProviderTrait {
 
-    private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';
-    private const MCP_OPERATION_TABLE = 'mercato_mcp_operations';
-
     /** @return array<string,mixed> */
     public function mcpProviderInfo(): array {
         return [
