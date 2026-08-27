@@ -24,7 +24,7 @@ require_once __DIR__ . '/src/MercatoBusinessHealthSummaries.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.3.7 (module info version: 137)
+ * @version 1.3.8 (module info version: 138)
  * @license MIT
  */
 
@@ -60,7 +60,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 137,
+            'version'  => 138,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,

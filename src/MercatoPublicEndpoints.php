@@ -788,64 +788,64 @@ trait MercatoPublicEndpoints {
             : 'Shipping';
         $paymentStatus = trim((string) $order->mrc_payment_status) ?: ((int) $order->mrc_payment_complete === 1 ? self::PAYMENT_STATUS_PAID : self::PAYMENT_STATUS_PENDING);
 
-        $lines = [
-            'Receipt ' . $invoice,
-            'Payment: ' . $this->humanizeStatus($paymentStatus),
-            'Date: ' . (string) ($order->mrc_invoice_date ?: date('Y-m-d H:i', (int) $order->created)),
-            '',
-            'Customer',
-            trim((string) $order->mrc_first_name . ' ' . (string) $order->mrc_last_name),
-            (string) $order->mrc_email,
-            '',
-            'Billing address',
-        ];
-        $lines = array_merge($lines, preg_split('/\R/', $this->formatAddressSnapshot($order, 'mrc_billing_address') ?: '-', -1, PREG_SPLIT_NO_EMPTY) ?: ['-']);
-        $lines[] = '';
-        $lines[] = $fulfilmentLabel . ' address';
-        $lines = array_merge($lines, preg_split('/\R/', $this->formatAddressSnapshot($order, 'mrc_shipping_address') ?: '-', -1, PREG_SPLIT_NO_EMPTY) ?: ['-']);
-        $merchantDetails = $this->getReceiptMerchantLegalDetails($order);
-        if ($merchantDetails !== '') {
-            $lines[] = '';
-            $lines[] = 'Merchant';
-            $lines = array_merge($lines, preg_split('/\R/', $merchantDetails, -1, PREG_SPLIT_NO_EMPTY) ?: []);
-        }
-        $lines[] = '';
-        $lines[] = 'Items';
+        $pdfItems = [];
         foreach ($items as $item) {
             $quantity = max(1, (int) ceil((float) ($item['quantity'] ?? 1)));
             $title = trim((string) ($item['title'] ?? $item['name'] ?? 'Product'));
             $sku = trim((string) ($item['sku'] ?? ''));
             $unit = (float) ($item['price'] ?? 0);
             $line = (float) ($item['sum'] ?? ($unit * $quantity));
-            $lines[] = sprintf('%s%s x%d @ %s = %s', $title, $sku !== '' ? ' (' . $sku . ')' : '', $quantity, $this->formatPrice($unit), $this->formatPrice($line));
+            $pdfItems[] = [
+                'title' => $title,
+                'sku' => $sku,
+                'quantity' => $quantity,
+                'unit' => $this->formatPrice($unit),
+                'amount' => $this->formatPrice($line),
+            ];
         }
-        if (!$items) {
-            $lines[] = 'No receipt items are available.';
-        }
-        $lines[] = '';
+        $summary = [];
         if ($subtotal > 0) {
-            $lines[] = 'Subtotal: ' . $this->formatPrice($subtotal);
+            $summary[] = ['label' => 'Subtotal', 'value' => $this->formatPrice($subtotal)];
         }
-        $lines[] = $fulfilmentLabel . ': ' . ($shippingTotal > 0 ? $this->formatPrice($shippingTotal) : 'Free');
+        $summary[] = ['label' => $fulfilmentLabel, 'value' => $shippingTotal > 0 ? $this->formatPrice($shippingTotal) : 'Free'];
         if ($discountTotal > 0) {
-            $lines[] = 'Discount: -' . $this->formatPrice($discountTotal);
+            $summary[] = ['label' => 'Discount', 'value' => '-' . $this->formatPrice($discountTotal)];
         }
         if ($refund['refunded'] > 0) {
-            $lines[] = 'Refunded: -' . $this->formatPrice((float) $refund['refunded']);
+            $summary[] = ['label' => 'Refunded', 'value' => '-' . $this->formatPrice((float) $refund['refunded'])];
         }
         if ($refund['pending'] > 0) {
-            $lines[] = 'Pending refund: -' . $this->formatPrice((float) $refund['pending']);
+            $summary[] = ['label' => 'Pending refund', 'value' => '-' . $this->formatPrice((float) $refund['pending'])];
         }
-        $lines[] = 'Total paid: ' . $this->formatPrice($total);
+        $summary[] = ['label' => 'Total paid', 'value' => $this->formatPrice($total), 'total' => true];
         if ($refund['has_refund']) {
-            $lines[] = 'Net paid: ' . $this->formatPrice((float) $refund['net_paid']);
+            $summary[] = ['label' => 'Net paid', 'value' => $this->formatPrice((float) $refund['net_paid']), 'total' => true];
         }
         $taxLabel = $this->getTaxLabel($order);
         foreach ($taxRates as $rate) {
-            $lines[] = 'incl. ' . $taxLabel . ' ' . (string) ($rate['tax_rate'] ?? 0) . '%: ' . $this->formatPrice((float) ($rate['sum'] ?? 0));
+            $summary[] = ['label' => $taxLabel . ' ' . (string) ($rate['tax_rate'] ?? 0) . '%', 'value' => $this->formatPrice((float) ($rate['sum'] ?? 0))];
         }
+        $invoiceDate = (string) ($order->mrc_invoice_date ?: date('Y-m-d H:i', (int) $order->created));
+        $timestamp = strtotime($invoiceDate) ?: (int) $order->created;
+        $document = [
+            'invoice' => $invoice,
+            'date' => date('F j, Y', $timestamp),
+            'date_short' => date('M j, Y', $timestamp),
+            'payment_status' => $this->humanizeStatus($paymentStatus),
+            'total' => $this->formatPrice($total),
+            'customer_name' => trim((string) $order->mrc_first_name . ' ' . (string) $order->mrc_last_name) ?: 'Customer',
+            'customer_email' => (string) $order->mrc_email,
+            'fulfilment_label' => $fulfilmentLabel,
+            'billing_address' => preg_split('/\R/', $this->formatAddressSnapshot($order, 'mrc_billing_address'), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            'shipping_address' => preg_split('/\R/', $this->formatAddressSnapshot($order, 'mrc_shipping_address'), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            'items' => $pdfItems,
+            'summary' => $summary,
+        ];
+        return MercatoReceiptPdfRenderer::render($document, (array) $this->orderReceiptPdfTheme($order));
+    }
 
-        return $this->buildSimplePdf($lines);
+    public function ___orderReceiptPdfTheme(Page $order): array {
+        return [];
     }
 
     protected function renderOrderPackingSlipPdf(Page $order): string {
