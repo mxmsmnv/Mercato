@@ -3,6 +3,37 @@ namespace ProcessWire;
 
 trait MercatoOrderExperience {
 
+    public function getOrderCancellationRequest(Page $order): ?array {
+        if (!$order || !$order->id || !$order->hasField('mrc_api_details')) return null;
+        $details = json_decode((string) $order->mrc_api_details, true);
+        $request = is_array($details) ? ($details['customer_cancellation_request'] ?? null) : null;
+        return is_array($request) ? $request : null;
+    }
+
+    public function getOrderCancellationEligibility(Page $order): array {
+        $existing = $this->getOrderCancellationRequest($order);
+        if ($existing) return ['can_request' => false, 'message' => 'A cancellation request is already being reviewed.', 'request_status' => (string) ($existing['status'] ?? 'requested')];
+        $payment = strtolower(trim((string) ($order->mrc_payment_status ?? '')));
+        if (in_array($payment, [MercatoPaymentStatus::CANCELED, MercatoPaymentStatus::EXPIRED, MercatoPaymentStatus::REFUNDED, MercatoPaymentStatus::PARTIALLY_REFUNDED, MercatoPaymentStatus::REFUND_PENDING, MercatoPaymentStatus::PARTIAL_REFUND_PENDING], true)) return ['can_request' => false, 'message' => 'This order can no longer be canceled from the app.', 'request_status' => null];
+        $fulfilment = strtolower(trim((string) ($order->mrc_fulfilment_status ?? ''))) ?: MercatoFulfilmentStatus::UNFULFILLED;
+        if ($fulfilment !== MercatoFulfilmentStatus::UNFULFILLED) return ['can_request' => false, 'message' => 'This order is already being fulfilled. Contact support or request a return when eligible.', 'request_status' => null];
+        return ['can_request' => true, 'message' => 'Send a cancellation request for store review. Payment cancellation or refund is not automatic.', 'request_status' => null];
+    }
+
+    public function createCancellationRequest(Page $order, array $data = []): array {
+        if (!$order || !$order->id || $order->template->name !== (string) $this->order_template || !$order->hasField('mrc_api_details')) throw new WireException($this->_('Order not found.'));
+        if ($existing = $this->getOrderCancellationRequest($order)) return $existing;
+        $eligibility = $this->getOrderCancellationEligibility($order);
+        if (empty($eligibility['can_request'])) throw new WireException((string) $eligibility['message'], 409);
+        $reason = trim((string) ($data['reason'] ?? ''));
+        if ($reason === '') throw new WireException($this->_('Enter a cancellation reason.'));
+        $request = ['request_id' => 'CAN-' . (int) $order->id . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)), 'status' => 'requested', 'reason' => $this->wire('sanitizer')->textarea($reason), 'created_at' => date(DATE_ATOM), 'source' => $this->wire('sanitizer')->text((string) ($data['source'] ?? 'api')) ?: 'api'];
+        $hooked = $this->cancellationRequested($order, $request); if (is_array($hooked)) $request = $hooked + $request;
+        $details = json_decode((string) $order->mrc_api_details, true); if (!is_array($details)) $details = []; $details['customer_cancellation_request'] = $request; $order->of(false); $order->mrc_api_details = json_encode($details, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); $this->wire('pages')->save($order);
+        $this->recordEvent('mercato-cancellations', ['event' => 'cancellation_requested', 'request_id' => (string) $request['request_id'], 'order_id' => (int) $order->id, 'invoice' => (string) ($order->mrc_invoice_number ?: $order->title), 'status' => (string) $request['status'], 'reason' => (string) $request['reason'], 'source' => (string) $request['source']], 'cancellation_requested');
+        return $request;
+    }
+
     public function createReturnRequest(Page $order, array $data = []): array {
         if (!$order || !$order->id || $order->template->name !== (string) $this->order_template) {
             throw new WireException($this->_('Order not found.'));
@@ -22,6 +53,7 @@ trait MercatoOrderExperience {
             $quantity = max(1, (int) ($item['quantity'] ?? 1));
             $title = trim((string) ($item['title'] ?? $item['name'] ?? ''));
             $sku = trim((string) ($item['sku'] ?? ''));
+            $variantId = trim((string) ($item['variant_id'] ?? ''));
             $productId = max(0, (int) ($item['product_id'] ?? $item['id'] ?? 0));
             if ($title === '' && $productId <= 0 && $sku === '') {
                 continue;
@@ -30,6 +62,8 @@ trait MercatoOrderExperience {
                 'product_id' => $productId,
                 'title' => $sanitizer->text($title),
                 'sku' => $sanitizer->text($sku),
+                'variant_id' => $sanitizer->text($variantId),
+                'variant_options' => is_array($item['variant_options'] ?? null) ? $item['variant_options'] : [],
                 'quantity' => $quantity,
             ];
         }
@@ -44,6 +78,8 @@ trait MercatoOrderExperience {
                     'product_id' => max(0, (int) ($item['product_id'] ?? $item['id'] ?? 0)),
                     'title' => $sanitizer->text((string) ($item['title'] ?? $item['name'] ?? '')),
                     'sku' => $sanitizer->text((string) ($item['sku'] ?? '')),
+                    'variant_id' => $sanitizer->text((string) ($item['variant_id'] ?? '')),
+                    'variant_options' => is_array($item['variant_options'] ?? null) ? $item['variant_options'] : [],
                     'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
                 ];
             }

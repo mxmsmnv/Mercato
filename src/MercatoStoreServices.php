@@ -326,7 +326,9 @@ trait MercatoStoreServices {
         $quote = [
             'items' => $cart->toArray(),
             'item_count' => $cart->count(),
-            'currency' => MercatoCurrency::normalizeCode((string) ($options['currency'] ?? $this->currency ?? 'GBP')),
+            // Mercato currently has one authoritative store currency. A client
+            // may not relabel calculated amounts by supplying another code.
+            'currency' => MercatoCurrency::normalizeCode((string) ($this->currency ?? 'GBP')),
             'subtotal' => $subtotal,
             'shipping' => $shipping,
             'discount' => $discountAmount,
