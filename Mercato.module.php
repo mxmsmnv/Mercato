@@ -25,7 +25,7 @@ require_once __DIR__ . '/src/Mcp/MercatoMcpProviderTrait.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.4.0 (module info version: 140)
+ * @version 1.4.1 (module info version: 141)
  * @license MIT
  */
 
@@ -65,7 +65,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         return [
             'title'    => 'Mercato',
             'summary'  => 'E-commerce toolkit for ProcessWire. Cart, orders, Stripe and Mollie payments.',
-            'version'  => 140,
+            'version'  => 141,
             'author'   => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,

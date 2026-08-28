@@ -14,7 +14,7 @@ trait MercatoMcpProviderTrait {
         return [
             'name' => 'mercato',
             'title' => 'Mercato Commerce',
-            'version' => '1.4.0',
+            'version' => '1.4.1',
         ];
     }
 

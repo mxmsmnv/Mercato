@@ -1,7 +1,7 @@
 {
   "name": "mercato-acceptance",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.4.1",
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --grep @live"
