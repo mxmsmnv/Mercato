@@ -347,6 +347,10 @@ trait MercatoStoreServices {
     }
 
     public function getRuntimeCompatibilityReport(): array {
+        // ProcessWire can call install() before the module's init() lifecycle hook.
+        // Keep this public preflight safe on a fresh installation where neither
+        // the Composer classmap nor requireGatewayClasses() has run yet.
+        $this->requireArchitectureClasses();
         return MercatoRuntimeCompatibility::report($this->getEnabledPaymentMethods(), (string) ($this->wire('config')->version ?? ''));
     }
 

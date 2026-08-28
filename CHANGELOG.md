@@ -9,6 +9,12 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-08-28
+
+### Fixed
+
+- Fresh ProcessWire installations now bootstrap runtime compatibility classes before the installer preflight, preventing a `MercatoRuntimeCompatibility not found` fatal error.
+
 ## [1.4.0] - 2026-08-27
 
 ### Added
