@@ -5,7 +5,9 @@ require_once __DIR__ . '/src/MercatoHealthSummaries.php';
 require_once __DIR__ . '/src/MercatoConfigSupport.php';
 require_once __DIR__ . '/src/MercatoStoreServices.php';
 require_once __DIR__ . '/src/MercatoFrontendHooks.php';
+require_once __DIR__ . '/src/MercatoPublicOrderRoutes.php';
 require_once __DIR__ . '/src/MercatoOrderApi.php';
+require_once __DIR__ . '/src/MercatoAccessRecovery.php';
 require_once __DIR__ . '/src/MercatoOrderExperience.php';
 require_once __DIR__ . '/src/MercatoPersistenceGatewayHooks.php';
 require_once __DIR__ . '/src/MercatoPublicEndpoints.php';
@@ -33,7 +35,9 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     use MercatoConfigSupport;
     use MercatoStoreServices;
     use MercatoFrontendHooks;
+    use MercatoPublicOrderRoutes;
     use MercatoOrderApi;
+    use MercatoAccessRecovery;
     use MercatoOrderExperience;
     use MercatoPersistenceGatewayHooks;
     use MercatoPublicEndpoints;
@@ -153,6 +157,9 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'notification_locale'      => 'en',
             'notification_brand_color' => '#6b4f3a',
             'notification_logo_url'    => '',
+            'notification_templates_json' => '{}',
+            'notification_header_html' => '',
+            'notification_footer_html' => '',
             'notification_retries'     => 2,
             'enabled_notification_events' => ['order_confirmation', 'payment_failed', 'payment_recovery', 'refund', 'cancellation', 'shipment_tracking', 'pickup_ready', 'local_delivery', 'account_created', 'account_security'],
             'seo_site_name'          => 'Mercato Store',
@@ -162,9 +169,11 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'seo_organization_logo_url' => '',
             'merchant_legal_details'   => '',
             'receipt_template_file'    => '',
+            'order_status_template_file' => '',
+            'access_recovery_enabled' => false,
             'receipt_pdf_url_template' => '',
             'confirmation_email_subject' => 'Order confirmation {invoice}',
-            'confirmation_email_body'  => "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\nSubtotal: {subtotal}\n{fulfilment}: {shipping}\n{fulfilment_details}\nDiscount: {discount}\nTotal: {total}\n\nReceipt:\n{receipt_link}\n\nYou can check order status here:\n{order_status_link}\n\nWe will send the next fulfilment update.\n\n{policy_links}",
+            'confirmation_email_body'  => "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\nSubtotal: {subtotal}\n{fulfilment}: {shipping}\n{fulfilment_details}\nDiscount: {discount}\nTotal: {total}\n\nReceipt:\n{receipt_link}\n\nYou can check order status here:\n{order_status_link}\n\nAccess recovery:\n{access_recovery_link}\n\nWe will send the next fulfilment update.\n\n{policy_links}",
             'quote_requests_enabled' => false,
             'quote_expiry_days' => 30,
             'quote_inventory_policy' => 'none',
@@ -329,6 +338,11 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         $this->addHook('/api/mercato/order-lookup', $this, 'handleOrderLookup');
         $this->addHook('/api/mercato/order-status', $this, 'handleOrderStatus');
         $this->addHook('/api/mercato/order-receipt', $this, 'handleOrderReceipt');
+        $this->addHook('/order/status/{code}/?', $this, 'handleOrderStatus');
+        $this->addHook('/order/receipt/{code}/?', $this, 'handleOrderReceipt');
+        $this->addHook('/order/receipt/{code}/pdf/?', $this, 'handleOrderReceiptPdf');
+        $this->addHook('/access/recovery/{code}/?', $this, 'handleOrderAccessRecovery');
+        $this->addHook('/api/mercato/access-recovery', $this, 'handleLegacyOrderAccessRecovery');
         $this->addHook('/api/mercato/order-receipt-pdf', $this, 'handleOrderReceiptPdf');
         $this->addHook('/api/mercato/order-packing-slip-pdf', $this, 'handleOrderPackingSlipPdf');
         $this->addHook('/api/mercato/download', $this, 'handleOrderDownload');
@@ -336,7 +350,9 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         $this->addHook('/api/mercato/quote-status', $this, 'handleQuoteStatus');
         $this->addHook('/api/mercato/shipping-webhook', $this, 'handleShippingWebhook');
         $this->addHook('/api/mercato/email-webhook', $this, 'handleEmailWebhook');
-        $this->addHook('/sitemap-mercato.xml', $this, 'handleSeoSitemap');
+        if ($this->usesBuiltInSeo()) {
+            $this->addHook('/sitemap-mercato.xml', $this, 'handleSeoSitemap');
+        }
         $this->addHook('/api/mercato/health', $this, 'handleHealthCheck');
         $this->addHook('/api/mercato/analytics-consent', $this, 'handleAnalyticsConsent');
         $this->addHook('/api/mercato/v1/?', $this, 'handleHeadlessApi');
@@ -374,6 +390,8 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoPaymentAttempt::class => '/src/Payment/MercatoPaymentAttempt.php',
             MercatoPaymentAttemptEventLog::class => '/src/Payment/MercatoPaymentAttemptEventLog.php',
             MercatoPaymentService::class => '/src/Payment/MercatoPaymentService.php',
+            MercatoStripeCustomerData::class => '/src/Payment/MercatoStripeCustomerData.php',
+            MercatoStripeOrderData::class => '/src/Payment/MercatoStripeOrderData.php',
             MercatoPaymentEventLog::class => '/src/Payment/MercatoPaymentEventLog.php',
             MercatoPaymentReconciliationService::class => '/src/Payment/MercatoPaymentReconciliationService.php',
             MercatoRefundEventLog::class => '/src/Payment/MercatoRefundEventLog.php',
@@ -403,6 +421,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoPushTransportInterface::class => '/src/Notification/MercatoPushTransportInterface.php',
             MercatoApnsTransport::class => '/src/Notification/MercatoApnsTransport.php',
             MercatoPushNotificationService::class => '/src/Notification/MercatoPushNotificationService.php',
+            MercatoSeoOwnership::class => '/src/Seo/MercatoSeoOwnership.php',
             MercatoSeoRules::class => '/src/Seo/MercatoSeoRules.php',
             MercatoSeoService::class => '/src/Seo/MercatoSeoService.php',
             MercatoPrivacyRetentionPolicy::class => '/src/Privacy/MercatoPrivacyRetentionPolicy.php',

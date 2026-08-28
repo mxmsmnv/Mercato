@@ -46,7 +46,7 @@ final class MercatoOrderConfirmationService extends Wire {
         $values = $this->getTemplateValues($order);
         $subjectTemplate = trim((string) $this->commerce->confirmation_email_subject) ?: 'Order confirmation {invoice}';
         $bodyTemplate = trim((string) $this->commerce->confirmation_email_body)
-            ?: "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\n{fulfilment}: {shipping}\n{fulfilment_details}\nTotal: {total}\n\nReceipt:\n{receipt_link}\n\nYou can check order status here:\n{order_status_link}\n\nWe will send the next fulfilment update.\n\n{policy_links}";
+            ?: "Hello {customer},\n\nThank you for your order {invoice}.\n\n{items}\n\n{fulfilment}: {shipping}\n{fulfilment_details}\nTotal: {total}\n\nReceipt:\n{receipt_link}\n\nYou can check order status here:\n{order_status_link}\n\nAccess recovery:\n{access_recovery_link}\n\nWe will send the next fulfilment update.\n\n{policy_links}";
 
         try {
             $result = $this->commerce->notificationDeliveryService()->deliver('order_confirmation', $recipient, $values, [
@@ -97,6 +97,7 @@ final class MercatoOrderConfirmationService extends Wire {
             '{currency}' => (string) ($order->mrc_currency ?: $this->commerce->currency),
             '{receipt_link}' => $this->commerce->getOrderReceiptUrl($order),
             '{order_status_link}' => $this->commerce->getOrderStatusUrl($order),
+            '{access_recovery_link}' => $this->commerce->getOrderAccessRecoveryUrl($order),
             '{policy_links}' => $this->commerce->getPolicyLinksText(),
         ];
     }

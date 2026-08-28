@@ -463,10 +463,7 @@ trait MercatoOrderExperience {
         if ($external !== '') {
             return $external;
         }
-        return $this->getHttpRoot() . '/api/mercato/order-receipt-pdf?' . http_build_query([
-            'order' => (int) $order->id,
-            'token' => $this->getOrderReceiptToken($order),
-        ]);
+        return $this->getHttpRoot() . '/order/receipt/' . rawurlencode($this->getOrderPublicRouteCode($order, 'receipt')) . '/pdf/';
     }
 
     protected function getExternalOrderReceiptPdfUrl(Page $order): string {
@@ -521,6 +518,43 @@ trait MercatoOrderExperience {
                 ob_end_clean();
             }
             $this->wire('log')->save('mercato', 'Receipt template failed: ' . $e->getMessage());
+            return '';
+        }
+    }
+
+    protected function getOrderStatusTemplatePath(): string {
+        $file = self::normalizeReceiptTemplateFile($this->order_status_template_file ?? '');
+        if ($file === '') {
+            return '';
+        }
+        $templatesRoot = realpath((string) $this->wire('config')->paths->templates);
+        if (!$templatesRoot) {
+            return '';
+        }
+        $path = realpath($templatesRoot . DIRECTORY_SEPARATOR . $file);
+        if (!$path || !is_file($path) || !str_starts_with($path, $templatesRoot . DIRECTORY_SEPARATOR)) {
+            return '';
+        }
+        return $path;
+    }
+
+    protected function renderCustomOrderStatus(Page $order, array $context): string {
+        $templatePath = $this->getOrderStatusTemplatePath();
+        if ($templatePath === '') {
+            return '';
+        }
+        $commerce = $this;
+        $bufferLevel = ob_get_level();
+        try {
+            ob_start();
+            extract($context, EXTR_SKIP);
+            include $templatePath;
+            return trim((string) ob_get_clean());
+        } catch (\Throwable $e) {
+            if (ob_get_level() > $bufferLevel) {
+                ob_end_clean();
+            }
+            $this->wire('log')->save('mercato', 'Order status template failed: ' . $e->getMessage());
             return '';
         }
     }

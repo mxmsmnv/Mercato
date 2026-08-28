@@ -64,6 +64,7 @@ $cart = $commerce->cart();
 $pendingOrder = $session->get('mrc_pending_order');
 $clientSecret = is_array($pendingOrder) ? ($pendingOrder['stripe_client_secret'] ?? '') : '';
 $publishableKey = '';
+$stripeBillingDetails = [];
 $ui = $commerce->getFrontendUiClasses();
 $frameworkAssets = $commerce->renderFrontendFrameworkAssets();
 $isVanilla = $commerce->getFrontendFramework() === 'vanilla';
@@ -81,7 +82,11 @@ if ($checkoutNonce === '') {
 }
 
 try {
-    $publishableKey = $commerce->getGateway('stripe')->getPublishableKey();
+    $stripeGateway = $commerce->getGateway('stripe');
+    $publishableKey = $stripeGateway->getPublishableKey();
+    if (is_array($pendingOrder) && method_exists($stripeGateway, 'getCustomerBillingDetails')) {
+        $stripeBillingDetails = $stripeGateway->getCustomerBillingDetails($pendingOrder);
+    }
 } catch (WireException $e) {
     $publishableKey = '';
 }
@@ -1101,17 +1106,25 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
                 <script>
                 (async () => {
                     const stripe = Stripe('<?= $sanitizer->entities($publishableKey) ?>');
+                    const billingDetails = <?= json_encode($stripeBillingDetails, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES) ?>;
                     const elements = stripe.elements({ clientSecret: '<?= $sanitizer->entities($clientSecret) ?>' });
-                    elements.create('payment').mount('#payment-element');
+                    const paymentOptions = Object.keys(billingDetails).length
+                        ? { defaultValues: { billingDetails } }
+                        : {};
+                    elements.create('payment', paymentOptions).mount('#payment-element');
 
                     const button = document.getElementById('mrc-pay-button');
                     const message = document.getElementById('payment-message');
                     button.addEventListener('click', async () => {
                         button.disabled = true;
                         message.textContent = '';
+                        const confirmParams = { return_url: '<?= $sanitizer->entities($successUrl) ?>' };
+                        if (Object.keys(billingDetails).length) {
+                            confirmParams.payment_method_data = { billing_details: billingDetails };
+                        }
                         const result = await stripe.confirmPayment({
                             elements,
-                            confirmParams: { return_url: '<?= $sanitizer->entities($successUrl) ?>' }
+                            confirmParams
                         });
                         if (result.error) {
                             message.textContent = result.error.message || 'Payment could not be confirmed.';
