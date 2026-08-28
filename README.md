@@ -100,6 +100,8 @@ Each product uses `mrc_market_prices` for explicit non-default prices. Variant p
 
 Mercato never converts currencies or trusts a client-supplied currency code. Products without a complete price in the selected market are omitted, paid fulfilment requires an explicit market amount, and the market/currency snapshot is revalidated before the gateway receives the order. Non-default coupons are currently limited to percentage discounts without a fixed minimum; fixed amounts need a future per-market discount price list.
 
+Native catalog and collection resources also apply the selected market's `language` before serializing ProcessWire multilingual fields. Collection list/detail responses carry the same `commerce_context` as products, and native clients should keep localized collection caches separated by `market_id`. `Accept-Language` may express the device preference, but the configured market language remains authoritative for merchant content.
+
 ## Installation
 
 Copy the module into your ProcessWire modules directory:
@@ -156,6 +158,8 @@ php scripts/run-acceptance.php
 The release threshold is zero failed scenarios, zero serious/critical axe violations, successful fixture cleanup, and retained JSON/Markdown and Playwright diagnostics. See [ACCEPTANCE.md](ACCEPTANCE.md) for setup, browser versions, coverage, report paths, and the separately gated live-provider smoke policy.
 
 Native clients use `/api/mercato/v1`; see [HEADLESS_API.md](HEADLESS_API.md) for resources, SDK/redirect flows, opaque credentials, errors, deep links, and compatibility.
+
+Native transactional push uses owner-scoped device credentials and the same order lifecycle as email; see [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md) for the APNs setup, privacy contract, registration API, and transport extension point.
 
 MCP-compatible agents and automation systems use the optional ProcessWire
 McpServer provider. It exposes bounded PII-minimized order and inventory reads,

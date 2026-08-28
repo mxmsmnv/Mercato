@@ -36,6 +36,8 @@ try {
     if (count($store['markets'] ?? []) !== 2 || ($store['markets'][1]['currency'] ?? '') !== 'USD') throw new \RuntimeException('Store market discovery failed.');
     $marketProduct = $service->product((int) $product->id, ['market_id' => 'us']);
     if ((float) $marketProduct['price'] !== $marketPrice || $marketProduct['currency'] !== 'USD' || $marketProduct['market_id'] !== 'us') throw new \RuntimeException('Catalog did not use the explicit market price.');
+    $marketCollections = $service->collections(['market_id' => 'us', 'limit' => 5]);
+    if (($marketCollections['meta']['commerce_context']['market_id'] ?? '') !== 'us' || ($marketCollections['meta']['commerce_context']['language_code'] ?? '') !== 'en') throw new \RuntimeException('Collections lost the market language context.');
 
     $items = [['product_id' => (int) $product->id, 'quantity' => 1]];
     $cartResource = $service->createCart(['market_id' => 'us', 'items' => $items], 'market-cart-' . $nonce);

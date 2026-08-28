@@ -20,6 +20,7 @@ Base URL: `https://shop.example/api/mercato/v1`. Responses are JSON and include 
 - `GET /account/favorites` and `POST /account/favorites` — an account-scoped product library with optimistic `expected_revision`, idempotent replacement, and public product snapshots.
 - `GET /account/orders` — paginated owned order history using account-scoped opaque identifiers.
 - `GET /account/deletion-review` and `POST /account/delete` — reauthenticated, exact-confirmation account deletion/anonymization with legal/payment/fulfilment holds preserved.
+- `POST /devices` and `POST /devices/{registration}/revoke` — idempotent, owner-scoped APNs registration and revocation for an account token or exact guest-order token. See [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
 
 Pagination contains `page`, `limit`, `total`, `pages`, and `has_next`. Product-list metadata additionally includes server-derived `facets` for product types, collections, availability, price range, and variant options. Filters are applied before totals and pagination. Product sorting is `title`, `price`, `-price`, or `-created`. Products include public images, descriptions, collections, variants, and live purchasability—never filesystem paths or admin URLs.
 
@@ -37,7 +38,7 @@ The response contains opaque `id`, opaque `order_id`, bearer `token`, expiry, au
 
 When customer accounts are optional, an account bearer token may be supplied while creating a checkout so the order is attached to the verified owner. When account mode is `required_verified`, checkout without a valid account token returns `403 account_required`.
 
-Mercato currently has one authoritative store currency. A client-supplied `options.currency` never relabels or converts calculated amounts. `store.commerce_context` makes that boundary explicit; delivery country can still affect tax and shipping. Multiple currencies require real server-side markets/price lists rather than client conversion.
+Mercato exposes a backward-compatible default market plus configured authoritative markets and price lists. A client-supplied display currency never relabels or converts calculated amounts. Select a published `market_id`; catalog, cart, quote, checkout, tax, shipping, and immutable order snapshots remain server-authoritative for that market.
 
 ## Errors
 

@@ -39,6 +39,18 @@ final class MercatoEmailDeliveryService extends Wire {
     }
 
     public function deliver(string $event, string $recipient, array $values = [], array $context = [], array $overrides = []): array {
+        // Push is an independent transactional channel. It must still run when
+        // email is disabled or temporarily misconfigured.
+        try {
+            if ((int) ($context['order_id'] ?? 0) > 0) {
+                $order = $this->wire('pages')->get((int) $context['order_id']);
+                if ($order instanceof Page && $order->id) $this->commerce->pushNotificationService()->sendOrderEvent($order, $event, (string) ($context['business_event_id'] ?? ''));
+            } elseif ((int) ($context['user_id'] ?? 0) > 0) {
+                $this->commerce->pushNotificationService()->sendUserEvent((int) $context['user_id'], $event, (string) ($context['business_event_id'] ?? ''));
+            }
+        } catch (\Throwable $error) {
+            $this->wire('log')->error('Mercato push dispatch: ' . $error->getMessage());
+        }
         $recipient = (string) $this->wire('sanitizer')->email($recipient);
         $sender = (string) $this->wire('sanitizer')->email((string) $this->commerce->notification_sender_email);
         $enabled = array_values(array_filter(array_map('trim', (array) ($this->commerce->enabled_notification_events ?? MercatoEmailEventCatalog::EVENTS))));

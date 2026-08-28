@@ -52,6 +52,7 @@ Use these module methods instead of inventing APIs:
 - `$commerce->analyticsService()` and `$commerce->setAnalyticsConsent(array $categories)`: emit/consume minimized analytics events and manage session consent.
 - `$commerce->setMessage($message)` and `$commerce->getMessage()`: set/read storefront feedback messages.
 - `$commerce->notificationDeliveryService()`: preview or deliver lifecycle email events through the configured transport with retry, redaction, and idempotency controls.
+- `$commerce->pushNotificationService()`: register/revoke owner-scoped native devices and deliver minimized transactional push events through the configured transport.
 - `$commerce->seoService()`: build/render canonical, robots, social, structured-data, sitemap, and diagnostic output from server-authoritative storefront state.
 - `$commerce->submitQuoteRequest(array $data, ?array $items = null)`: create a dedicated non-payment quote request from the current cart or explicit product requests.
 - `$commerce->updateQuoteStatus(Page $quote, string $status, string $note = '', ?float $amount = null)`: perform a validated quote lifecycle transition.

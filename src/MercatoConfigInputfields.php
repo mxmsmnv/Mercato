@@ -54,6 +54,10 @@ trait MercatoConfigInputfields {
         $data['headless_api_rate_limit_per_minute'] = max(1, min(1000, (int) ($data['headless_api_rate_limit_per_minute'] ?? 60)));
         $data['headless_api_max_body_bytes'] = max(1024, min(1048576, (int) ($data['headless_api_max_body_bytes'] ?? 65536)));
         $data['headless_api_allowed_origins'] = trim((string) ($data['headless_api_allowed_origins'] ?? ''));
+        $data['push_notifications_enabled'] = !empty($data['push_notifications_enabled']);
+        $data['push_transport'] = trim((string) ($data['push_transport'] ?? 'apns')) ?: 'apns';
+        $data['apns_environment'] = (string) ($data['apns_environment'] ?? 'sandbox') === 'production' ? 'production' : 'sandbox';
+        foreach (['apns_team_id', 'apns_key_id', 'apns_bundle_id', 'apns_private_key_path'] as $pushConfigKey) $data[$pushConfigKey] = trim((string) ($data[$pushConfigKey] ?? ''));
         $data['preupgrade_backup_required'] = !empty($data['preupgrade_backup_required']);
         $data['backup_max_age_hours'] = max(1, min(8760, (int) ($data['backup_max_age_hours'] ?? 24)));
         $data['health_storage_min_bytes'] = max(1048576, (int) ($data['health_storage_min_bytes'] ?? 104857600));
@@ -415,6 +419,16 @@ trait MercatoConfigInputfields {
         $f->columnWidth = 100;
         $fs->add($f);
 
+        $wrapper->add($fs);
+
+        // --- Mobile push notifications ---
+        $fs = $modules->get('InputfieldFieldset');
+        $fs->label = __('Mobile Push Notifications');
+        $fs->collapsed = Inputfield::collapsedBlank;
+        $f = $modules->get('InputfieldCheckbox'); $f->name = 'push_notifications_enabled'; $f->label = __('Enable transactional push delivery'); $f->description = __('Enable only after APNs credentials have been verified. Device registration remains available while delivery is disabled.'); $f->checked = !empty($data['push_notifications_enabled']); $f->columnWidth = 100; $fs->add($f);
+        $f = $modules->get('InputfieldSelect'); $f->name = 'push_transport'; $f->label = __('Push transport'); $f->addOption('apns', 'Apple Push Notification service'); $f->value = $data['push_transport']; $f->description = __('Extensions can replace this through the Mercato::pushTransport hook.'); $f->columnWidth = 50; $fs->add($f);
+        $f = $modules->get('InputfieldSelect'); $f->name = 'apns_environment'; $f->label = __('APNs environment'); $f->addOption('sandbox', __('Sandbox')); $f->addOption('production', __('Production')); $f->value = $data['apns_environment']; $f->columnWidth = 50; $fs->add($f);
+        foreach (['apns_team_id'=>__('Apple Team ID'),'apns_key_id'=>__('APNs Key ID'),'apns_bundle_id'=>__('App bundle ID'),'apns_private_key_path'=>__('Private key path (.p8)')] as $name=>$label) { $f=$modules->get('InputfieldText');$f->name=$name;$f->label=$label;$f->value=$data[$name];$f->columnWidth=50;$fs->add($f); }
         $wrapper->add($fs);
 
         // --- Advanced / Debug ---

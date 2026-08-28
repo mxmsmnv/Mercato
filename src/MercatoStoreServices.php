@@ -141,6 +141,10 @@ trait MercatoStoreServices {
         $data['recovery_automation_batch_limit'] = self::normalizeRecoveryAutomationBatchLimit($data['recovery_automation_batch_limit'] ?? 10);
         $data['recovery_discount_code'] = self::normalizeRecoveryDiscountCode($data['recovery_discount_code'] ?? '');
         $data['recovery_suppressed_emails'] = self::normalizeRecoverySuppressedEmails($data['recovery_suppressed_emails'] ?? '');
+        $data['push_notifications_enabled'] = !empty($data['push_notifications_enabled']);
+        $data['push_transport'] = trim((string) ($data['push_transport'] ?? 'apns')) ?: 'apns';
+        $data['apns_environment'] = (string) ($data['apns_environment'] ?? 'sandbox') === 'production' ? 'production' : 'sandbox';
+        foreach (['apns_team_id', 'apns_key_id', 'apns_bundle_id', 'apns_private_key_path'] as $pushConfigKey) $data[$pushConfigKey] = trim((string) ($data[$pushConfigKey] ?? ''));
         $data['receipt_template_file'] = self::normalizeReceiptTemplateFile($data['receipt_template_file'] ?? '');
         $data['receipt_pdf_url_template'] = self::normalizeReceiptPdfUrlTemplate($data['receipt_pdf_url_template'] ?? '');
         if (empty($previousConfig['production']) && !empty($data['production'])) {
@@ -176,6 +180,17 @@ trait MercatoStoreServices {
             $this->emailWebhookService->setWire($this->wire());
         }
         return $this->emailWebhookService;
+    }
+
+    public function ___pushTransport(MercatoPushTransportInterface $default): MercatoPushTransportInterface { return $default; }
+
+    public function pushNotificationService(): MercatoPushNotificationService {
+        if (!$this->pushNotificationService) {
+            $transport = $this->pushTransport(new MercatoApnsTransport($this));
+            $this->pushNotificationService = new MercatoPushNotificationService($this, $transport);
+            $this->pushNotificationService->setWire($this->wire());
+        }
+        return $this->pushNotificationService;
     }
 
     public function seoService(): MercatoSeoService {

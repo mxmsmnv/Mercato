@@ -52,7 +52,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const PAYMENT_STATUS_CANCELED = 'canceled';
 
     public const SUBSCRIPTION_STATUS_NONE = 'none';
-    public const SCHEMA_VERSION = 11;
+    public const SCHEMA_VERSION = 12;
 
     private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';
     private const MCP_OPERATION_TABLE = 'mercato_mcp_operations';
@@ -127,6 +127,13 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'headless_api_rate_limit_per_minute' => 60,
             'headless_api_max_body_bytes' => 65536,
             'headless_api_allowed_origins' => '',
+            'push_notifications_enabled' => false,
+            'push_transport' => 'apns',
+            'apns_environment' => 'sandbox',
+            'apns_team_id' => '',
+            'apns_key_id' => '',
+            'apns_bundle_id' => '',
+            'apns_private_key_path' => '',
             'preupgrade_backup_required' => false,
             'backup_max_age_hours' => 24,
             'backup_evidence' => '',
@@ -274,6 +281,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     protected ?MercatoWebhookService $webhookService = null;
     protected ?MercatoEmailDeliveryService $emailDeliveryService = null;
     protected ?MercatoEmailWebhookService $emailWebhookService = null;
+    protected ?MercatoPushNotificationService $pushNotificationService = null;
     protected ?MercatoSeoService $seoService = null;
     protected ?MercatoPrivacyService $privacyService = null;
     protected ?MercatoCustomerAccountService $customerAccountService = null;
@@ -392,6 +400,9 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoEmailDeliveryService::class => '/src/Notification/MercatoEmailDeliveryService.php',
             MercatoEmailWebhookAdapterInterface::class => '/src/Notification/MercatoEmailWebhookAdapterInterface.php',
             MercatoEmailWebhookService::class => '/src/Notification/MercatoEmailWebhookService.php',
+            MercatoPushTransportInterface::class => '/src/Notification/MercatoPushTransportInterface.php',
+            MercatoApnsTransport::class => '/src/Notification/MercatoApnsTransport.php',
+            MercatoPushNotificationService::class => '/src/Notification/MercatoPushNotificationService.php',
             MercatoSeoRules::class => '/src/Seo/MercatoSeoRules.php',
             MercatoSeoService::class => '/src/Seo/MercatoSeoService.php',
             MercatoPrivacyRetentionPolicy::class => '/src/Privacy/MercatoPrivacyRetentionPolicy.php',
