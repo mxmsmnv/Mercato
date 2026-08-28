@@ -223,7 +223,9 @@ class MercatoCart extends MercatoProductList {
             if (!is_array($item)) continue;
             $product = $this->findCartProduct($item);
             if (!$product) continue;
-            $items[$key] = $commerce->variantService()->hydrateItem($product, $item);
+            $hydrated = $commerce->variantService()->hydrateItem($product, $item);
+            $marketId = (string) ($item['market_id'] ?? 'default');
+            $items[$key] = $marketId !== 'default' ? $commerce->marketService()->applyToItem($product, $hydrated, $marketId) : $hydrated;
         }
         return $items;
     }
@@ -243,6 +245,10 @@ class MercatoCart extends MercatoProductList {
         if ($quantity <= 0) return ['key' => $key, 'id' => $existing['id'] ?? $key, 'quantity' => 0];
         $canonical = array_merge($existing, ['quantity' => $quantity]);
         $product = $this->findCartProduct($canonical);
-        return $product ? wire('modules')->get('Mercato')->variantService()->hydrateItem($product, $canonical) : $canonical;
+        if (!$product) return $canonical;
+        $commerce = wire('modules')->get('Mercato');
+        $hydrated = $commerce->variantService()->hydrateItem($product, $canonical);
+        $marketId = (string) ($canonical['market_id'] ?? 'default');
+        return $marketId !== 'default' ? $commerce->marketService()->applyToItem($product, $hydrated, $marketId) : $hydrated;
     }
 }

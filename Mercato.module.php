@@ -52,7 +52,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const PAYMENT_STATUS_CANCELED = 'canceled';
 
     public const SUBSCRIPTION_STATUS_NONE = 'none';
-    public const SCHEMA_VERSION = 10;
+    public const SCHEMA_VERSION = 11;
 
     private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';
     private const MCP_OPERATION_TABLE = 'mercato_mcp_operations';
@@ -88,6 +88,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'currency'                 => 'GBP',
             'currency_symbol'          => '£',
             'currency_symbol_position' => 'before', // before | after
+            'markets_json'             => '',
             'invoice_prefix'           => '',
             'production'               => false,
             'frontend_framework'       => 'tailwind',
@@ -289,6 +290,8 @@ class Mercato extends WireData implements Module, ConfigurableModule {
 
     protected ?MercatoTaxService $taxService = null;
 
+    protected ?MercatoMarketService $marketService = null;
+
     /** @var array<string,array<string,mixed>> Product snapshots captured before admin page saves. */
     protected array $productSaveSnapshots = [];
 
@@ -357,6 +360,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         foreach ([
             MercatoEventLog::class => '/src/Logging/MercatoEventLog.php',
             MercatoCurrency::class => '/src/Pricing/MercatoCurrency.php',
+            MercatoMarketService::class => '/src/Pricing/MercatoMarketService.php',
             MercatoPaymentStatus::class => '/src/Payment/MercatoPaymentStatus.php',
             MercatoPaymentStatusMapper::class => '/src/Payment/MercatoPaymentStatusMapper.php',
             MercatoPaymentAttempt::class => '/src/Payment/MercatoPaymentAttempt.php',

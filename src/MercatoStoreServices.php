@@ -24,6 +24,11 @@ trait MercatoStoreServices {
         $data['currency_symbol_position'] = in_array((string) ($data['currency_symbol_position'] ?? ''), ['before', 'after'], true)
             ? (string) $data['currency_symbol_position']
             : self::getDefaultConfig()['currency_symbol_position'];
+        $data['markets_json'] = trim((string) ($data['markets_json'] ?? ''));
+        if ($data['markets_json'] !== '') {
+            $markets = json_decode($data['markets_json'], true);
+            if (!is_array($markets) || !array_is_list($markets)) throw new WireException($this->_('Markets must be a valid JSON array.'));
+        }
         $data['invoice_prefix'] = self::normalizeInvoicePrefix($data['invoice_prefix'] ?? '');
         $data['quotes_parent'] = self::normalizePagePathConfig($data['quotes_parent'] ?? 'quotes', 'quotes');
         $data['quote_requests_enabled'] = !empty($data['quote_requests_enabled']);
@@ -275,13 +280,21 @@ trait MercatoStoreServices {
         return $service;
     }
 
+    public function marketService(): MercatoMarketService {
+        $this->requireArchitectureClasses();
+        if (!$this->marketService) { $this->marketService = new MercatoMarketService($this); $this->marketService->setWire($this->wire()); }
+        return $this->marketService;
+    }
+
     public function getHeadlessCheckoutQuote(array $items, array $customerData = [], array $options = []): array {
+        $market = $this->marketService()->resolve((string) ($options['market_id'] ?? ''));
+        $customerData['mrc_market_id'] = $market['id'];
         foreach ($items as $key => $item) {
             if (!is_array($item)) continue;
             $reference = $item['product_id'] ?? $item['id'] ?? '';
             $product = $reference !== '' ? $this->wire('pages')->get($reference) : null;
             if ($product && $product->id && $product->template && $product->template->name === 'mrc-product') {
-                $items[$key] = $this->variantService()->hydrateItem($product, $item);
+                $items[$key] = $this->marketService()->applyToItem($product, $this->variantService()->hydrateItem($product, $item), $market['id']);
             }
         }
         $cart = $this->productList($items);
@@ -293,8 +306,9 @@ trait MercatoStoreServices {
         if (empty($discount['valid'])) {
             $discount = ['valid' => false, 'code' => '', 'amount' => 0.0];
         }
+        $this->marketService()->assertDiscountSupported($discount, $market);
 
-        $methods = $this->fulfilmentService()->getCheckoutMethods($cart, $customerData);
+        $methods = $this->marketService()->applyToFulfilmentMethods($this->fulfilmentService()->getCheckoutMethods($cart, $customerData), $market);
         $selectedType = trim((string) ($options['fulfilment_method'] ?? ''));
         $selected = [];
         foreach ($methods as $method) {
@@ -317,7 +331,7 @@ trait MercatoStoreServices {
         $shipping = round(max(0.0, (float) ($selected['amount'] ?? 0)), 2);
         $discount = $this->discountService()->applyFinalShippingAmount($discount, $shipping);
         $discountAmount = round(max(0.0, (float) ($discount['amount'] ?? 0)), 2);
-        $taxQuote = $this->taxService()->estimate($cart, $customerData, $selected, $discount);
+        $taxQuote = $this->taxService()->estimate($cart, $customerData, $selected, $discount, $market['currency']);
         $taxAmount = round(max(0.0, (float) ($taxQuote['total_tax'] ?? 0)), 2);
         $taxAddedToTotal = (string) ($taxQuote['provider'] ?? 'manual') !== 'manual'
             && (string) ($taxQuote['display_mode'] ?? 'included') === 'excluded';
@@ -326,9 +340,9 @@ trait MercatoStoreServices {
         $quote = [
             'items' => $cart->toArray(),
             'item_count' => $cart->count(),
-            // Mercato currently has one authoritative store currency. A client
-            // may not relabel calculated amounts by supplying another code.
-            'currency' => MercatoCurrency::normalizeCode((string) ($this->currency ?? 'GBP')),
+            'market_id' => $market['id'],
+            'commerce_context' => $this->marketService()->context($market['id']),
+            'currency' => $market['currency'],
             'subtotal' => $subtotal,
             'shipping' => $shipping,
             'discount' => $discountAmount,

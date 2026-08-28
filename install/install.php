@@ -148,6 +148,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         ['name' => 'mrc_customer_revision',         'type' => 'FieldtypeInteger',  'label' => 'Customer Profile Revision'],
         // Product fields
         ['name' => 'mrc_price',       'type' => 'FieldtypeFloat',   'label' => 'Price (incl. tax)', 'extra' => ['precision' => 2]],
+        ['name' => 'mrc_market_prices', 'type' => 'FieldtypeTextarea', 'label' => 'Market prices (JSON)'],
         ['name' => 'mrc_tax_rate',    'type' => 'FieldtypeFloat',   'label' => 'Tax Rate (%)',      'extra' => ['precision' => 2]],
         ['name' => 'mrc_tax_code',    'type' => 'FieldtypeText',    'label' => 'Product Tax Code'],
         ['name' => 'mrc_shipping_price', 'type' => 'FieldtypeFloat', 'label' => 'Shipping Price',    'extra' => ['precision' => 2]],
@@ -364,6 +365,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
             'title', 'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
             'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_product_status', 'mrc_stripe_price_id',
             'mrc_variant_options', 'mrc_variants',
+            'mrc_market_prices',
             'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
         ] as $fn) {
             $field = $wire->fields->get($fn);
@@ -586,6 +588,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
             'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
             'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_product_status', 'mrc_stripe_price_id',
             'mrc_variant_options', 'mrc_variants',
+            'mrc_market_prices',
             'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_collections', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
         ] as $fieldName) {
             if ($productTemplate->fieldgroup->hasField($fieldName)) continue;
@@ -982,6 +985,7 @@ function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void
         'mrc_stock_policy',
         'mrc_variant_options',
         'mrc_variants',
+        'mrc_market_prices',
         'mrc_price',
         'mrc_tax_rate',
         'mrc_tax_code',
@@ -1027,6 +1031,7 @@ function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void
         'mrc_stock_policy' => ['columnWidth' => 25],
         'mrc_variant_options' => ['columnWidth' => 50],
         'mrc_variants' => ['columnWidth' => 50],
+        'mrc_market_prices' => ['columnWidth' => 100],
         'mrc_price' => ['columnWidth' => 25],
         'mrc_tax_rate' => ['columnWidth' => 25],
         'mrc_tax_code' => ['columnWidth' => 25],

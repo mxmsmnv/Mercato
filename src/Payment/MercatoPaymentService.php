@@ -20,6 +20,7 @@ class MercatoPaymentService extends Wire {
         $session = $this->wire('session');
         $cart = $this->commerce->cart();
         $data = $this->commerce->normalizeOrderData($data);
+        $market = $this->commerce->marketService()->resolve((string) ($data['mrc_market_id'] ?? ''));
         $checkoutNonce = trim((string) ($data['checkout_nonce'] ?? ''));
         if ($checkoutNonce !== '' && (string) $session->get('mrc_checkout_started_nonce') === $checkoutNonce) {
             $existingPending = $session->get('mrc_pending_order');
@@ -31,6 +32,7 @@ class MercatoPaymentService extends Wire {
         if ($cart->count() === 0) {
             throw new WireException($this->commerce->_('Cart is empty.'), 400);
         }
+        $this->commerce->marketService()->assertCart($cart, $market);
 
         if (empty($data['payment_method'])) {
             throw new WireException($this->commerce->_('No payment method provided.'), 400);
@@ -83,18 +85,20 @@ class MercatoPaymentService extends Wire {
         if (empty($discount['valid'])) {
             $discount = ['code' => '', 'amount' => 0.0, 'title' => '', 'type' => ''];
         }
+        $this->commerce->marketService()->assertDiscountSupported($discount, $market);
 
         $fulfilment = $this->commerce->fulfilmentService()->resolveSelection(
             (string) ($data['fulfilment_method'] ?? ''),
             $cart,
             $data
         );
+        $fulfilment = $this->commerce->marketService()->applyToFulfilmentMethods([$fulfilment], $market, true)[0];
         $addresses = $this->commerce->buildAddressSnapshots($data, $fulfilment);
         $subtotal = $cart->getSubtotal();
         $shipping = (float) $fulfilment['amount'];
         $discount = $this->commerce->discountService()->applyFinalShippingAmount($discount, $shipping);
         $discountAmount = round((float) ($discount['amount'] ?? 0), 2);
-        $taxQuote = $this->commerce->taxService()->estimate($cart, $data, $fulfilment, $discount);
+        $taxQuote = $this->commerce->taxService()->estimate($cart, $data, $fulfilment, $discount, $market['currency']);
         $taxAmount = round(max(0, (float) ($taxQuote['total_tax'] ?? 0)), 2);
         $taxAddedToTotal = (string) ($taxQuote['provider'] ?? 'manual') !== 'manual'
             && (string) ($taxQuote['display_mode'] ?? 'included') === 'excluded';
@@ -102,7 +106,7 @@ class MercatoPaymentService extends Wire {
         $total = round(max(0, $subtotal + $shipping - $discountAmount + ($taxAddedToTotal ? $taxAmount : 0)), 2);
 
         $data['mrc_items'] = json_encode($cart->toArray());
-        $data['mrc_currency'] = MercatoCurrency::normalizeCode((string) $this->commerce->currency);
+        $data['mrc_currency'] = $market['currency'];
         $data['mrc_subtotal_amount'] = $subtotal;
         $data['mrc_shipping_amount'] = $shipping;
         $data['mrc_tax_amount'] = $taxAmount;

@@ -67,6 +67,39 @@ as proof that the layer can ship a real storefront.
 - Public order status, receipt, and download flows.
 - Installable demo storefront templates and demo product images.
 
+## Storefront Markets And Currencies
+
+Mercato supports one backward-compatible `default` market plus optional explicit market price lists for native/headless storefronts. Configure additional markets in **Additional storefront markets (JSON)**, for example:
+
+```json
+[
+  {
+    "id": "us",
+    "label": "United States",
+    "currency": "USD",
+    "countries": ["US"],
+    "language": "en",
+    "fulfilment_prices": {"carrier_delivery": 7.5}
+  }
+]
+```
+
+Each product uses `mrc_market_prices` for explicit non-default prices. Variant prices must also be explicit:
+
+```json
+{
+  "us": {
+    "price": 42,
+    "shipping_price": 4,
+    "variants": {
+      "large-oat": {"price": 48, "shipping_price": 5}
+    }
+  }
+}
+```
+
+Mercato never converts currencies or trusts a client-supplied currency code. Products without a complete price in the selected market are omitted, paid fulfilment requires an explicit market amount, and the market/currency snapshot is revalidated before the gateway receives the order. Non-default coupons are currently limited to percentage discounts without a fixed minimum; fixed amounts need a future per-market discount price list.
+
 ## Installation
 
 Copy the module into your ProcessWire modules directory:

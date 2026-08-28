@@ -223,6 +223,13 @@ final class MercatoFulfilmentService extends Wire {
 
     protected function assertDeliveryCountryAllowed(array $customerData): void {
         $country = strtoupper(trim((string) ($customerData['country'] ?? '')));
+        $marketId = MercatoMarketService::normalizeId((string) ($customerData['mrc_market_id'] ?? ''));
+        if ($marketId !== '' && $marketId !== 'default') {
+            $market = $this->commerce->marketService()->resolve($marketId);
+            $countries = (array) ($market['countries'] ?? []);
+            if ($countries === [] || in_array($country, $countries, true)) return;
+            throw new WireException($this->commerce->_('Delivery is not available for this country in the selected market.'));
+        }
         if (!$this->commerce->isDeliveryCountryAllowed($country)) {
             throw new WireException($this->commerce->_('Delivery is not available for this country.'));
         }

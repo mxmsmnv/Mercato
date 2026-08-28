@@ -232,6 +232,15 @@ trait MercatoConfigInputfields {
         $f->columnWidth = 25;
         $fs->add($f);
 
+        $f = $modules->get('InputfieldTextarea');
+        $f->name = 'markets_json';
+        $f->label = __('Additional storefront markets (JSON)');
+        $f->description = __('Each enabled market needs id, label, ISO currency, countries, and language. Product prices are explicit in mrc_market_prices; Mercato never converts currencies automatically.');
+        $f->value = (string) ($data['markets_json'] ?? '');
+        $f->rows = 6;
+        $f->columnWidth = 100;
+        $fs->add($f);
+
         foreach (['email_log_retention_days' => __('Email log retention'), 'payment_attempt_retention_days' => __('Payment-attempt log retention'), 'operational_log_retention_days' => __('Operational log retention')] as $name => $label) { $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->description = __('Rows older than this are redacted while event status and financial linkage remain.'); $f->value = $data[$name]; $f->min = 1; $f->max = 3650; $f->columnWidth = 25; $fs->add($f); }
         foreach (['provider_reference_retention_days' => __('Failed provider-reference retention'), 'signed_link_retention_days' => __('Signed customer-link lifetime')] as $name => $label) { $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->description = __('Days; use 0 to retain without automatic expiry. Paid financial references are not automatically removed.'); $f->value = $data[$name]; $f->min = 0; $f->max = 3650; $f->columnWidth = 25; $fs->add($f); }
         $f = $modules->get('InputfieldSelect'); $f->name = 'privacy_retention_schedule'; $f->label = __('Privacy retention schedule'); foreach (self::getReservationCleanupScheduleOptions() as $value => $label) $f->addOption($value, __($label)); $f->value = $data['privacy_retention_schedule']; $f->columnWidth = 25; $fs->add($f);
