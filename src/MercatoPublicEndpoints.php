@@ -56,6 +56,13 @@ trait MercatoPublicEndpoints {
     }
 
     public function handleSeoSitemap(HookEvent $event): void {
+        if (!$this->usesBuiltInSeo()) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            header('X-Robots-Tag: noindex, nofollow');
+            echo 'Mercato SEO is delegated to Ichiban.';
+            exit;
+        }
         header('Content-Type: application/xml; charset=utf-8');
         header('X-Robots-Tag: noindex');
         echo $this->seoService()->sitemapXml();
@@ -149,11 +156,25 @@ trait MercatoPublicEndpoints {
 
     public function handleOrderStatus(HookEvent $event): void {
         $input = $this->wire('input');
-        $order = $this->wire('pages')->get((int) $input->get('order'));
-        $token = (string) $input->get->text('token');
-        $ok = $this->verifyOrderStatusToken($order, $token);
+        $code = trim((string) $event->arguments('code'));
+        $order = $code !== ''
+            ? $this->resolveOrderPublicRouteCode($code, 'status')
+            : $this->wire('pages')->get((int) $input->get('order'));
+        $ok = $code !== ''
+            ? $order instanceof Page
+            : $this->verifyOrderStatusToken($order, (string) $input->get->text('token'));
+
+        if ($code === '' && $ok) {
+            header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+            header('Referrer-Policy: no-referrer');
+            header('Location: ' . $this->getOrderStatusUrl($order), true, 302);
+            exit;
+        }
 
         header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
         http_response_code($ok ? 200 : 404);
         echo $ok ? $this->renderPublicOrderStatus($order) : $this->renderPublicOrderStatusError();
         exit;
@@ -185,21 +206,117 @@ trait MercatoPublicEndpoints {
 
     public function handleOrderReceipt(HookEvent $event): void {
         $input = $this->wire('input');
-        $order = $this->wire('pages')->get((int) $input->get('order'));
-        $token = (string) $input->get->text('token');
-        $ok = $this->verifyOrderReceiptToken($order, $token);
+        $code = trim((string) $event->arguments('code'));
+        $order = $code !== ''
+            ? $this->resolveOrderPublicRouteCode($code, 'receipt')
+            : $this->wire('pages')->get((int) $input->get('order'));
+        $ok = $code !== ''
+            ? $order instanceof Page
+            : $this->verifyOrderReceiptToken($order, (string) $input->get->text('token'));
+
+        if ($code === '' && $ok) {
+            header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+            header('Referrer-Policy: no-referrer');
+            header('Location: ' . $this->getOrderReceiptUrl($order), true, 302);
+            exit;
+        }
 
         header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
         http_response_code($ok ? 200 : 404);
         echo $ok ? $this->renderPublicOrderReceipt($order) : $this->renderPublicOrderReceiptError();
         exit;
     }
 
-    public function handleOrderReceiptPdf(HookEvent $event): void {
+    public function handleOrderAccessRecovery(HookEvent $event): void {
+        $session = $this->wire('session');
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        $order = $this->resolveOrderAccessRecoveryCode((string) $event->arguments('code'));
+        $ok = in_array($method, ['GET', 'POST'], true) && $order instanceof Page && !$this->areOrderSignedLinksExpired($order) && $this->isOrderReceiptAvailable($order);
+
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
+        header('Referrer-Policy: no-referrer');
+        if (!$ok) {
+            if (!in_array($method, ['GET', 'POST'], true)) header('Allow: GET, POST');
+            http_response_code(in_array($method, ['GET', 'POST'], true) ? 404 : 405);
+            echo $this->renderPublicOrderAccessRecoveryError();
+            exit;
+        }
+
+        $state = $this->normalizeOrderAccessRecoveryState((array) $this->orderAccessRecoveryState($order));
+        $recoveryUrl = $this->getOrderAccessRecoveryUrl($order);
+        $error = '';
+        if ($method === 'POST') {
+            $csrf = $session->CSRF ?? null;
+            if (!$csrf || !method_exists($csrf, 'hasValidToken') || !$csrf->hasValidToken()) {
+                $error = $this->_('The recovery form expired. Reload this page and try again.');
+            } elseif (!$state['enabled'] || $state['status'] !== 'recoverable') {
+                $error = $this->_('This order cannot issue a replacement access credential.');
+            } else {
+                $result = $this->normalizeOrderAccessRecoveryResult((array) $this->replaceOrderAccessCredential($order));
+                if ($result['ok']) {
+                    $session->set('mrc_access_recovery_once_' . (int) $order->id, $result);
+                    header('Location: ' . $recoveryUrl, true, 303);
+                    exit;
+                }
+                $error = $result['error'] !== '' ? $result['error'] : $this->_('A replacement access credential could not be created.');
+            }
+        }
+
+        $flashKey = 'mrc_access_recovery_once_' . (int) $order->id;
+        $flash = $session->get($flashKey);
+        $result = is_array($flash) ? $this->normalizeOrderAccessRecoveryResult($flash) : null;
+        $session->remove($flashKey);
+        $csrf = $session->CSRF ?? null;
+        $csrfInput = $csrf && method_exists($csrf, 'renderInput') ? (string) $csrf->renderInput() : '';
+        echo $this->renderPublicOrderAccessRecovery($order, $state, $result, $error, $csrfInput, $recoveryUrl);
+        exit;
+    }
+
+    public function handleLegacyOrderAccessRecovery(HookEvent $event): void {
         $input = $this->wire('input');
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
         $order = $this->wire('pages')->get((int) $input->get('order'));
         $token = (string) $input->get->text('token');
-        $ok = $this->verifyOrderReceiptToken($order, $token);
+        if ($method === 'GET' && $this->verifyOrderAccessRecoveryToken($order, $token)) {
+            header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+            header('Referrer-Policy: no-referrer');
+            header('Location: ' . $this->getOrderAccessRecoveryUrl($order), true, 302);
+            exit;
+        }
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
+        http_response_code($method === 'GET' ? 404 : 405);
+        echo $this->renderPublicOrderAccessRecoveryError();
+        exit;
+    }
+
+    protected function renderPublicOrderAccessRecoveryError(): string {
+        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>Access recovery unavailable</title>' . $this->renderPublicOrderStatusStyles() . '</head><body><main class="mrc-public-status"><section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Private order link</p><h1>Access recovery unavailable</h1><p>The link is invalid or expired.</p></section></main></body></html>';
+    }
+
+    public function handleOrderReceiptPdf(HookEvent $event): void {
+        $input = $this->wire('input');
+        $code = trim((string) $event->arguments('code'));
+        $order = $code !== ''
+            ? $this->resolveOrderPublicRouteCode($code, 'receipt')
+            : $this->wire('pages')->get((int) $input->get('order'));
+        $ok = $code !== ''
+            ? $order instanceof Page
+            : $this->verifyOrderReceiptToken($order, (string) $input->get->text('token'));
+        if ($code === '' && $ok) {
+            header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+            header('Referrer-Policy: no-referrer');
+            header('Location: ' . $this->getOrderReceiptPdfUrl($order), true, 302);
+            exit;
+        }
         if (!$ok) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
@@ -210,6 +327,9 @@ trait MercatoPublicEndpoints {
         $invoice = preg_replace('/[^A-Za-z0-9_.-]+/', '-', (string) ($order->mrc_invoice_number ?: $order->title)) ?: 'receipt';
         $pdf = $this->renderPublicOrderReceiptPdf($order);
         header('Content-Type: application/pdf');
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
         header('Content-Disposition: inline; filename="receipt-' . $invoice . '.pdf"');
         header('Content-Length: ' . strlen($pdf));
         echo $pdf;
@@ -668,64 +788,64 @@ trait MercatoPublicEndpoints {
             : 'Shipping';
         $paymentStatus = trim((string) $order->mrc_payment_status) ?: ((int) $order->mrc_payment_complete === 1 ? self::PAYMENT_STATUS_PAID : self::PAYMENT_STATUS_PENDING);
 
-        $lines = [
-            'Receipt ' . $invoice,
-            'Payment: ' . $this->humanizeStatus($paymentStatus),
-            'Date: ' . (string) ($order->mrc_invoice_date ?: date('Y-m-d H:i', (int) $order->created)),
-            '',
-            'Customer',
-            trim((string) $order->mrc_first_name . ' ' . (string) $order->mrc_last_name),
-            (string) $order->mrc_email,
-            '',
-            'Billing address',
-        ];
-        $lines = array_merge($lines, preg_split('/\R/', $this->formatAddressSnapshot($order, 'mrc_billing_address') ?: '-', -1, PREG_SPLIT_NO_EMPTY) ?: ['-']);
-        $lines[] = '';
-        $lines[] = $fulfilmentLabel . ' address';
-        $lines = array_merge($lines, preg_split('/\R/', $this->formatAddressSnapshot($order, 'mrc_shipping_address') ?: '-', -1, PREG_SPLIT_NO_EMPTY) ?: ['-']);
-        $merchantDetails = $this->getReceiptMerchantLegalDetails($order);
-        if ($merchantDetails !== '') {
-            $lines[] = '';
-            $lines[] = 'Merchant';
-            $lines = array_merge($lines, preg_split('/\R/', $merchantDetails, -1, PREG_SPLIT_NO_EMPTY) ?: []);
-        }
-        $lines[] = '';
-        $lines[] = 'Items';
+        $pdfItems = [];
         foreach ($items as $item) {
             $quantity = max(1, (int) ceil((float) ($item['quantity'] ?? 1)));
             $title = trim((string) ($item['title'] ?? $item['name'] ?? 'Product'));
             $sku = trim((string) ($item['sku'] ?? ''));
             $unit = (float) ($item['price'] ?? 0);
             $line = (float) ($item['sum'] ?? ($unit * $quantity));
-            $lines[] = sprintf('%s%s x%d @ %s = %s', $title, $sku !== '' ? ' (' . $sku . ')' : '', $quantity, $this->formatPrice($unit), $this->formatPrice($line));
+            $pdfItems[] = [
+                'title' => $title,
+                'sku' => $sku,
+                'quantity' => $quantity,
+                'unit' => $this->formatPrice($unit),
+                'amount' => $this->formatPrice($line),
+            ];
         }
-        if (!$items) {
-            $lines[] = 'No receipt items are available.';
-        }
-        $lines[] = '';
+        $summary = [];
         if ($subtotal > 0) {
-            $lines[] = 'Subtotal: ' . $this->formatPrice($subtotal);
+            $summary[] = ['label' => 'Subtotal', 'value' => $this->formatPrice($subtotal)];
         }
-        $lines[] = $fulfilmentLabel . ': ' . ($shippingTotal > 0 ? $this->formatPrice($shippingTotal) : 'Free');
+        $summary[] = ['label' => $fulfilmentLabel, 'value' => $shippingTotal > 0 ? $this->formatPrice($shippingTotal) : 'Free'];
         if ($discountTotal > 0) {
-            $lines[] = 'Discount: -' . $this->formatPrice($discountTotal);
+            $summary[] = ['label' => 'Discount', 'value' => '-' . $this->formatPrice($discountTotal)];
         }
         if ($refund['refunded'] > 0) {
-            $lines[] = 'Refunded: -' . $this->formatPrice((float) $refund['refunded']);
+            $summary[] = ['label' => 'Refunded', 'value' => '-' . $this->formatPrice((float) $refund['refunded'])];
         }
         if ($refund['pending'] > 0) {
-            $lines[] = 'Pending refund: -' . $this->formatPrice((float) $refund['pending']);
+            $summary[] = ['label' => 'Pending refund', 'value' => '-' . $this->formatPrice((float) $refund['pending'])];
         }
-        $lines[] = 'Total paid: ' . $this->formatPrice($total);
+        $summary[] = ['label' => 'Total paid', 'value' => $this->formatPrice($total), 'total' => true];
         if ($refund['has_refund']) {
-            $lines[] = 'Net paid: ' . $this->formatPrice((float) $refund['net_paid']);
+            $summary[] = ['label' => 'Net paid', 'value' => $this->formatPrice((float) $refund['net_paid']), 'total' => true];
         }
         $taxLabel = $this->getTaxLabel($order);
         foreach ($taxRates as $rate) {
-            $lines[] = 'incl. ' . $taxLabel . ' ' . (string) ($rate['tax_rate'] ?? 0) . '%: ' . $this->formatPrice((float) ($rate['sum'] ?? 0));
+            $summary[] = ['label' => $taxLabel . ' ' . (string) ($rate['tax_rate'] ?? 0) . '%', 'value' => $this->formatPrice((float) ($rate['sum'] ?? 0))];
         }
+        $invoiceDate = (string) ($order->mrc_invoice_date ?: date('Y-m-d H:i', (int) $order->created));
+        $timestamp = strtotime($invoiceDate) ?: (int) $order->created;
+        $document = [
+            'invoice' => $invoice,
+            'date' => date('F j, Y', $timestamp),
+            'date_short' => date('M j, Y', $timestamp),
+            'payment_status' => $this->humanizeStatus($paymentStatus),
+            'total' => $this->formatPrice($total),
+            'customer_name' => trim((string) $order->mrc_first_name . ' ' . (string) $order->mrc_last_name) ?: 'Customer',
+            'customer_email' => (string) $order->mrc_email,
+            'fulfilment_label' => $fulfilmentLabel,
+            'billing_address' => preg_split('/\R/', $this->formatAddressSnapshot($order, 'mrc_billing_address'), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            'shipping_address' => preg_split('/\R/', $this->formatAddressSnapshot($order, 'mrc_shipping_address'), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            'items' => $pdfItems,
+            'summary' => $summary,
+        ];
+        return MercatoReceiptPdfRenderer::render($document, (array) $this->orderReceiptPdfTheme($order));
+    }
 
-        return $this->buildSimplePdf($lines);
+    public function ___orderReceiptPdfTheme(Page $order): array {
+        return [];
     }
 
     protected function renderOrderPackingSlipPdf(Page $order): string {
@@ -872,6 +992,30 @@ trait MercatoPublicEndpoints {
         $discountTotal = $order->hasField('mrc_discount_total') ? (float) $order->mrc_discount_total : 0.0;
         $total = $this->orderRepository()->getTotalAmount($order);
         $refund = $this->getPublicRefundSummary($order);
+        $policyLinks = $this->getPolicyLinksText();
+        $receiptUrl = $this->isOrderReceiptAvailable($order) ? $this->getOrderReceiptUrl($order) : '';
+        $retryPaymentUrl = $this->isOrderPaymentRetryAvailable($order) ? $this->getPaymentLinkUrl($order) : '';
+        $customStatus = $this->renderCustomOrderStatus($order, compact(
+            'items',
+            'invoice',
+            'orderStatus',
+            'paymentStatus',
+            'fulfilmentStatus',
+            'fulfilmentLabel',
+            'tracking',
+            'trackingUrl',
+            'detailText',
+            'shippingTotal',
+            'discountTotal',
+            'total',
+            'refund',
+            'policyLinks',
+            'receiptUrl',
+            'retryPaymentUrl'
+        ));
+        if ($customStatus !== '') {
+            return $customStatus;
+        }
 
         $rows = '';
         foreach ($items as $item) {
@@ -887,16 +1031,15 @@ trait MercatoPublicEndpoints {
         $trackingHtml = $tracking !== ''
             ? '<p><strong>Tracking:</strong> ' . ($trackingUrl !== '' ? '<a href="' . $this->h($trackingUrl) . '" rel="noopener">' . $this->h($tracking) . '</a>' : $this->h($tracking)) . '</p>'
             : '';
-        $policyLinks = $this->getPolicyLinksText();
         $policyHtml = '';
         if ($policyLinks !== '') {
             $policyHtml = '<section class="mrc-status-card"><h2>Store policies</h2><pre>' . $this->h($policyLinks) . '</pre></section>';
         }
-        $receiptHtml = $this->isOrderReceiptAvailable($order)
-            ? '<p><a href="' . $this->h($this->getOrderReceiptUrl($order)) . '">View receipt</a></p>'
+        $receiptHtml = $receiptUrl !== ''
+            ? '<p><a href="' . $this->h($receiptUrl) . '">View receipt</a></p>'
             : '';
-        $retryHtml = $this->isOrderPaymentRetryAvailable($order)
-            ? '<p class="mrc-status-actions"><a class="mrc-primary-action" href="' . $this->h($this->getPaymentLinkUrl($order)) . '">Retry payment</a></p>'
+        $retryHtml = $retryPaymentUrl !== ''
+            ? '<p class="mrc-status-actions"><a class="mrc-primary-action" href="' . $this->h($retryPaymentUrl) . '">Retry payment</a></p>'
             : '';
 
         return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'

@@ -2,12 +2,18 @@
 namespace ProcessWire;
 
 final class MercatoEmailTemplateRenderer {
-    public static function render(string $subjectTemplate, string $textTemplate, string $htmlTemplate, array $values): array {
+    public static function render(string $subjectTemplate, string $textTemplate, string $htmlTemplate, array $values, string $headerTemplate = '', string $footerTemplate = ''): array {
         $textValues = self::normalizeValues($values, false);
         $htmlValues = self::normalizeValues($values, true);
         $subject = preg_replace('/[\r\n]+/', ' ', strtr($subjectTemplate, $textValues)) ?: '';
         $text = strtr($textTemplate, $textValues);
-        $html = $htmlTemplate !== '' ? strtr($htmlTemplate, $htmlValues) : self::textToHtml($text);
+        if ($headerTemplate !== '' || $footerTemplate !== '') {
+            $body = $htmlTemplate !== '' ? strtr($htmlTemplate, $htmlValues) : self::textToHtmlFragment($text);
+            $html = '<!doctype html><html><head><meta charset="utf-8"></head><body>'
+                . strtr($headerTemplate, $htmlValues) . $body . strtr($footerTemplate, $htmlValues) . '</body></html>';
+        } else {
+            $html = $htmlTemplate !== '' ? strtr($htmlTemplate, $htmlValues) : self::textToHtml($text);
+        }
         $html = self::sanitizeHtml($html);
         return ['subject' => trim($subject), 'text' => trim($text), 'html' => $html];
     }
@@ -20,8 +26,8 @@ final class MercatoEmailTemplateRenderer {
     public static function sanitizeHtml(string $html): string {
         $html = preg_replace('#<(script|style|iframe|object|embed|form)\b[^>]*>.*?</\1>#is', '', $html) ?: '';
         $html = preg_replace('/\s+on[a-z]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?: '';
-        $html = preg_replace('/\s+(href|src)\s*=\s*(["\'])\s*(?:javascript|data):.*?\2/i', ' $1="#"', $html) ?: '';
-        return strip_tags($html, '<!doctype><html><head><meta><title><body><div><table><tbody><tr><td><p><br><h1><h2><h3><strong><b><em><i><a><ul><ol><li><span><small><hr>');
+        $html = preg_replace('/\s+(href|src)\s*=\s*(["\'])\s*(?:javascript|data|vbscript):.*?\2/i', ' $1="#"', $html) ?: '';
+        return strip_tags($html, '<!doctype><html><head><meta><title><body><div><table><thead><tbody><tfoot><tr><th><td><p><br><h1><h2><h3><strong><b><em><i><a><img><ul><ol><li><span><small><blockquote><hr>');
     }
 
     private static function normalizeValues(array $values, bool $html): array {
@@ -35,6 +41,10 @@ final class MercatoEmailTemplateRenderer {
     }
 
     private static function textToHtml(string $text): string {
-        return '<!doctype html><html><body><div style="font-family:Arial,sans-serif;line-height:1.5;color:#2c2521">' . nl2br(htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</div></body></html>';
+        return '<!doctype html><html><body>' . self::textToHtmlFragment($text) . '</body></html>';
+    }
+
+    private static function textToHtmlFragment(string $text): string {
+        return '<div style="font-family:Arial,sans-serif;line-height:1.5;color:#2c2521">' . nl2br(htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</div>';
     }
 }

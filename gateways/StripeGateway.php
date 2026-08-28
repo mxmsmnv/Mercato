@@ -256,10 +256,17 @@ class StripeGateway extends MercatoGatewayBase {
     }
 
     protected function getCardPaymentIntentParams(array $pendingOrder): array {
+        $orderData = $this->getStripeOrderData($pendingOrder);
         $params = [
             'capture_method' => 'manual',
-            'metadata'       => $this->getOrderMetadata($pendingOrder),
+            'description'    => $orderData['description'],
+            'metadata'       => $orderData['metadata'],
         ];
+
+        $billingDetails = $this->getCustomerBillingDetails($pendingOrder);
+        if (!empty($billingDetails['email'])) {
+            $params['receipt_email'] = $billingDetails['email'];
+        }
 
         if (!empty($this->commerce->stripe_automatic_payment_methods)) {
             $params['automatic_payment_methods'] = ['enabled' => true];
@@ -268,6 +275,14 @@ class StripeGateway extends MercatoGatewayBase {
         }
 
         return $params;
+    }
+
+    /**
+     * Customer data suitable for Stripe Payment Element billing_details.
+     * PII must be passed through Stripe's dedicated fields, never metadata.
+     */
+    public function getCustomerBillingDetails(array $pendingOrder): array {
+        return MercatoStripeCustomerData::fromPendingOrder($pendingOrder);
     }
 
     protected function initializeKlarnaPayment(array $pendingOrder, float $sum): array {
@@ -281,12 +296,14 @@ class StripeGateway extends MercatoGatewayBase {
         }
 
         $successUrl = $this->getSuccessUrl();
+        $orderData = $this->getStripeOrderData($pendingOrder);
 
         $pi = $this->createPaymentIntent($sum, [
             'payment_method_types' => ['klarna'],
             'confirm'              => true,
             'capture_method'       => 'automatic',
-            'metadata'             => $this->getOrderMetadata($pendingOrder),
+            'description'          => $orderData['description'],
+            'metadata'             => $orderData['metadata'],
             'payment_method_data'  => [
                 'type'    => 'klarna',
                 'billing_details' => [
@@ -310,6 +327,7 @@ class StripeGateway extends MercatoGatewayBase {
 
     protected function initializeiDEALPayment(array $pendingOrder, float $sum): array {
         $successUrl = $this->getSuccessUrl();
+        $orderData = $this->getStripeOrderData($pendingOrder);
 
         // iDEAL requires the customer to select their bank on Stripe's hosted page.
         // We create a PaymentIntent without confirm=true and let Stripe.js / Payment Element
@@ -318,7 +336,8 @@ class StripeGateway extends MercatoGatewayBase {
         $pi = $this->createPaymentIntent($sum, [
             'payment_method_types' => ['ideal'],
             'capture_method'       => 'automatic',
-            'metadata'             => $this->getOrderMetadata($pendingOrder),
+            'description'          => $orderData['description'],
+            'metadata'             => $orderData['metadata'],
         ], $this->getPaymentIntentRequestOptions($pendingOrder));
 
         $pendingOrder['stripe_payment_intent_id'] = $pi->id;
@@ -333,10 +352,12 @@ class StripeGateway extends MercatoGatewayBase {
     }
 
     protected function initializeSepaPayment(array $pendingOrder, float $sum): array {
+        $orderData = $this->getStripeOrderData($pendingOrder);
         $pi = $this->createPaymentIntent($sum, [
             'payment_method_types' => ['sepa_debit'],
             'capture_method'       => 'automatic',
-            'metadata'             => $this->getOrderMetadata($pendingOrder),
+            'description'          => $orderData['description'],
+            'metadata'             => $orderData['metadata'],
         ], $this->getPaymentIntentRequestOptions($pendingOrder));
 
         $pendingOrder['stripe_payment_intent_id'] = $pi->id;
@@ -549,14 +570,16 @@ class StripeGateway extends MercatoGatewayBase {
     }
 
     protected function getOrderMetadata(array $pendingOrder): array {
-        $metadata = [];
-        if (!empty($pendingOrder['mrc_order_page_id'])) {
-            $metadata['mrc_order_id'] = (string) $pendingOrder['mrc_order_page_id'];
-        }
-        if (!empty($pendingOrder['mrc_invoice_number'])) {
-            $metadata['mrc_invoice_number'] = (string) $pendingOrder['mrc_invoice_number'];
-        }
-        return $metadata;
+        return $this->getStripeOrderData($pendingOrder)['metadata'];
+    }
+
+    /**
+     * Generic Stripe projection of the saved Mercato order/cart snapshot.
+     *
+     * @return array{description:string,metadata:array<string,string>}
+     */
+    public function getStripeOrderData(array $pendingOrder): array {
+        return MercatoStripeOrderData::fromPendingOrder($pendingOrder);
     }
 
     protected function getPaymentIntentRequestOptions(array $pendingOrder): array {

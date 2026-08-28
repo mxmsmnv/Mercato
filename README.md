@@ -64,8 +64,43 @@ as proof that the layer can ship a real storefront.
 - Fulfilment support for carrier delivery, store pickup, and local delivery.
 - Coupon and discount rules with product, collection, customer, usage, and minimum-total targeting.
 - Inventory rules for in-stock, low-stock, sold-out, preorder, and backorder behavior.
-- Public order status, receipt, and download flows.
+- Public order status, receipt, access-recovery, and download flows.
 - Installable demo storefront templates and demo product images.
+
+## Storefront Markets And Currencies
+
+Mercato supports one backward-compatible `default` market plus optional explicit market price lists for native/headless storefronts. Configure additional markets in **Additional storefront markets (JSON)**, for example:
+
+```json
+[
+  {
+    "id": "us",
+    "label": "United States",
+    "currency": "USD",
+    "countries": ["US"],
+    "language": "en",
+    "fulfilment_prices": {"carrier_delivery": 7.5}
+  }
+]
+```
+
+Each product uses `mrc_market_prices` for explicit non-default prices. Variant prices must also be explicit:
+
+```json
+{
+  "us": {
+    "price": 42,
+    "shipping_price": 4,
+    "variants": {
+      "large-oat": {"price": 48, "shipping_price": 5}
+    }
+  }
+}
+```
+
+Mercato never converts currencies or trusts a client-supplied currency code. Products without a complete price in the selected market are omitted, paid fulfilment requires an explicit market amount, and the market/currency snapshot is revalidated before the gateway receives the order. Non-default coupons are currently limited to percentage discounts without a fixed minimum; fixed amounts need a future per-market discount price list.
+
+Native catalog and collection resources also apply the selected market's `language` before serializing ProcessWire multilingual fields. Collection list/detail responses carry the same `commerce_context` as products, and native clients should keep localized collection caches separated by `market_id`. `Accept-Language` may express the device preference, but the configured market language remains authoritative for merchant content.
 
 ## Installation
 
@@ -123,6 +158,8 @@ php scripts/run-acceptance.php
 The release threshold is zero failed scenarios, zero serious/critical axe violations, successful fixture cleanup, and retained JSON/Markdown and Playwright diagnostics. See [ACCEPTANCE.md](ACCEPTANCE.md) for setup, browser versions, coverage, report paths, and the separately gated live-provider smoke policy.
 
 Native clients use `/api/mercato/v1`; see [HEADLESS_API.md](HEADLESS_API.md) for resources, SDK/redirect flows, opaque credentials, errors, deep links, and compatibility.
+
+Native transactional push uses owner-scoped device credentials and the same order lifecycle as email; see [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md) for the APNs setup, privacy contract, registration API, and transport extension point.
 
 MCP-compatible agents and automation systems use the optional ProcessWire
 McpServer provider. It exposes bounded PII-minimized order and inventory reads,
@@ -229,6 +266,22 @@ Mercato includes these payment methods:
 - **PayPal** for PayPal checkout.
 - **Bank transfer** for offline invoice-style orders.
 - **Demo Payment** for test workflows while production mode is off.
+
+Stripe PaymentIntent checkout sends a valid buyer email through Stripe's
+dedicated `receipt_email` field. The bundled Payment Element also pre-fills and
+confirms checkout-owned name, email, phone, and available billing-address data
+as `billing_details`, so the Stripe payment and guest-customer views are useful
+without copying customer PII into metadata. Site-level checkout overrides must
+preserve this behavior by using
+`$commerce->getGateway('stripe')->getCustomerBillingDetails($pendingOrder)` for
+the Payment Element defaults and confirmation parameters. Mercato also projects
+the saved order snapshot into every one-time Stripe PaymentIntent: the
+description contains the invoice reference, total quantity, and bounded product
+titles, while metadata contains the Mercato order/invoice references, line and
+quantity counts, bounded SKU list, and product types. This projection is generic
+to Mercato and never includes customer PII. Use
+`$commerce->getGateway('stripe')->getStripeOrderData($pendingOrder)` when a
+site-level integration needs the same provider-safe projection.
 
 Production mode disables Demo Payment and expects live gateway configuration.
 Always configure provider webhooks before taking live orders.
@@ -389,7 +442,13 @@ During an incident, disable affected checkout methods or production mode without
 
 Mercato renders both plain-text and HTML for order confirmation, payment failure/recovery, refund, cancellation, shipment/tracking, pickup-ready, local-delivery, account-created, and account-security events. Merchants can enable events individually, select a locale, preview every built-in template, and send a test copy from **Modules → Mercato → Email Notifications**. Production readiness treats an invalid sender as a launch blocker when transactional events are enabled.
 
+The **Mercato → Notifications** workspace provides the visual authoring flow used by Tickets: choose an event, edit its subject and HTML in TinyMCE, insert only variables supported by that event, maintain a required plain-text fallback, and inspect the complete message in an isolated live preview. A second editor manages shared header and footer blocks for consistent branding across every transactional message. Saving requires `mercato-admin`, CSRF validation, and server-side HTML sanitization; a customized event can be restored to its configured default without affecting delivery history. When TinyMCE is unavailable, the same forms remain usable as HTML textareas.
+
 Safe merchant overrides are data files, not executable PHP. Put them at `/site/templates/mercato/emails/{locale}/{event}.txt` and `.html`, or omit the locale directory for a common fallback. Supported event names are `order_confirmation`, `payment_failed`, `payment_recovery`, `refund`, `cancellation`, `shipment_tracking`, `pickup_ready`, `local_delivery`, `account_created`, and `account_security`. Placeholders use `{name}` syntax. Customer/order values are escaped for HTML, unsafe scripts, event attributes, embedded forms, and `javascript:`/`data:` URLs are removed, while signed public links remain escaped and intact.
+
+Template precedence is: a saved visual template for that event, then a locale/file override, then the configured legacy subject/body or built-in event default. Shared header and footer blocks wrap the resulting HTML for all events. Keep critical signed URLs in both HTML and plain text, and use inline styles in shared layout blocks because many email clients strip page-level CSS.
+
+For paid digital access that can be reissued, enable **Signed access recovery** and include `{access_recovery_link}` in the order-confirmation template. Mercato owns the opaque `/access/recovery/{code}/` URL, expiry enforcement, CSRF-protected replacement request, private no-store response, and one-time browser-session delivery. Customer-facing links contain no order id or signature query parameters; the legacy query endpoint only redirects already-issued links after validation. The integrating project supplies domain behavior through `orderAccessRecoveryState` and `replaceOrderAccessCredential`; Mercato does not store the returned plaintext credential on the order or in notification logs. A site can skin the private page with `/site/templates/mercato/mrc-access-recovery.php` while retaining those controls.
 
 ProcessWire WireMail is the default transport. A provider module can implement `MercatoEmailTransportInterface` and replace it through the `Mercato::emailTransport` hook. Delivery attempts are written to `mercato-notifications` with a masked recipient, recipient hash, transport, provider message ID, provider status, retry count, and final result. The idempotency key prevents replayed commerce events from sending duplicates. Failed events remain visible in Customer Emails and can be retried from the corresponding order action without creating a second commerce event.
 
@@ -398,6 +457,8 @@ Provider modules that support delivery callbacks can implement `MercatoEmailWebh
 Before launch, publish SPF for the sending service, enable DKIM signing, and add a DMARC policy with reporting. Keep the visible From domain aligned with the authenticated domain, use a monitored Reply-To address, and configure bounce/complaint handling. If delivery fails, check the transport readiness result, ProcessWire mail configuration, DNS alignment, provider suppression list, masked attempt log, provider message ID, and webhook signature/endpoint. Never paste SMTP/API secrets or full provider payloads into order notes or logs.
 
 ### Storefront SEO and structured data
+
+SEO ownership is automatic and exclusive. When Ichiban is installed, Mercato delegates publication to Ichiban: `seoService()->render()` returns an empty string, `/sitemap-mercato.xml` is not registered, native SEO controls are replaced by an ownership notice, and Mercato's Launch diagnostics do not claim authority. Existing Mercato SEO values and fields are preserved so the fallback remains available if Ichiban is later removed. Project templates must call Ichiban in that state. When Ichiban is not installed, Mercato's built-in renderer and sitemap operate normally.
 
 Bundled catalog, collection, product, and content templates call `$commerce->seoService()->render($page)` inside `<head>`. The service emits exactly one escaped title, description, canonical URL, robots directive, Open Graph/Twitter metadata, language alternates, breadcrumbs, and applicable Organization, WebSite/SearchAction, Product, Offer, or AggregateOffer JSON-LD. Product price, currency, SKU, images, availability, condition, and canonical URL come from the saved product/variant and purchasability services used by the storefront.
 
@@ -487,7 +548,8 @@ live ProcessWire site.
 - Never disable gateway webhook signature verification in production.
 - Keep production gateway keys out of code and configure them through module settings.
 - Do not expose hidden order pages directly.
-- Use the public receipt and order-status URLs generated by Mercato instead of exposing admin URLs.
+- Use the public receipt and order-status URLs generated by Mercato instead of exposing admin URLs. Current links use opaque `/order/receipt/{code}/` and `/order/status/{code}/` routes; valid legacy signed `/api/mercato/...` links redirect to their clean equivalent for previously delivered messages.
+- Receipt PDFs use Mercato's structured print renderer rather than a plain-text dump. Customize brand name, local logo, palette, website, document label, and footer through `Mercato::orderReceiptPdfTheme`; order, customer, item, tax, refund, and total values always come from Mercato's server-owned snapshots.
 - Treat refunds, inventory changes, payment method changes, and template overwrites as sensitive operations.
 
 ## Troubleshooting
@@ -501,7 +563,7 @@ live ProcessWire site.
 | Demo Payment is missing | Confirm production mode is off. Demo Payment is disabled in production mode. |
 | Products are missing from the demo | Run the installer repair action from module settings. Existing merchant products are preserved where possible. |
 | Transactional email is blocked | Validate sender name/email, enabled events, WireMail/provider setup, SPF/DKIM/DMARC, and the latest masked attempt in **Customer Emails**. |
-| SEO metadata is missing or duplicated | Run the Launch SEO diagnostics and ensure the active site template contains exactly one `$commerce->seoService()->render($page)` call. |
+| SEO metadata is missing or duplicated | Check `$commerce->seoOwner()`. With Ichiban installed, configure and render Ichiban exactly once; without it, run Mercato Launch SEO diagnostics and keep exactly one `$commerce->seoService()->render($page)` call. |
 
 ## License
 

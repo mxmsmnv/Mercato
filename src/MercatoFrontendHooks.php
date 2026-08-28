@@ -122,6 +122,10 @@ trait MercatoFrontendHooks {
         return $request;
     }
 
+    public function ___cancellationRequested(Page $orderPage, array $request): array {
+        return $request;
+    }
+
     public function ___orderStatusChanged(Page $orderPage, string $from, string $to, array $context = []): void {
         if ($to === MercatoOrderStatus::CANCELED) $this->notificationDeliveryService()->sendOrderEvent($orderPage, 'cancellation', $context + ['status' => $to]);
     }

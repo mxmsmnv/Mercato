@@ -54,6 +54,10 @@ trait MercatoConfigInputfields {
         $data['headless_api_rate_limit_per_minute'] = max(1, min(1000, (int) ($data['headless_api_rate_limit_per_minute'] ?? 60)));
         $data['headless_api_max_body_bytes'] = max(1024, min(1048576, (int) ($data['headless_api_max_body_bytes'] ?? 65536)));
         $data['headless_api_allowed_origins'] = trim((string) ($data['headless_api_allowed_origins'] ?? ''));
+        $data['push_notifications_enabled'] = !empty($data['push_notifications_enabled']);
+        $data['push_transport'] = trim((string) ($data['push_transport'] ?? 'apns')) ?: 'apns';
+        $data['apns_environment'] = (string) ($data['apns_environment'] ?? 'sandbox') === 'production' ? 'production' : 'sandbox';
+        foreach (['apns_team_id', 'apns_key_id', 'apns_bundle_id', 'apns_private_key_path'] as $pushConfigKey) $data[$pushConfigKey] = trim((string) ($data[$pushConfigKey] ?? ''));
         $data['preupgrade_backup_required'] = !empty($data['preupgrade_backup_required']);
         $data['backup_max_age_hours'] = max(1, min(8760, (int) ($data['backup_max_age_hours'] ?? 24)));
         $data['health_storage_min_bytes'] = max(1048576, (int) ($data['health_storage_min_bytes'] ?? 104857600));
@@ -232,6 +236,15 @@ trait MercatoConfigInputfields {
         $f->columnWidth = 25;
         $fs->add($f);
 
+        $f = $modules->get('InputfieldTextarea');
+        $f->name = 'markets_json';
+        $f->label = __('Additional storefront markets (JSON)');
+        $f->description = __('Each enabled market needs id, label, ISO currency, countries, and language. Product prices are explicit in mrc_market_prices; Mercato never converts currencies automatically.');
+        $f->value = (string) ($data['markets_json'] ?? '');
+        $f->rows = 6;
+        $f->columnWidth = 100;
+        $fs->add($f);
+
         foreach (['email_log_retention_days' => __('Email log retention'), 'payment_attempt_retention_days' => __('Payment-attempt log retention'), 'operational_log_retention_days' => __('Operational log retention')] as $name => $label) { $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->description = __('Rows older than this are redacted while event status and financial linkage remain.'); $f->value = $data[$name]; $f->min = 1; $f->max = 3650; $f->columnWidth = 25; $fs->add($f); }
         foreach (['provider_reference_retention_days' => __('Failed provider-reference retention'), 'signed_link_retention_days' => __('Signed customer-link lifetime')] as $name => $label) { $f = $modules->get('InputfieldInteger'); $f->name = $name; $f->label = $label; $f->description = __('Days; use 0 to retain without automatic expiry. Paid financial references are not automatically removed.'); $f->value = $data[$name]; $f->min = 0; $f->max = 3650; $f->columnWidth = 25; $fs->add($f); }
         $f = $modules->get('InputfieldSelect'); $f->name = 'privacy_retention_schedule'; $f->label = __('Privacy retention schedule'); foreach (self::getReservationCleanupScheduleOptions() as $value => $label) $f->addOption($value, __($label)); $f->value = $data['privacy_retention_schedule']; $f->columnWidth = 25; $fs->add($f);
@@ -406,6 +419,16 @@ trait MercatoConfigInputfields {
         $f->columnWidth = 100;
         $fs->add($f);
 
+        $wrapper->add($fs);
+
+        // --- Mobile push notifications ---
+        $fs = $modules->get('InputfieldFieldset');
+        $fs->label = __('Mobile Push Notifications');
+        $fs->collapsed = Inputfield::collapsedBlank;
+        $f = $modules->get('InputfieldCheckbox'); $f->name = 'push_notifications_enabled'; $f->label = __('Enable transactional push delivery'); $f->description = __('Enable only after APNs credentials have been verified. Device registration remains available while delivery is disabled.'); $f->checked = !empty($data['push_notifications_enabled']); $f->columnWidth = 100; $fs->add($f);
+        $f = $modules->get('InputfieldSelect'); $f->name = 'push_transport'; $f->label = __('Push transport'); $f->addOption('apns', 'Apple Push Notification service'); $f->value = $data['push_transport']; $f->description = __('Extensions can replace this through the Mercato::pushTransport hook.'); $f->columnWidth = 50; $fs->add($f);
+        $f = $modules->get('InputfieldSelect'); $f->name = 'apns_environment'; $f->label = __('APNs environment'); $f->addOption('sandbox', __('Sandbox')); $f->addOption('production', __('Production')); $f->value = $data['apns_environment']; $f->columnWidth = 50; $fs->add($f);
+        foreach (['apns_team_id'=>__('Apple Team ID'),'apns_key_id'=>__('APNs Key ID'),'apns_bundle_id'=>__('App bundle ID'),'apns_private_key_path'=>__('Private key path (.p8)')] as $name=>$label) { $f=$modules->get('InputfieldText');$f->name=$name;$f->label=$label;$f->value=$data[$name];$f->columnWidth=50;$fs->add($f); }
         $wrapper->add($fs);
 
         // --- Advanced / Debug ---
@@ -809,6 +832,22 @@ trait MercatoConfigInputfields {
         $fs->add($f);
 
         $f = $modules->get('InputfieldText');
+        $f->name = 'order_status_template_file';
+        $f->label = __('Order status template file');
+        $f->description = __('Optional PHP template relative to /site/templates/, e.g. mercato-order-status.php. Leave blank to use the built-in signed order-status page.');
+        $f->value = $data['order_status_template_file'];
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldCheckbox');
+        $f->name = 'access_recovery_enabled';
+        $f->label = __('Signed access recovery');
+        $f->description = __('Expose a private, CSRF-protected replacement-credential page for integrations that implement the access-recovery hooks.');
+        $f->checked = !empty($data['access_recovery_enabled']);
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldText');
         $f->name = 'receipt_pdf_url_template';
         $f->label = __('Receipt PDF URL template');
         $f->description = __('Optional external PDF renderer URL. Variables: {order_id}, {invoice}, {token}, {receipt_link}. Leave blank to use printable HTML only.');
@@ -823,17 +862,43 @@ trait MercatoConfigInputfields {
         $fs->label = __('Storefront SEO');
         $fs->collapsed = Inputfield::collapsedBlank;
 
-        $f = $modules->get('InputfieldText'); $f->name = 'seo_site_name'; $f->label = __('Site/organization name'); $f->value = $data['seo_site_name']; $f->columnWidth = 50; $fs->add($f);
-        $f = $modules->get('InputfieldText'); $f->name = 'seo_default_robots'; $f->label = __('Default robots directive'); $f->value = $data['seo_default_robots']; $f->description = __('Private and tokenized commerce pages are always noindex regardless of this value.'); $f->columnWidth = 50; $fs->add($f);
-        $f = $modules->get('InputfieldTextarea'); $f->name = 'seo_default_description'; $f->label = __('Fallback meta description'); $f->value = $data['seo_default_description']; $f->maxlength = 160; $f->rows = 3; $f->columnWidth = 100; $fs->add($f);
-        foreach (['seo_social_image_url' => __('Default social image URL'), 'seo_organization_logo_url' => __('Organization logo URL')] as $name => $label) { $f = $modules->get('InputfieldURL'); if (!$f) $f = $modules->get('InputfieldText'); $f->name = $name; $f->label = $label; $f->description = __('Use a public HTTPS URL.'); $f->value = (string) ($data[$name] ?? ''); $f->columnWidth = 50; $fs->add($f); }
-        $f = $modules->get('InputfieldMarkup'); $f->label = __('Sitemap and overrides'); $f->value = '<p><a href="' . htmlspecialchars(rtrim((string) wire('config')->urls->root, '/') . '/sitemap-mercato.xml', ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener">/sitemap-mercato.xml</a></p><p>Project modules can hook <code>storefrontSeoMetadata</code>, <code>storefrontSeoAlternates</code>, and <code>storefrontSitemapEntries</code>.</p>'; $fs->add($f);
+        if ($modules->isInstalled('Ichiban')) {
+            $f = $modules->get('InputfieldMarkup');
+            $f->label = __('SEO owner: Ichiban');
+            $f->value = '<p>' . __('Ichiban is installed and is authoritative for metadata, canonical URLs, robots directives, structured data, and sitemaps. Mercato native SEO output is disabled automatically to prevent duplicate publication.') . '</p>';
+            $fs->add($f);
+            foreach (['seo_site_name', 'seo_default_robots', 'seo_default_description', 'seo_social_image_url', 'seo_organization_logo_url'] as $hiddenName) {
+                $hidden = $modules->get('InputfieldHidden');
+                $hidden->name = $hiddenName;
+                $hidden->value = (string) ($data[$hiddenName] ?? '');
+                $fs->add($hidden);
+            }
+        } else {
+            $f = $modules->get('InputfieldText'); $f->name = 'seo_site_name'; $f->label = __('Site/organization name'); $f->value = $data['seo_site_name']; $f->columnWidth = 50; $fs->add($f);
+            $f = $modules->get('InputfieldText'); $f->name = 'seo_default_robots'; $f->label = __('Default robots directive'); $f->value = $data['seo_default_robots']; $f->description = __('Private and tokenized commerce pages are always noindex regardless of this value.'); $f->columnWidth = 50; $fs->add($f);
+            $f = $modules->get('InputfieldTextarea'); $f->name = 'seo_default_description'; $f->label = __('Fallback meta description'); $f->value = $data['seo_default_description']; $f->maxlength = 160; $f->rows = 3; $f->columnWidth = 100; $fs->add($f);
+            foreach (['seo_social_image_url' => __('Default social image URL'), 'seo_organization_logo_url' => __('Organization logo URL')] as $name => $label) { $f = $modules->get('InputfieldURL'); if (!$f) $f = $modules->get('InputfieldText'); $f->name = $name; $f->label = $label; $f->description = __('Use a public HTTPS URL.'); $f->value = (string) ($data[$name] ?? ''); $f->columnWidth = 50; $fs->add($f); }
+            $f = $modules->get('InputfieldMarkup'); $f->label = __('Sitemap and overrides'); $f->value = '<p><a href="' . htmlspecialchars(rtrim((string) wire('config')->urls->root, '/') . '/sitemap-mercato.xml', ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener">/sitemap-mercato.xml</a></p><p>Project modules can hook <code>storefrontSeoMetadata</code>, <code>storefrontSeoAlternates</code>, and <code>storefrontSitemapEntries</code>.</p>'; $fs->add($f);
+        }
         $wrapper->add($fs);
 
         // --- Notifications ---
         $fs = $modules->get('InputfieldFieldset');
         $fs->label = __('Email Notifications');
         $fs->collapsed = Inputfield::collapsedBlank;
+
+        $f = $modules->get('InputfieldMarkup');
+        $f->label = __('Visual templates');
+        $f->value = '<p>' . __('Edit every transactional message, shared email layout, variables, plain-text fallback, and live preview in the Mercato workspace.') . '</p><p><a class="ui-button ui-priority-primary" href="' . htmlspecialchars((string) wire('config')->urls->admin . 'setup/mercato/notifications/', ENT_QUOTES, 'UTF-8') . '">' . __('Open notification designer') . '</a></p>';
+        $f->columnWidth = 100;
+        $fs->add($f);
+
+        foreach (['notification_templates_json', 'notification_header_html', 'notification_footer_html'] as $hiddenName) {
+            $hidden = $modules->get('InputfieldHidden');
+            $hidden->name = $hiddenName;
+            $hidden->value = (string) ($data[$hiddenName] ?? '');
+            $fs->add($hidden);
+        }
 
         $f = $modules->get('InputfieldText');
         $f->name = 'notification_sender_name';
@@ -945,7 +1010,7 @@ trait MercatoConfigInputfields {
         $f->columnWidth = 34;
         $fs->add($f);
 
-        $sample = ['invoice' => 'MRC-00123', 'customer' => 'Alex Customer', 'items' => '1 x Sample product', 'total' => '£49.00', 'receipt_link' => 'https://store.example/receipt?signed=preview', 'order_status_link' => 'https://store.example/status?signed=preview', 'payment_link' => 'https://store.example/pay?signed=preview', 'policy_links' => 'https://store.example/policies', 'reason' => 'The payment provider declined the attempt.', 'refund_amount' => '£10.00', 'refund_status' => 'partially refunded', 'tracking' => 'TRACK123', 'tracking_url' => 'https://carrier.example/TRACK123', 'fulfilment_details' => 'Pickup at the selected store.', 'recovery_discount_line' => '', 'recovery_unsubscribe_link' => 'https://store.example/unsubscribe?signed=preview', 'store_name' => (string) ($data['notification_sender_name'] ?: 'Mercato Store'), 'account_link' => 'https://store.example/account', 'security_message' => 'Your password was changed.'];
+        $sample = ['invoice' => 'MRC-00123', 'customer' => 'Alex Customer', 'items' => '1 x Sample product', 'total' => '£49.00', 'receipt_link' => 'https://store.example/receipt?signed=preview', 'order_status_link' => 'https://store.example/status?signed=preview', 'access_recovery_link' => 'https://store.example/access-recovery?signed=preview', 'payment_link' => 'https://store.example/pay?signed=preview', 'policy_links' => 'https://store.example/policies', 'reason' => 'The payment provider declined the attempt.', 'refund_amount' => '£10.00', 'refund_status' => 'partially refunded', 'tracking' => 'TRACK123', 'tracking_url' => 'https://carrier.example/TRACK123', 'fulfilment_details' => 'Pickup at the selected store.', 'recovery_discount_line' => '', 'recovery_unsubscribe_link' => 'https://store.example/unsubscribe?signed=preview', 'store_name' => (string) ($data['notification_sender_name'] ?: 'Mercato Store'), 'account_link' => 'https://store.example/account', 'security_message' => 'Your password was changed.'];
         $previewOverrides = ['locale' => (string) $data['notification_locale']];
         if ($previewEvent === 'order_confirmation') $previewOverrides += ['subject' => (string) $data['confirmation_email_subject'], 'text' => (string) $data['confirmation_email_body']];
         if ($previewEvent === 'payment_recovery') $previewOverrides += ['subject' => (string) $data['payment_link_email_subject'], 'text' => (string) $data['payment_link_email_body']];
@@ -986,7 +1051,7 @@ trait MercatoConfigInputfields {
         $f = $modules->get('InputfieldTextarea');
         $f->name = 'confirmation_email_body';
         $f->label = __('Order confirmation body');
-        $f->description = __('Plain-text message. Variables: {invoice}, {customer}, {items}, {subtotal}, {shipping}, {fulfilment}, {fulfilment_details}, {discount}, {total}, {currency}, {receipt_link}, {order_status_link}, {policy_links}.');
+        $f->description = __('Plain-text message. Variables: {invoice}, {customer}, {items}, {subtotal}, {shipping}, {fulfilment}, {fulfilment_details}, {discount}, {total}, {currency}, {receipt_link}, {order_status_link}, {access_recovery_link}, {policy_links}.');
         $f->value = $data['confirmation_email_body'];
         $f->rows = 7;
         $f->columnWidth = 50;

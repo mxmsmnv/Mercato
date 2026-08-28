@@ -14,8 +14,8 @@ final class MercatoTaxService extends Wire {
         return $providers;
     }
 
-    public function estimate(MercatoProductList $cart, array $customer, array $fulfilment, array $discount = []): array {
-        $context = $this->buildContext($cart, $customer, $fulfilment, $discount);
+    public function estimate(MercatoProductList $cart, array $customer, array $fulfilment, array $discount = [], string $currency = ''): array {
+        $context = $this->buildContext($cart, $customer, $fulfilment, $discount, $currency);
         $providerKey = trim((string) ($this->commerce->tax_provider ?? 'manual')) ?: 'manual';
         $providers = $this->getProviders();
         if (!isset($providers[$providerKey])) return $this->handleFailure(new WireException(sprintf('Tax provider "%s" is unavailable.', $providerKey)), $context, $providers['manual']);
@@ -91,7 +91,7 @@ final class MercatoTaxService extends Wire {
         return array_values($groups);
     }
 
-    protected function buildContext(MercatoProductList $cart, array $customer, array $fulfilment, array $discount): array {
+    protected function buildContext(MercatoProductList $cart, array $customer, array $fulfilment, array $discount, string $currency = ''): array {
         $items = [];
         foreach ($cart->toArray() as $item) {
             $items[] = [
@@ -109,7 +109,7 @@ final class MercatoTaxService extends Wire {
         ];
         $context = [
             'operation' => 'estimate', 'provider' => (string) ($this->commerce->tax_provider ?? 'manual'),
-            'currency' => MercatoCurrency::normalizeCode((string) $this->commerce->currency), 'display_mode' => $this->commerce->getTaxDisplayMode(),
+            'currency' => MercatoCurrency::normalizeCode($currency !== '' ? $currency : (string) $this->commerce->currency), 'display_mode' => $this->commerce->getTaxDisplayMode(),
             'items' => $items, 'customer' => ['email' => (string) ($customer['email'] ?? ''), 'tax_number' => (string) ($customer['tax_number'] ?? ''), 'tax_exempt' => !empty($customer['tax_exempt'])],
             'destination' => $destination, 'shipping' => ['amount' => round((float) ($fulfilment['amount'] ?? 0), 2), 'method' => (string) ($fulfilment['type'] ?? ''), 'taxable' => $this->commerce->shouldTaxShipping(), 'tax_rate' => $this->commerce->getShippingTaxRate()],
             'discount' => ['code' => (string) ($discount['code'] ?? ''), 'amount' => round((float) ($discount['amount'] ?? 0), 2)],

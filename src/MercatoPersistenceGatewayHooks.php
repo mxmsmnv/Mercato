@@ -28,6 +28,7 @@ trait MercatoPersistenceGatewayHooks {
             'deliveryNote' => 'delivery_note',
             'purchaseOrderNumber' => 'purchase_order_number',
             'policyAccepted' => 'mrc_policy_accepted',
+            'marketId' => 'mrc_market_id',
         ];
 
         foreach ($aliases as $from => $to) {

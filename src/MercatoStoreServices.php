@@ -24,6 +24,11 @@ trait MercatoStoreServices {
         $data['currency_symbol_position'] = in_array((string) ($data['currency_symbol_position'] ?? ''), ['before', 'after'], true)
             ? (string) $data['currency_symbol_position']
             : self::getDefaultConfig()['currency_symbol_position'];
+        $data['markets_json'] = trim((string) ($data['markets_json'] ?? ''));
+        if ($data['markets_json'] !== '') {
+            $markets = json_decode($data['markets_json'], true);
+            if (!is_array($markets) || !array_is_list($markets)) throw new WireException($this->_('Markets must be a valid JSON array.'));
+        }
         $data['invoice_prefix'] = self::normalizeInvoicePrefix($data['invoice_prefix'] ?? '');
         $data['quotes_parent'] = self::normalizePagePathConfig($data['quotes_parent'] ?? 'quotes', 'quotes');
         $data['quote_requests_enabled'] = !empty($data['quote_requests_enabled']);
@@ -87,6 +92,9 @@ trait MercatoStoreServices {
         $data['notification_brand_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', trim((string) ($data['notification_brand_color'] ?? ''))) ? strtolower(trim((string) $data['notification_brand_color'])) : '#6b4f3a';
         $logoUrl = trim((string) ($data['notification_logo_url'] ?? ''));
         $data['notification_logo_url'] = $logoUrl !== '' && filter_var($logoUrl, FILTER_VALIDATE_URL) && str_starts_with(strtolower($logoUrl), 'https://') ? $logoUrl : '';
+        $data['notification_templates_json'] = self::normalizeNotificationTemplatesJson($data['notification_templates_json'] ?? '{}');
+        $data['notification_header_html'] = mb_substr(MercatoEmailTemplateRenderer::sanitizeHtml(trim((string) ($data['notification_header_html'] ?? ''))), 0, 100000);
+        $data['notification_footer_html'] = mb_substr(MercatoEmailTemplateRenderer::sanitizeHtml(trim((string) ($data['notification_footer_html'] ?? ''))), 0, 100000);
         $data['notification_retries'] = max(0, min(5, (int) ($data['notification_retries'] ?? 2)));
         $data['enabled_notification_events'] = array_values(array_intersect(MercatoEmailEventCatalog::EVENTS, array_map('strval', (array) ($data['enabled_notification_events'] ?? MercatoEmailEventCatalog::EVENTS))));
         $data['seo_site_name'] = MercatoSeoRules::safeText((string) ($data['seo_site_name'] ?? 'Mercato Store'), 80);
@@ -136,7 +144,13 @@ trait MercatoStoreServices {
         $data['recovery_automation_batch_limit'] = self::normalizeRecoveryAutomationBatchLimit($data['recovery_automation_batch_limit'] ?? 10);
         $data['recovery_discount_code'] = self::normalizeRecoveryDiscountCode($data['recovery_discount_code'] ?? '');
         $data['recovery_suppressed_emails'] = self::normalizeRecoverySuppressedEmails($data['recovery_suppressed_emails'] ?? '');
+        $data['push_notifications_enabled'] = !empty($data['push_notifications_enabled']);
+        $data['push_transport'] = trim((string) ($data['push_transport'] ?? 'apns')) ?: 'apns';
+        $data['apns_environment'] = (string) ($data['apns_environment'] ?? 'sandbox') === 'production' ? 'production' : 'sandbox';
+        foreach (['apns_team_id', 'apns_key_id', 'apns_bundle_id', 'apns_private_key_path'] as $pushConfigKey) $data[$pushConfigKey] = trim((string) ($data[$pushConfigKey] ?? ''));
         $data['receipt_template_file'] = self::normalizeReceiptTemplateFile($data['receipt_template_file'] ?? '');
+        $data['order_status_template_file'] = self::normalizeReceiptTemplateFile($data['order_status_template_file'] ?? '');
+        $data['access_recovery_enabled'] = !empty($data['access_recovery_enabled']);
         $data['receipt_pdf_url_template'] = self::normalizeReceiptPdfUrlTemplate($data['receipt_pdf_url_template'] ?? '');
         if (empty($previousConfig['production']) && !empty($data['production'])) {
             if (!$productionActivationConfirmed) throw new WireException($this->_('Confirm the production activation checklist before enabling production mode.'));
@@ -165,6 +179,130 @@ trait MercatoStoreServices {
         return $this->emailDeliveryService;
     }
 
+    public function notificationTemplates(): array {
+        $stored = self::decodeNotificationTemplates($this->notification_templates_json ?? '{}');
+        $metadata = MercatoEmailEventCatalog::metadata();
+        $templates = [];
+        foreach (MercatoEmailEventCatalog::EVENTS as $event) {
+            $default = MercatoEmailEventCatalog::get($event);
+            $legacy = $this->legacyNotificationTemplateOverride($event);
+            $custom = (array) ($stored[$event] ?? []);
+            $meta = (array) ($metadata[$event] ?? []);
+            $subject = (string) ($custom['subject'] ?? $legacy['subject'] ?? $default['subject']);
+            $text = (string) ($custom['text'] ?? $legacy['text'] ?? $default['text']);
+            $html = (string) ($custom['html'] ?? self::defaultNotificationHtml($text));
+            $templates[$event] = [
+                'template_key' => $event,
+                'label' => (string) ($meta['label'] ?? ucwords(str_replace('_', ' ', $event))),
+                'recipient' => (string) ($meta['recipient'] ?? 'Customer'),
+                'purpose' => (string) ($meta['purpose'] ?? 'Transactional commerce update.'),
+                'subject' => $subject,
+                'text' => $text,
+                'html' => $html,
+                'variables' => MercatoEmailEventCatalog::variables($event),
+                'customized' => isset($stored[$event]),
+            ];
+        }
+        return $templates;
+    }
+
+    public function notificationTemplate(string $event): array {
+        if (!in_array($event, MercatoEmailEventCatalog::EVENTS, true)) throw new WireException('Unknown transactional email template.');
+        return (array) ($this->notificationTemplates()[$event] ?? []);
+    }
+
+    public function notificationMailLayout(): array {
+        return [
+            'header' => (string) ($this->notification_header_html ?? ''),
+            'footer' => (string) ($this->notification_footer_html ?? ''),
+        ];
+    }
+
+    public function saveNotificationTemplate(string $event, string $subject, string $text, string $html, User $user): void {
+        $this->requireNotificationTemplateAdmin($user);
+        if (!in_array($event, MercatoEmailEventCatalog::EVENTS, true)) throw new WireException('Unknown transactional email template.');
+        $subject = mb_substr(trim(str_replace(["\r", "\n"], ' ', $subject)), 0, 240);
+        $text = mb_substr(trim($text), 0, 100000);
+        $html = mb_substr(MercatoEmailTemplateRenderer::sanitizeHtml(trim($html)), 0, 100000);
+        if ($subject === '' || $text === '' || $html === '') throw new WireException('Subject, plain-text fallback, and HTML body are required.');
+        $stored = self::decodeNotificationTemplates($this->notification_templates_json ?? '{}');
+        $stored[$event] = ['subject' => $subject, 'text' => $text, 'html' => $html, 'updated_at' => date('c')];
+        $this->persistNotificationTemplateConfig(['notification_templates_json' => self::encodeNotificationTemplates($stored)]);
+    }
+
+    public function resetNotificationTemplate(string $event, User $user): void {
+        $this->requireNotificationTemplateAdmin($user);
+        if (!in_array($event, MercatoEmailEventCatalog::EVENTS, true)) throw new WireException('Unknown transactional email template.');
+        $stored = self::decodeNotificationTemplates($this->notification_templates_json ?? '{}');
+        unset($stored[$event]);
+        $this->persistNotificationTemplateConfig(['notification_templates_json' => self::encodeNotificationTemplates($stored)]);
+    }
+
+    public function saveNotificationMailLayout(string $header, string $footer, User $user): void {
+        $this->requireNotificationTemplateAdmin($user);
+        $header = mb_substr(MercatoEmailTemplateRenderer::sanitizeHtml(trim($header)), 0, 100000);
+        $footer = mb_substr(MercatoEmailTemplateRenderer::sanitizeHtml(trim($footer)), 0, 100000);
+        $this->persistNotificationTemplateConfig([
+            'notification_header_html' => $header,
+            'notification_footer_html' => $footer,
+        ]);
+    }
+
+    protected function legacyNotificationTemplateOverride(string $event): array {
+        return match ($event) {
+            'order_confirmation' => ['subject' => (string) $this->confirmation_email_subject, 'text' => (string) $this->confirmation_email_body],
+            'payment_recovery' => ['subject' => (string) $this->payment_link_email_subject, 'text' => (string) $this->payment_link_email_body],
+            'shipment_tracking' => ['subject' => (string) $this->shipping_email_subject, 'text' => (string) $this->shipping_email_body],
+            'pickup_ready' => ['subject' => (string) $this->pickup_ready_email_subject, 'text' => (string) $this->pickup_ready_email_body],
+            'local_delivery' => ['subject' => (string) $this->local_delivery_email_subject, 'text' => (string) $this->local_delivery_email_body],
+            default => [],
+        };
+    }
+
+    protected static function normalizeNotificationTemplatesJson(mixed $value): string {
+        return self::encodeNotificationTemplates(self::decodeNotificationTemplates($value));
+    }
+
+    protected static function decodeNotificationTemplates(mixed $value): array {
+        $decoded = is_array($value) ? $value : json_decode((string) $value, true);
+        if (!is_array($decoded)) return [];
+        $normalized = [];
+        foreach (MercatoEmailEventCatalog::EVENTS as $event) {
+            $row = (array) ($decoded[$event] ?? []);
+            if (!$row) continue;
+            $subject = mb_substr(trim(str_replace(["\r", "\n"], ' ', (string) ($row['subject'] ?? ''))), 0, 240);
+            $text = mb_substr(trim((string) ($row['text'] ?? '')), 0, 100000);
+            $html = mb_substr(MercatoEmailTemplateRenderer::sanitizeHtml(trim((string) ($row['html'] ?? ''))), 0, 100000);
+            if ($subject === '' || $text === '' || $html === '') continue;
+            $normalized[$event] = ['subject' => $subject, 'text' => $text, 'html' => $html, 'updated_at' => mb_substr(trim((string) ($row['updated_at'] ?? '')), 0, 40)];
+        }
+        return $normalized;
+    }
+
+    protected static function encodeNotificationTemplates(array $templates): string {
+        return json_encode($templates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}';
+    }
+
+    protected static function defaultNotificationHtml(string $text): string {
+        $paragraphs = preg_split('/\R{2,}/', trim($text)) ?: [];
+        $html = '';
+        foreach ($paragraphs as $paragraph) {
+            $html .= '<p>' . nl2br(htmlspecialchars(trim((string) $paragraph), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
+        }
+        return $html !== '' ? $html : '<p>Transactional update</p>';
+    }
+
+    protected function requireNotificationTemplateAdmin(User $user): void {
+        if (!$user->isSuperuser() && !$user->hasPermission('mercato-admin')) throw new WirePermissionException('You cannot edit transactional email templates.');
+    }
+
+    protected function persistNotificationTemplateConfig(array $changes): void {
+        $modules = $this->wire('modules');
+        $config = array_merge(self::getDefaultConfig(), (array) $modules->getConfig('Mercato'), $changes);
+        if (!$modules->saveConfig('Mercato', $config)) throw new WireException('Transactional email settings could not be saved.');
+        foreach ($changes as $key => $value) $this->set($key, $value);
+    }
+
     public function emailWebhookService(): MercatoEmailWebhookService {
         if (!$this->emailWebhookService) {
             $this->emailWebhookService = new MercatoEmailWebhookService($this);
@@ -173,9 +311,29 @@ trait MercatoStoreServices {
         return $this->emailWebhookService;
     }
 
+    public function ___pushTransport(MercatoPushTransportInterface $default): MercatoPushTransportInterface { return $default; }
+
+    public function pushNotificationService(): MercatoPushNotificationService {
+        if (!$this->pushNotificationService) {
+            $transport = $this->pushTransport(new MercatoApnsTransport($this));
+            $this->pushNotificationService = new MercatoPushNotificationService($this, $transport);
+            $this->pushNotificationService->setWire($this->wire());
+        }
+        return $this->pushNotificationService;
+    }
+
     public function seoService(): MercatoSeoService {
         if (!$this->seoService) { $this->seoService = new MercatoSeoService($this); $this->seoService->setWire($this->wire()); }
         return $this->seoService;
+    }
+
+    public function seoOwner(): string {
+        $modules = $this->wire('modules');
+        return MercatoSeoOwnership::resolve((bool) ($modules && $modules->isInstalled('Ichiban')));
+    }
+
+    public function usesBuiltInSeo(): bool {
+        return $this->seoOwner() === MercatoSeoOwnership::MERCATO;
     }
 
     public function privacyService(): MercatoPrivacyService {
@@ -275,13 +433,21 @@ trait MercatoStoreServices {
         return $service;
     }
 
+    public function marketService(): MercatoMarketService {
+        $this->requireArchitectureClasses();
+        if (!$this->marketService) { $this->marketService = new MercatoMarketService($this); $this->marketService->setWire($this->wire()); }
+        return $this->marketService;
+    }
+
     public function getHeadlessCheckoutQuote(array $items, array $customerData = [], array $options = []): array {
+        $market = $this->marketService()->resolve((string) ($options['market_id'] ?? ''));
+        $customerData['mrc_market_id'] = $market['id'];
         foreach ($items as $key => $item) {
             if (!is_array($item)) continue;
             $reference = $item['product_id'] ?? $item['id'] ?? '';
             $product = $reference !== '' ? $this->wire('pages')->get($reference) : null;
             if ($product && $product->id && $product->template && $product->template->name === 'mrc-product') {
-                $items[$key] = $this->variantService()->hydrateItem($product, $item);
+                $items[$key] = $this->marketService()->applyToItem($product, $this->variantService()->hydrateItem($product, $item), $market['id']);
             }
         }
         $cart = $this->productList($items);
@@ -293,8 +459,9 @@ trait MercatoStoreServices {
         if (empty($discount['valid'])) {
             $discount = ['valid' => false, 'code' => '', 'amount' => 0.0];
         }
+        $this->marketService()->assertDiscountSupported($discount, $market);
 
-        $methods = $this->fulfilmentService()->getCheckoutMethods($cart, $customerData);
+        $methods = $this->marketService()->applyToFulfilmentMethods($this->fulfilmentService()->getCheckoutMethods($cart, $customerData), $market);
         $selectedType = trim((string) ($options['fulfilment_method'] ?? ''));
         $selected = [];
         foreach ($methods as $method) {
@@ -317,7 +484,7 @@ trait MercatoStoreServices {
         $shipping = round(max(0.0, (float) ($selected['amount'] ?? 0)), 2);
         $discount = $this->discountService()->applyFinalShippingAmount($discount, $shipping);
         $discountAmount = round(max(0.0, (float) ($discount['amount'] ?? 0)), 2);
-        $taxQuote = $this->taxService()->estimate($cart, $customerData, $selected, $discount);
+        $taxQuote = $this->taxService()->estimate($cart, $customerData, $selected, $discount, $market['currency']);
         $taxAmount = round(max(0.0, (float) ($taxQuote['total_tax'] ?? 0)), 2);
         $taxAddedToTotal = (string) ($taxQuote['provider'] ?? 'manual') !== 'manual'
             && (string) ($taxQuote['display_mode'] ?? 'included') === 'excluded';
@@ -326,7 +493,9 @@ trait MercatoStoreServices {
         $quote = [
             'items' => $cart->toArray(),
             'item_count' => $cart->count(),
-            'currency' => MercatoCurrency::normalizeCode((string) ($options['currency'] ?? $this->currency ?? 'GBP')),
+            'market_id' => $market['id'],
+            'commerce_context' => $this->marketService()->context($market['id']),
+            'currency' => $market['currency'],
             'subtotal' => $subtotal,
             'shipping' => $shipping,
             'discount' => $discountAmount,
