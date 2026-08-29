@@ -61,7 +61,7 @@ final class MercatoCustomerAccountService extends Wire {
 
     public function profile(User $user): array {
         $this->assertCustomer($user); $addresses = json_decode((string) ($user->mrc_customer_addresses ?? ''), true); $preferences = json_decode((string) ($user->mrc_customer_preferences ?? ''), true);
-        return ['email' => (string) $user->email, 'first_name' => (string) ($user->mrc_first_name ?? ''), 'last_name' => (string) ($user->mrc_last_name ?? ''), 'phone' => (string) ($user->mrc_phone ?? ''), 'addresses' => is_array($addresses) ? $addresses : [], 'preferences' => is_array($preferences) ? $preferences : [], 'revision' => (int) ($user->mrc_customer_revision ?? 0), 'verified' => $this->isVerified($user)];
+        return ['email' => (string) $user->email, 'first_name' => (string) ($user->mrc_first_name ?? ''), 'last_name' => (string) ($user->mrc_last_name ?? ''), 'phone' => (string) ($user->mrc_phone ?? ''), 'addresses' => $this->normalizeAddresses(is_array($addresses) ? $addresses : []), 'preferences' => is_array($preferences) ? $preferences : [], 'revision' => (int) ($user->mrc_customer_revision ?? 0), 'verified' => $this->isVerified($user)];
     }
 
     public function updateProfile(User $user, array $profile, int $expectedRevision): array {
@@ -96,7 +96,26 @@ final class MercatoCustomerAccountService extends Wire {
     private function findByEmail(string $email): ?User { if ($email === '') return null; $safe = $this->wire('sanitizer')->selectorValue($email); $user = $this->wire('users')->get("email=$safe, roles=mercato-customer, include=all"); return $user && $user->id ? $user : null; }
     private function uniqueName(string $email): string { $base = 'customer-' . substr(hash('sha256', $email), 0, 20); $name = $base; $i = 1; while ($this->wire('users')->get("name=" . $this->wire('sanitizer')->selectorValue($name))->id) $name = $base . '-' . ++$i; return $name; }
     private function assertCustomer(User $user): void { if (!$this->isEnabled() || !$user->id || $user->isGuest() || !$user->hasRole('mercato-customer') || !$this->isVerified($user)) throw new WireException($this->commerce->_('Customer account access is required.'), 403); }
-    private function applyProfile(User $user, array $data, bool $includeStructured): void { foreach (['first_name' => 'mrc_first_name', 'last_name' => 'mrc_last_name', 'phone' => 'mrc_phone'] as $key => $field) if ($user->hasField($field)) $user->set($field, substr(trim((string) ($data[$key] ?? $user->get($field))), 0, 200)); if ($includeStructured && isset($data['addresses'])) $user->mrc_customer_addresses = json_encode(array_values(array_slice((array) $data['addresses'], 0, 20)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); if ($includeStructured && isset($data['preferences'])) $user->mrc_customer_preferences = json_encode((array) $data['preferences'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); }
+    private function applyProfile(User $user, array $data, bool $includeStructured): void { foreach (['first_name' => 'mrc_first_name', 'last_name' => 'mrc_last_name', 'phone' => 'mrc_phone'] as $key => $field) if ($user->hasField($field)) $user->set($field, substr(trim((string) ($data[$key] ?? $user->get($field))), 0, 200)); if ($includeStructured && isset($data['addresses'])) $user->mrc_customer_addresses = json_encode($this->normalizeAddresses((array) $data['addresses']), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); if ($includeStructured && isset($data['preferences'])) $user->mrc_customer_preferences = json_encode((array) $data['preferences'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); }
+
+    private function normalizeAddresses(array $addresses): array {
+        $sanitizer = $this->wire('sanitizer');
+        $limits = ['id' => 100, 'label' => 80, 'first_name' => 100, 'last_name' => 100, 'address' => 300, 'city' => 120, 'zip' => 40, 'country' => 2, 'state' => 120, 'note' => 1000];
+        $normalized = [];
+        foreach (array_slice($addresses, 0, 20) as $address) {
+            if (!is_array($address)) continue;
+            $item = [];
+            foreach ($limits as $key => $limit) {
+                $value = trim((string) ($address[$key] ?? ''));
+                if ($value === '') continue;
+                $value = $key === 'note' ? (string) $sanitizer->textarea($value) : (string) $sanitizer->text($value);
+                $item[$key] = function_exists('mb_substr') ? mb_substr($value, 0, $limit) : substr($value, 0, $limit);
+            }
+            if (isset($item['country'])) $item['country'] = strtoupper($item['country']);
+            if ($item !== []) $normalized[] = $item;
+        }
+        return $normalized;
+    }
     private function issueToken(User $user, string $type): string { $token = bin2hex(random_bytes(32)); $field = $type === 'verify' ? 'mrc_customer_verification' : 'mrc_customer_password_reset'; $user->of(false); $user->set($field, json_encode(['hash' => hash('sha256', $token), 'expires' => time() + max(5, (int) ($this->commerce->account_token_ttl_minutes ?? 60)) * 60])); $this->wire('users')->save($user); return $token; }
     private function validToken(?User $user, string $type, string $token): bool { if (!$user || !$user->id || $token === '') return false; $field = $type === 'verify' ? 'mrc_customer_verification' : 'mrc_customer_password_reset'; $data = json_decode((string) $user->get($field), true); return is_array($data) && !MercatoAccountPolicy::tokenExpired((int) ($data['expires'] ?? 0)) && hash_equals((string) ($data['hash'] ?? ''), hash('sha256', $token)); }
     private function clearToken(User $user, string $type): void { $user->set($type === 'verify' ? 'mrc_customer_verification' : 'mrc_customer_password_reset', ''); }
