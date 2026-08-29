@@ -2,8 +2,8 @@
 namespace ProcessWire;
 $site = getenv('MERCATO_TEST_SITE');
 if (!$site) { echo "Mercato payment hardening integration test skipped (set MERCATO_TEST_SITE).\n"; exit(0); }
-$_SERVER['HTTP_HOST'] = 'mercato.dev'; $_SERVER['SERVER_NAME'] = 'mercato.dev'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
-require $site . '/wire/core/ProcessWire.php'; $config = ProcessWire::buildConfig($site); $config->dbHost = 'localhost'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser')); /** @var Mercato $commerce */ $commerce = $wire->modules->get('Mercato');
+$_SERVER['HTTP_HOST'] = 'mercato.test'; $_SERVER['SERVER_NAME'] = 'mercato.test'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
+require $site . '/wire/core/ProcessWire.php'; $config = ProcessWire::buildConfig($site); $config->dbHost = '127.0.0.1'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser')); /** @var Mercato $commerce */ $commerce = $wire->modules->get('Mercato');
 $items = [['id' => 'payment-hardening-fixture', 'product_id' => 999996, 'title' => 'Payment hardening fixture', 'price' => 10, 'quantity' => 1, 'tax_rate' => 0, 'tax_code' => '', 'shipping_price' => 0, 'product_type' => 'service', 'template' => 'fixture', 'uid' => 'payment-hardening-fixture']];
 $order = $commerce->orderRepository()->savePendingOrder(['first_name' => 'Payment', 'last_name' => 'Fixture', 'email' => 'payment-hardening@example.test', 'payment_method' => 'stripe-card', 'payment_status' => MercatoPaymentStatus::PENDING, 'payment_complete' => 0, 'mrc_currency' => 'USD', 'mrc_items' => json_encode($items), 'mrc_subtotal_amount' => 10, 'mrc_total_amount' => 10]);
 $before = [(string) $order->mrc_payment_status, (int) $order->mrc_payment_complete, (int) ($order->mrc_inventory_adjusted ?? 0), (int) ($order->mrc_confirmation_send_count ?? 0)];

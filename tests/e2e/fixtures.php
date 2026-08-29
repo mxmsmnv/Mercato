@@ -14,7 +14,7 @@ if (!in_array($action, ['setup', 'cleanup'], true) || $site === '' || $stateFile
 }
 require $site . '/wire/core/ProcessWire.php';
 $config = ProcessWire::buildConfig($site);
-$config->dbHost = 'localhost';
+$config->dbHost = '127.0.0.1';
 $wire = new ProcessWire($config);
 $commerce = $wire->modules->get('Mercato');
 if (!$commerce || !empty($commerce->production)) {

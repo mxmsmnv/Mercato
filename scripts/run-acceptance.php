@@ -4,13 +4,14 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 $site = rtrim((string) (getenv('MERCATO_E2E_SITE') ?: getenv('MERCATO_TEST_SITE')), '/');
 if ($site === '') { fwrite(STDERR, "Set MERCATO_E2E_SITE to a non-production ProcessWire installation.\n"); exit(2); }
-$baseUrl = (string) (getenv('MERCATO_E2E_BASE_URL') ?: 'https://mercato.dev');
+$baseUrl = (string) (getenv('MERCATO_E2E_BASE_URL') ?: 'https://mercato.test');
 $artifacts = (string) (getenv('MERCATO_E2E_ARTIFACTS') ?: $root . '/artifacts/e2e');
 if (!is_dir($artifacts) && !mkdir($artifacts, 0775, true) && !is_dir($artifacts)) throw new RuntimeException('Cannot create artifacts directory.');
 $state = tempnam(sys_get_temp_dir(), 'mercato-e2e-'); if ($state === false) throw new RuntimeException('Cannot create fixture state file.'); unlink($state);
-$phpArgs = ['-d', 'pdo_mysql.default_socket=/Applications/MAMP/tmp/mysql/mysql.sock', '-d', 'mysqli.default_socket=/Applications/MAMP/tmp/mysql/mysql.sock'];
-$localTls = parse_url($baseUrl, PHP_URL_HOST) === 'mercato.dev' ? '1' : (string) (getenv('MERCATO_E2E_IGNORE_HTTPS_ERRORS') ?: '0');
-$env = array_merge(getenv(), ['MERCATO_E2E_SITE'=>$site, 'MERCATO_TEST_SITE'=>$site, 'MERCATO_E2E_STATE'=>$state, 'MERCATO_E2E_BASE_URL'=>$baseUrl, 'MERCATO_E2E_ARTIFACTS'=>$artifacts, 'MERCATO_E2E_IGNORE_HTTPS_ERRORS'=>$localTls, 'MERCATO_MYSQL_SOCKET'=>'/Applications/MAMP/tmp/mysql/mysql.sock']);
+$mysqlSocket = trim((string) getenv('MERCATO_MYSQL_SOCKET'));
+$phpArgs = $mysqlSocket === '' ? [] : ['-d', "pdo_mysql.default_socket={$mysqlSocket}", '-d', "mysqli.default_socket={$mysqlSocket}"];
+$localTls = parse_url($baseUrl, PHP_URL_HOST) === 'mercato.test' ? '1' : (string) (getenv('MERCATO_E2E_IGNORE_HTTPS_ERRORS') ?: '0');
+$env = array_merge(getenv(), ['MERCATO_E2E_SITE'=>$site, 'MERCATO_TEST_SITE'=>$site, 'MERCATO_E2E_STATE'=>$state, 'MERCATO_E2E_BASE_URL'=>$baseUrl, 'MERCATO_E2E_ARTIFACTS'=>$artifacts, 'MERCATO_E2E_IGNORE_HTTPS_ERRORS'=>$localTls]);
 $results = [];
 function runAcceptance(string $name, array $command, string $expected, array $env, string $cwd): int {
     global $results; $started = microtime(true);

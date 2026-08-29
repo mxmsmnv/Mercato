@@ -1,7 +1,7 @@
 <?php
 namespace ProcessWire;
 $site = getenv('MERCATO_TEST_SITE'); if (!$site) { echo "Mercato customer account integration test skipped (set MERCATO_TEST_SITE).\n"; exit(0); } if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-$_SERVER['HTTP_HOST']='mercato.dev'; $_SERVER['SERVER_NAME']='mercato.dev'; $_SERVER['REQUEST_URI']='/'; $_SERVER['SCRIPT_NAME']='/index.php'; $_SERVER['SCRIPT_FILENAME']=$site.'/index.php';
+$_SERVER['HTTP_HOST']='mercato.test'; $_SERVER['SERVER_NAME']='mercato.test'; $_SERVER['REQUEST_URI']='/'; $_SERVER['SCRIPT_NAME']='/index.php'; $_SERVER['SCRIPT_FILENAME']=$site.'/index.php';
 require $site.'/wire/core/ProcessWire.php'; $config=ProcessWire::buildConfig($site); $config->dbHost='127.0.0.1'; $wire=new ProcessWire($config); $super=$wire->users->get('template=user, roles.name=superuser'); $wire->users->setCurrentUser($super); /** @var Mercato $commerce */ $commerce=$wire->modules->get('Mercato');
 $originalMode=$commerce->customer_accounts_mode; $originalSender=$commerce->notification_sender_email; $commerce->set('customer_accounts_mode','optional'); $commerce->set('notification_sender_email',''); $service=$commerce->customerAccountService(); $email='account-'.bin2hex(random_bytes(5)).'@example.test'; $password='Test-account-42!';
 $registered=$service->register($email,$password,['first_name'=>'Account','last_name'=>'Fixture']); $duplicate=$service->register($email,$password); if (($registered['message']??'')!==($duplicate['message']??'')) throw new \RuntimeException('Registration leaks account existence.');

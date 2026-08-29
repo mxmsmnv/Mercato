@@ -7,14 +7,14 @@ if (!$site) {
     exit(0);
 }
 
-$_SERVER['HTTP_HOST'] = 'mercato.dev';
-$_SERVER['SERVER_NAME'] = 'mercato.dev';
+$_SERVER['HTTP_HOST'] = 'mercato.test';
+$_SERVER['SERVER_NAME'] = 'mercato.test';
 $_SERVER['REQUEST_URI'] = '/';
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
 require $site . '/wire/core/ProcessWire.php';
 $config = ProcessWire::buildConfig($site);
-$config->dbHost = 'localhost';
+$config->dbHost = '127.0.0.1';
 $wire = new ProcessWire($config);
 $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser'));
 /** @var Mercato $commerce */
