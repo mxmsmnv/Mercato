@@ -2,8 +2,8 @@
 namespace ProcessWire;
 $site = getenv('MERCATO_TEST_SITE');
 if (!$site) { echo "Mercato email delivery integration test skipped (set MERCATO_TEST_SITE).\n"; exit(0); }
-$_SERVER['HTTP_HOST'] = 'mercato.dev'; $_SERVER['SERVER_NAME'] = 'mercato.dev'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
-require $site . '/wire/core/ProcessWire.php'; $config = ProcessWire::buildConfig($site); $config->dbHost = 'localhost'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser')); /** @var Mercato $commerce */ $commerce = $wire->modules->get('Mercato');
+$_SERVER['HTTP_HOST'] = 'mercato.test'; $_SERVER['SERVER_NAME'] = 'mercato.test'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
+require $site . '/wire/core/ProcessWire.php'; $config = ProcessWire::buildConfig($site); $config->dbHost = '127.0.0.1'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser')); /** @var Mercato $commerce */ $commerce = $wire->modules->get('Mercato');
 
 final class EmailRetryFixture implements MercatoEmailTransportInterface {
     public int $calls = 0;
@@ -23,7 +23,7 @@ $localized = $service->preview('payment_failed', ['invoice' => 'MRC-LOCAL', 'cus
 if (($localized['text'] ?? '') !== 'Localized MRC-LOCAL for Localized Customer' || !str_contains((string) ($localized['html'] ?? ''), '#123456')) throw new \RuntimeException('Localized override or branding render failed.');
 $key = 'email-integration-' . bin2hex(random_bytes(8));
 $recipient = 'email-' . bin2hex(random_bytes(6)) . '@example.test';
-$first = $service->deliver('payment_failed', $recipient, ['invoice' => 'MRC-TEST', 'customer' => 'Customer', 'reason' => 'Declined', 'payment_link' => 'https://mercato.dev/pay?token=signed', 'order_status_link' => 'https://mercato.dev/status?token=signed'], ['idempotency_key' => $key, 'business_event_id' => $key]);
+$first = $service->deliver('payment_failed', $recipient, ['invoice' => 'MRC-TEST', 'customer' => 'Customer', 'reason' => 'Declined', 'payment_link' => 'https://mercato.test/pay?token=signed', 'order_status_link' => 'https://mercato.test/status?token=signed'], ['idempotency_key' => $key, 'business_event_id' => $key]);
 if (($first['status'] ?? '') !== 'sent' || $transport->calls !== 2 || ($first['retry_count'] ?? -1) !== 1 || ($first['provider_message_id'] ?? '') !== 'message-fixture') throw new \RuntimeException('Transport retry/audit flow failed.');
 $duplicate = $service->deliver('payment_failed', $recipient, [], ['idempotency_key' => $key]);
 if (($duplicate['status'] ?? '') !== 'skipped' || $transport->calls !== 2) throw new \RuntimeException('Duplicate email event was not idempotent.');

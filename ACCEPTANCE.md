@@ -19,7 +19,9 @@ MERCATO_E2E_BASE_URL=https://shop.test \
 php scripts/run-acceptance.php
 ```
 
-For a local self-signed certificate, add `MERCATO_E2E_IGNORE_HTTPS_ERRORS=1`. The bundled `mercato.dev` development target enables this automatically; release/staging targets must use a trusted certificate.
+For a local self-signed certificate, add `MERCATO_E2E_IGNORE_HTTPS_ERRORS=1`. The bundled `mercato.test` development target enables this automatically; release/staging targets must use a trusted certificate. The public native-app tunnel is `https://mercato.smnv.org` and must retain a trusted certificate.
+
+The local Yerd target uses its configured MySQL TCP endpoint. Set `MERCATO_MYSQL_SOCKET` only when an alternative installation explicitly requires a Unix socket.
 
 Production mode must be disabled. Fixture setup refuses to run otherwise. The cleanup uses the generated run ID and exact created page IDs; it never deletes arbitrary catalog or order records. Run against an isolated acceptance database or a disposable staging copy, never a merchant's production database.
 

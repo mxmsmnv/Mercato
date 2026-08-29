@@ -2,7 +2,7 @@
 namespace ProcessWire;
 $site = getenv('MERCATO_TEST_SITE');
 if (!$site) { echo "Mercato privacy integration test skipped (set MERCATO_TEST_SITE).\n"; exit(0); }
-$_SERVER['HTTP_HOST'] = 'mercato.dev'; $_SERVER['SERVER_NAME'] = 'mercato.dev'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
+$_SERVER['HTTP_HOST'] = 'mercato.test'; $_SERVER['SERVER_NAME'] = 'mercato.test'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
 require $site . '/wire/core/ProcessWire.php'; $config = ProcessWire::buildConfig($site); $config->dbHost = '127.0.0.1'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser')); /** @var Mercato $commerce */ $commerce = $wire->modules->get('Mercato');
 $originalModuleConfig = (array) $wire->modules->getConfig('Mercato'); $originalSuppressed = $originalModuleConfig['recovery_suppressed_emails'] ?? '';
 $email = 'privacy-' . bin2hex(random_bytes(6)) . '@example.test'; $items = [['id' => 'privacy-fixture', 'product_id' => 999991, 'title' => 'Privacy fixture', 'sku' => 'PRIVACY-1', 'price' => 42, 'quantity' => 1, 'tax_rate' => 0, 'product_type' => 'service', 'uid' => 'privacy-fixture']];

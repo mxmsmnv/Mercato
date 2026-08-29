@@ -13,7 +13,7 @@ module.exports = defineConfig({
   expect: { timeout: 10000 },
   outputDir: path.join(artifacts, 'results'),
   reporter: [['list'], ['json', { outputFile: path.join(artifacts, 'playwright.json') }], ['html', { outputFolder: path.join(artifacts, 'html'), open: 'never' }]],
-  use: { baseURL: process.env.MERCATO_E2E_BASE_URL || 'https://mercato.dev', trace: 'retain-on-failure', screenshot: 'only-on-failure', video: 'retain-on-failure', ignoreHTTPSErrors: process.env.MERCATO_E2E_IGNORE_HTTPS_ERRORS === '1' },
+  use: { baseURL: process.env.MERCATO_E2E_BASE_URL || 'https://mercato.test', trace: 'retain-on-failure', screenshot: 'only-on-failure', video: 'retain-on-failure', ignoreHTTPSErrors: process.env.MERCATO_E2E_IGNORE_HTTPS_ERRORS === '1' },
   projects: [
     { name: 'chromium-desktop', use: { ...devices['Desktop Chrome'] } },
     { name: 'chromium-mobile', use: { ...devices['Pixel 7'] } },

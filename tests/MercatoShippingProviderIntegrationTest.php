@@ -3,9 +3,9 @@ namespace ProcessWire;
 
 $site = getenv('MERCATO_TEST_SITE');
 if (!$site) { echo "Mercato shipping provider integration test skipped (set MERCATO_TEST_SITE).\n"; exit(0); }
-$_SERVER['HTTP_HOST'] = 'mercato.dev'; $_SERVER['SERVER_NAME'] = 'mercato.dev'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
+$_SERVER['HTTP_HOST'] = 'mercato.test'; $_SERVER['SERVER_NAME'] = 'mercato.test'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
 require $site . '/wire/core/ProcessWire.php';
-$config = ProcessWire::buildConfig($site); $config->dbHost = 'localhost'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser'));
+$config = ProcessWire::buildConfig($site); $config->dbHost = '127.0.0.1'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser'));
 /** @var Mercato $commerce */ $commerce = $wire->modules->get('Mercato');
 $expect = static function (bool $condition, string $message): void { if (!$condition) throw new \RuntimeException($message); };
 final class ShippingFailureFixture implements MercatoShippingProviderInterface {
