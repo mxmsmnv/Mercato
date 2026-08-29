@@ -715,6 +715,7 @@ trait MercatoStoreServices {
             'email' => (string) ($data['email'] ?? ''),
             'phone' => (string) ($data['phone'] ?? ''),
             'address' => (string) ($data['address'] ?? ''),
+            'address_2' => (string) ($data['address_2'] ?? $data['address_line_2'] ?? ''),
             'city' => (string) ($data['city'] ?? ''),
             'zip' => (string) ($data['zip'] ?? ''),
             'country' => strtoupper((string) ($data['country'] ?? '')),
@@ -738,6 +739,7 @@ trait MercatoStoreServices {
             $pickupLocation = $pickupLocations[$pickupLocationKey] ?? reset($pickupLocations) ?: [];
             $shipping['type'] = 'pickup';
             $shipping['address'] = '';
+            $shipping['address_2'] = '';
             $shipping['city'] = '';
             $shipping['zip'] = '';
             $shipping['country'] = '';

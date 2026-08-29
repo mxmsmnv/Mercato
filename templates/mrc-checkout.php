@@ -282,6 +282,7 @@ $values = [
     'email' => $input->post->email('email'),
     'phone' => $input->post->text('phone'),
     'address' => $input->post->text('address'),
+    'address_2' => $input->post->text('address_2'),
     'city' => $input->post->text('city'),
     'zip' => $input->post->text('zip'),
     'country' => $postedCountry !== '' ? $postedCountry : $defaultCountry,
@@ -299,7 +300,7 @@ if (!$input->post('mrc_action') && !$paymentLinkOrder && $commerce->customerAcco
     $accountAddress = (array) ($accountProfile['addresses'][0] ?? []);
     foreach (['first_name', 'last_name', 'phone'] as $profileKey) if ($values[$profileKey] === '') $values[$profileKey] = (string) ($accountProfile[$profileKey] ?? '');
     $values['email'] = (string) $accountProfile['email'];
-    foreach (['address', 'city', 'zip', 'country'] as $addressKey) if ($values[$addressKey] === '' || ($addressKey === 'country' && $values[$addressKey] === $defaultCountry)) $values[$addressKey] = (string) ($accountAddress[$addressKey] ?? $values[$addressKey]);
+    foreach (['address', 'address_2', 'city', 'zip', 'country'] as $addressKey) if ($values[$addressKey] === '' || ($addressKey === 'country' && $values[$addressKey] === $defaultCountry)) $values[$addressKey] = (string) ($accountAddress[$addressKey] ?? $values[$addressKey]);
 }
 
 if ($paymentLinkOrder && !$input->post('mrc_action')) {
@@ -314,6 +315,7 @@ if ($paymentLinkOrder && !$input->post('mrc_action')) {
         'email' => (string) $paymentLinkOrder->mrc_email,
         'phone' => (string) $paymentLinkOrder->mrc_phone,
         'address' => (string) $paymentLinkOrder->mrc_address,
+        'address_2' => $paymentLinkOrder->hasField('mrc_address_2') ? (string) $paymentLinkOrder->mrc_address_2 : '',
         'city' => (string) $paymentLinkOrder->mrc_city,
         'zip' => (string) $paymentLinkOrder->mrc_zip,
         'country' => strtoupper((string) ($paymentLinkOrder->mrc_country ?: $defaultCountry)),
@@ -1018,6 +1020,10 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
                             <div class="<?= $ui['fieldWide'] ?>">
                                 <label for="mrc-address">Address</label>
                                 <input class="<?= $ui['input'] ?>" id="mrc-address" name="address" value="<?= $sanitizer->entities($values['address']) ?>" data-mrc-delivery-required <?= $deliveryAddressRequired ? 'required' : '' ?>>
+                            </div>
+                            <div class="<?= $ui['fieldWide'] ?>">
+                                <label for="mrc-address-2">Apartment, suite, unit or building <span aria-hidden="true">(optional)</span></label>
+                                <input class="<?= $ui['input'] ?>" id="mrc-address-2" name="address_2" value="<?= $sanitizer->entities($values['address_2']) ?>" autocomplete="address-line2">
                             </div>
                             <div class="<?= $ui['field'] ?>">
                                 <label for="mrc-city">City</label>

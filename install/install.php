@@ -65,6 +65,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         ['name' => 'mrc_email',                    'type' => $emailType,          'label' => 'Email'],
         ['name' => 'mrc_phone',                    'type' => 'FieldtypeText',     'label' => 'Phone'],
         ['name' => 'mrc_address',                  'type' => 'FieldtypeText',     'label' => 'Address'],
+        ['name' => 'mrc_address_2',                'type' => 'FieldtypeText',     'label' => 'Address Line 2'],
         ['name' => 'mrc_city',                     'type' => 'FieldtypeText',     'label' => 'City'],
         ['name' => 'mrc_zip',                      'type' => 'FieldtypeText',     'label' => 'ZIP / Postal Code'],
         ['name' => 'mrc_country',                  'type' => 'FieldtypeText',     'label' => 'Country'],
@@ -245,7 +246,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         foreach ([
             'title', 'mrc_invoice_number', 'mrc_invoice_date',
             'mrc_first_name', 'mrc_last_name', 'mrc_email',
-            'mrc_phone', 'mrc_address', 'mrc_city', 'mrc_zip',
+            'mrc_phone', 'mrc_address', 'mrc_address_2', 'mrc_city', 'mrc_zip',
             'mrc_country', 'mrc_billing_address', 'mrc_shipping_address', 'mrc_notes', 'mrc_payment_method',
             'mrc_payment_status', 'mrc_payment_complete', 'mrc_paid_date',
             'mrc_payment_details', 'mrc_receipt_details', 'mrc_status_token_seed',
@@ -314,7 +315,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
             'mrc_quote_expires', 'mrc_quote_details', 'mrc_quote_token_seed',
             'mrc_quote_customer_user_id',
             'mrc_first_name', 'mrc_last_name', 'mrc_email', 'mrc_phone',
-            'mrc_address', 'mrc_city', 'mrc_zip', 'mrc_country', 'mrc_notes',
+            'mrc_address', 'mrc_address_2', 'mrc_city', 'mrc_zip', 'mrc_country', 'mrc_notes',
             'mrc_items', 'mrc_currency', 'mrc_subtotal_amount', 'mrc_shipping_amount',
             'mrc_discount_code', 'mrc_discount_total', 'mrc_total_amount',
             'mrc_fulfilment_method', 'mrc_fulfilment_label', 'mrc_fulfilment_details',
@@ -537,7 +538,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
     $orderTemplate = $wire->templates->get('mrc-order');
     if ($orderTemplate) {
         $added = false;
-        foreach (['mrc_billing_address', 'mrc_shipping_address', 'mrc_payment_status', 'mrc_mollie_payment_id', 'mrc_receipt_details', 'mrc_status_token_seed', 'mrc_subscription_id', 'mrc_subscription_status', 'mrc_subscription_current_period_end', 'mrc_subscription_cancel_at_period_end', 'mrc_subscription_canceled_at', 'mrc_subscription_cancel_details', 'mrc_subscription_details', 'mrc_subscription_renewal_details', 'mrc_stripe_customer_id', 'mrc_policy_accepted', 'mrc_policy_acceptance_details', 'mrc_confirmation_sent_date', 'mrc_confirmation_send_count', 'mrc_refunded_amount', 'mrc_refund_pending_amount', 'mrc_refunded_date', 'mrc_refund_details', 'mrc_download_details', 'mrc_subtotal_amount', 'mrc_shipping_amount', 'mrc_discount_code', 'mrc_discount_total', 'mrc_discount_details', 'mrc_total_amount', 'mrc_tax_amount', 'mrc_tax_details', 'mrc_tax_provider_reference', 'mrc_tax_committed', 'mrc_inventory_reserved', 'mrc_inventory_reserved_until', 'mrc_inventory_adjusted', 'mrc_inventory_refund_restored', 'mrc_inventory_details', 'mrc_fulfilment_status', 'mrc_fulfilment_method', 'mrc_fulfilment_label', 'mrc_fulfilment_details', 'mrc_fulfilment_tracking', 'mrc_fulfilment_tracking_url', 'mrc_fulfilment_notes', 'mrc_fulfilled_date', 'mrc_privacy_legal_hold', 'mrc_privacy_anonymized_date', 'mrc_privacy_details', 'mrc_customer_user_id', 'mrc_customer_claim_details', 'mrc_analytics_details', 'mrc_api_checkout_id', 'mrc_api_order_id', 'mrc_api_details'] as $fieldName) {
+        foreach (['mrc_address_2', 'mrc_billing_address', 'mrc_shipping_address', 'mrc_payment_status', 'mrc_mollie_payment_id', 'mrc_receipt_details', 'mrc_status_token_seed', 'mrc_subscription_id', 'mrc_subscription_status', 'mrc_subscription_current_period_end', 'mrc_subscription_cancel_at_period_end', 'mrc_subscription_canceled_at', 'mrc_subscription_cancel_details', 'mrc_subscription_details', 'mrc_subscription_renewal_details', 'mrc_stripe_customer_id', 'mrc_policy_accepted', 'mrc_policy_acceptance_details', 'mrc_confirmation_sent_date', 'mrc_confirmation_send_count', 'mrc_refunded_amount', 'mrc_refund_pending_amount', 'mrc_refunded_date', 'mrc_refund_details', 'mrc_download_details', 'mrc_subtotal_amount', 'mrc_shipping_amount', 'mrc_discount_code', 'mrc_discount_total', 'mrc_discount_details', 'mrc_total_amount', 'mrc_tax_amount', 'mrc_tax_details', 'mrc_tax_provider_reference', 'mrc_tax_committed', 'mrc_inventory_reserved', 'mrc_inventory_reserved_until', 'mrc_inventory_adjusted', 'mrc_inventory_refund_restored', 'mrc_inventory_details', 'mrc_fulfilment_status', 'mrc_fulfilment_method', 'mrc_fulfilment_label', 'mrc_fulfilment_details', 'mrc_fulfilment_tracking', 'mrc_fulfilment_tracking_url', 'mrc_fulfilment_notes', 'mrc_fulfilled_date', 'mrc_privacy_legal_hold', 'mrc_privacy_anonymized_date', 'mrc_privacy_details', 'mrc_customer_user_id', 'mrc_customer_claim_details', 'mrc_analytics_details', 'mrc_api_checkout_id', 'mrc_api_order_id', 'mrc_api_details'] as $fieldName) {
             if ($orderTemplate->fieldgroup->hasField($fieldName)) continue;
             $field = $wire->fields->get($fieldName);
             if ($field) {
@@ -566,7 +567,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
             'mrc_quote_number', 'mrc_quote_status', 'mrc_quote_amount', 'mrc_quote_expires',
             'mrc_quote_details', 'mrc_quote_token_seed', 'mrc_first_name', 'mrc_last_name',
             'mrc_quote_customer_user_id',
-            'mrc_email', 'mrc_phone', 'mrc_address', 'mrc_city', 'mrc_zip', 'mrc_country',
+            'mrc_email', 'mrc_phone', 'mrc_address', 'mrc_address_2', 'mrc_city', 'mrc_zip', 'mrc_country',
             'mrc_notes', 'mrc_items', 'mrc_currency', 'mrc_subtotal_amount',
             'mrc_shipping_amount', 'mrc_discount_code', 'mrc_discount_total',
             'mrc_total_amount', 'mrc_fulfilment_method', 'mrc_fulfilment_label',

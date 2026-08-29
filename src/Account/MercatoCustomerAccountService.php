@@ -100,7 +100,7 @@ final class MercatoCustomerAccountService extends Wire {
 
     private function normalizeAddresses(array $addresses): array {
         $sanitizer = $this->wire('sanitizer');
-        $limits = ['id' => 100, 'label' => 80, 'first_name' => 100, 'last_name' => 100, 'address' => 300, 'city' => 120, 'zip' => 40, 'country' => 2, 'state' => 120, 'note' => 1000];
+        $limits = ['id' => 100, 'label' => 80, 'first_name' => 100, 'last_name' => 100, 'address' => 300, 'address_2' => 300, 'city' => 120, 'zip' => 40, 'country' => 2, 'state' => 120, 'note' => 1000];
         $normalized = [];
         foreach (array_slice($addresses, 0, 20) as $address) {
             if (!is_array($address)) continue;

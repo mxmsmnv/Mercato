@@ -75,6 +75,7 @@ final class MercatoQuoteService extends Wire {
             $page->mrc_email = $email;
             $page->mrc_phone = (string) ($data['phone'] ?? '');
             $page->mrc_address = (string) ($data['address'] ?? '');
+            if ($page->hasField('mrc_address_2')) $page->mrc_address_2 = (string) ($data['address_2'] ?? $data['address_line_2'] ?? '');
             $page->mrc_city = (string) ($data['city'] ?? '');
             $page->mrc_zip = (string) ($data['zip'] ?? '');
             $page->mrc_country = (string) ($data['country'] ?? '');
