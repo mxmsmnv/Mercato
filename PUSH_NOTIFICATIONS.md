@@ -25,8 +25,12 @@ The default transport uses APNs token authentication over HTTP/2. A deployment c
   "environment": "sandbox",
   "bundle_id": "org.example.store",
   "locale": "en_GB",
-  "topics": ["order_updates"]
+  "topics": ["order_status", "payment_updates", "delivery_updates", "account_security"]
 }
 ```
 
 Use a unique `Idempotency-Key` header. Guest registration additionally includes `order_id`; account registration does not.
+
+Clients can subscribe to `order_status`, `payment_updates`, `delivery_updates`, and `account_security` independently. The legacy `order_updates` topic remains supported as an all-transactional-events subscription for backward compatibility. Unsupported topic names are discarded during registration.
+
+Event routing is fixed by Mercato: payment failures, recovery, and refunds use `payment_updates`; shipment, pickup, and local-delivery events use `delivery_updates`; security events use `account_security`; all other order lifecycle events use `order_status`.
