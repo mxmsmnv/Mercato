@@ -14,7 +14,7 @@ final class MercatoInstallBootstrapHarness {
     }
 
     public function getEnabledPaymentMethods(): array {
-        return ['bank-transfer'];
+        return ['stripe-card', 'bank-transfer'];
     }
 
     public function wire(?string $name = null): mixed {
@@ -27,6 +27,9 @@ $report = $harness->getRuntimeCompatibilityReport();
 
 if ($harness->architectureBootstrapCalls !== 1) {
     throw new \RuntimeException('Runtime preflight did not bootstrap architecture classes.');
+}
+if (!class_exists('Stripe\\StripeClient') || empty($report['stripe_sdk'])) {
+    throw new \RuntimeException('Fresh-install runtime preflight did not bootstrap Composer dependencies.');
 }
 if (empty($report['ready'])) {
     throw new \RuntimeException('Fresh-install runtime preflight failed: ' . implode(' ', (array) ($report['errors'] ?? [])));

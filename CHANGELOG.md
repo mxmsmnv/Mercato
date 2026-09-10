@@ -9,6 +9,14 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ## [Unreleased]
 
+### Added
+
+- Native push registrations can independently select order-status, payment, delivery, and account-security notifications while retaining the legacy all-events topic.
+
+### Fixed
+
+- Fresh ProcessWire installation preflight now loads Mercato's Composer autoloader before checking enabled Stripe methods, preventing false `stripe/stripe-php is missing` failures after a successful dependency install (issues #17 and #18).
+
 ## [1.4.1] - 2026-08-28
 
 ### Fixed

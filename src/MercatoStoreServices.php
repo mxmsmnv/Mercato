@@ -348,10 +348,18 @@ trait MercatoStoreServices {
 
     public function getRuntimeCompatibilityReport(): array {
         // ProcessWire can call install() before the module's init() lifecycle hook.
-        // Keep this public preflight safe on a fresh installation where neither
-        // the Composer classmap nor requireGatewayClasses() has run yet.
+        // Load both Composer dependencies and Mercato architecture classes here;
+        // neither init() nor requireGatewayClasses() is guaranteed to have run.
+        $this->requireComposerAutoloader();
         $this->requireArchitectureClasses();
         return MercatoRuntimeCompatibility::report($this->getEnabledPaymentMethods(), (string) ($this->wire('config')->version ?? ''));
+    }
+
+    protected function requireComposerAutoloader(): bool {
+        $autoload = dirname(__DIR__) . '/vendor/autoload.php';
+        if (!is_file($autoload)) return false;
+        require_once $autoload;
+        return true;
     }
 
     public function operationalService(): MercatoOperationalService {

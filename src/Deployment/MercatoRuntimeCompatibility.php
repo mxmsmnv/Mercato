@@ -13,7 +13,7 @@ final class MercatoRuntimeCompatibility {
         if ($processWireVersion !== '' && version_compare($processWireVersion, self::MIN_PROCESSWIRE, '<')) $errors[] = 'Mercato requires ProcessWire ' . self::MIN_PROCESSWIRE . ' or newer; found ' . $processWireVersion . '.';
         foreach (self::REQUIRED_EXTENSIONS as $extension) if (!extension_loaded($extension)) $errors[] = "Mercato requires the PHP extension ext-$extension.";
         $stripeEnabled = count(array_filter($enabledPaymentMethods, static fn($method) => str_starts_with((string) $method, 'stripe-'))) > 0;
-        if ($stripeEnabled && !class_exists('Stripe\\StripeClient')) $errors[] = 'Stripe is enabled but stripe/stripe-php is missing. Run `composer install --no-dev --classmap-authoritative` inside the Mercato module directory, or deploy the complete release artifact.';
+        if ($stripeEnabled && !class_exists('Stripe\\StripeClient')) $errors[] = 'Stripe is enabled but the Stripe SDK is not autoloadable. Ensure `vendor/autoload.php` and `stripe/stripe-php` are present by running `composer install --no-dev --classmap-authoritative` inside the Mercato module directory, or deploy the complete release artifact.';
         if (!extension_loaded('curl')) $warnings[] = 'ext-curl is recommended for payment and provider HTTP requests; confirm ProcessWire WireHttp has a supported transport.';
         return ['ready' => !$errors, 'errors' => $errors, 'warnings' => $warnings, 'versions' => ['php' => PHP_VERSION, 'processwire' => $processWireVersion], 'extensions' => array_fill_keys(self::REQUIRED_EXTENSIONS, true), 'stripe_enabled' => $stripeEnabled, 'stripe_sdk' => class_exists('Stripe\\StripeClient')];
     }

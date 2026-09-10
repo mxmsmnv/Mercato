@@ -319,10 +319,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public function init(): void {
         // Load vendor autoloader FIRST — class files below contain \Stripe\* type hints
         // that PHP resolves at parse time and will Fatal if the class doesn't exist.
-        $autoload = __DIR__ . '/vendor/autoload.php';
-        if (file_exists($autoload)) {
-            require_once $autoload;
-        }
+        $this->requireComposerAutoloader();
 
         require_once __DIR__ . '/MercatoProductList.php';    // base class — must load first
         require_once __DIR__ . '/MercatoCart.php';           // extends MercatoProductList
