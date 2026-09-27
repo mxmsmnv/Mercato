@@ -14,7 +14,7 @@ trait MercatoMcpProviderTrait {
         return [
             'name' => 'mercato',
             'title' => 'Mercato Commerce',
-            'version' => '1.4.1',
+            'version' => $this->wire('modules')->formatVersion(self::MODULE_VERSION),
         ];
     }
 

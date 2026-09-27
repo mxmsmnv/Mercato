@@ -16,7 +16,7 @@ trait ProcessMercatoOrderDetailPanels {
         $out .= '<a class="uk-button uk-button-default" href="' . $this->e($this->orderDetailUrl($order)) . '"><i class="fa fa-file-text-o uk-margin-small-right"></i>' . $this->e($this->_('Order detail')) . '</a>';
         $out .= '<a class="uk-button uk-button-default" href="' . $this->e($this->editUrl($order)) . '"><i class="fa fa-pencil uk-margin-small-right"></i>' . $this->e($this->_('Edit order')) . '</a>';
         $out .= '</div></div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr><th>' . $this->e($this->_('Time')) . '</th><th>' . $this->e($this->_('Area')) . '</th><th>' . $this->e($this->_('Event')) . '</th><th>' . $this->e($this->_('Details')) . '</th></tr></thead><tbody>';
         foreach ($events as $event) {
             $out .= '<tr>';
@@ -267,7 +267,7 @@ trait ProcessMercatoOrderDetailPanels {
             $out .= '</div>';
         }
 
-        $out .= '<div class="mrc-admin-table-wrap uk-margin-bottom"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap uk-margin-bottom" tabindex="0"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
         $out .= '<thead><tr><th>' . $this->e($this->_('Line item')) . '</th><th>' . $this->e($this->_('Current')) . '</th><th>' . $this->e($this->_('New quantity')) . '</th></tr></thead><tbody>';
         foreach ($items as $index => $item) {
             if (!is_array($item)) continue;
@@ -384,14 +384,14 @@ trait ProcessMercatoOrderDetailPanels {
         $out .= '</div>';
         $out .= '<div class="mrc-status-link-box">';
         $out .= '<label class="uk-form-label">' . $this->e($this->_('Public status link')) . '</label>';
-        $out .= '<div class="mrc-copy-line"><input class="uk-input" type="text" readonly value="' . $this->e($statusUrl) . '"><a class="uk-button uk-button-default" href="' . $this->e($statusUrl) . '" target="_blank" rel="noopener"><i class="fa fa-external-link uk-margin-small-right"></i>' . $this->e($this->_('Open')) . '</a></div>';
+        $out .= '<div class="mrc-copy-line"><input class="uk-input" type="text" readonly aria-label="' . $this->e($this->_('Public status link')) . '" value="' . $this->e($statusUrl) . '"><a class="uk-button uk-button-default" href="' . $this->e($statusUrl) . '" target="_blank" rel="noopener"><i class="fa fa-external-link uk-margin-small-right"></i>' . $this->e($this->_('Open')) . '</a></div>';
         if ($receiptPdfUrl !== '') {
             $out .= '<label class="uk-form-label">' . $this->e($this->_('Receipt PDF')) . '</label>';
-            $out .= '<div class="mrc-copy-line"><input class="uk-input" type="text" readonly value="' . $this->e($receiptPdfUrl) . '"><a class="uk-button uk-button-default" href="' . $this->e($receiptPdfUrl) . '" target="_blank" rel="noopener"><i class="fa fa-file-pdf-o uk-margin-small-right"></i>' . $this->e($this->_('Open PDF')) . '</a></div>';
+            $out .= '<div class="mrc-copy-line"><input class="uk-input" type="text" readonly aria-label="' . $this->e($this->_('Receipt PDF')) . '" value="' . $this->e($receiptPdfUrl) . '"><a class="uk-button uk-button-default" href="' . $this->e($receiptPdfUrl) . '" target="_blank" rel="noopener"><i class="fa fa-file-pdf-o uk-margin-small-right"></i>' . $this->e($this->_('Open PDF')) . '</a></div>';
         }
         if ($packingSlipPdfUrl !== '') {
             $out .= '<label class="uk-form-label">' . $this->e($this->_('Packing slip PDF')) . '</label>';
-            $out .= '<div class="mrc-copy-line"><input class="uk-input" type="text" readonly value="' . $this->e($packingSlipPdfUrl) . '"><a class="uk-button uk-button-default" href="' . $this->e($packingSlipPdfUrl) . '" target="_blank" rel="noopener"><i class="fa fa-file-pdf-o uk-margin-small-right"></i>' . $this->e($this->_('Open PDF')) . '</a></div>';
+            $out .= '<div class="mrc-copy-line"><input class="uk-input" type="text" readonly aria-label="' . $this->e($this->_('Packing slip PDF')) . '" value="' . $this->e($packingSlipPdfUrl) . '"><a class="uk-button uk-button-default" href="' . $this->e($packingSlipPdfUrl) . '" target="_blank" rel="noopener"><i class="fa fa-file-pdf-o uk-margin-small-right"></i>' . $this->e($this->_('Open PDF')) . '</a></div>';
         }
         $out .= '<p class="uk-text-muted">' . $this->e($this->_('Regenerate the link if a customer-facing status URL was shared with the wrong recipient. Old status links stop working after regeneration.')) . '</p>';
         $out .= '</div>';
@@ -558,7 +558,7 @@ trait ProcessMercatoOrderDetailPanels {
 
         $out = '<section class="pw-wrap mrc-admin-panel">';
         $out .= '<div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Items and Totals')) . '</h2></div></div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
         $out .= '<thead><tr><th>' . $this->e($this->_('Product')) . '</th><th>' . $this->e($this->_('Quantity')) . '</th><th>' . $this->e($this->_('Price')) . '</th><th>' . $this->e($this->_('Tax')) . '</th><th>' . $this->e($this->_('Total')) . '</th></tr></thead><tbody>';
         foreach ($items as $item) {
             if (!is_array($item)) continue;
@@ -604,7 +604,7 @@ trait ProcessMercatoOrderDetailPanels {
         if ($label && !$void) { $out .= $this->renderShippingProviderActionForm($order, 'reprint_label', $this->_('Refresh label')); if (!empty($label['label_url'])) $out .= '<a class="uk-button uk-button-primary" href="' . $this->e((string) $label['label_url']) . '" target="_blank" rel="noopener noreferrer">' . $this->e($this->_('Open / reprint label')) . '</a>'; $out .= $this->renderShippingProviderActionForm($order, 'void_label', $this->_('Void and refund label')); }
         $out .= '</div>';
         if (!empty($state['tracking_events'])) {
-            $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Event')) . '</th><th>' . $this->e($this->_('Provider status')) . '</th><th>' . $this->e($this->_('Mercato status')) . '</th><th>' . $this->e($this->_('Time')) . '</th></tr></thead><tbody>';
+            $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Event')) . '</th><th>' . $this->e($this->_('Provider status')) . '</th><th>' . $this->e($this->_('Mercato status')) . '</th><th>' . $this->e($this->_('Time')) . '</th></tr></thead><tbody>';
             foreach (array_reverse((array) $state['tracking_events']) as $event) $out .= '<tr><td>' . $this->e((string) ($event['event_id'] ?? '')) . '</td><td>' . $this->e((string) ($event['provider_status'] ?? '')) . '</td><td>' . $this->e((string) ($event['status'] ?? '')) . '</td><td>' . $this->e((string) ($event['at'] ?? '')) . '</td></tr>';
             $out .= '</tbody></table></div>';
         }
@@ -637,7 +637,7 @@ trait ProcessMercatoOrderDetailPanels {
     protected function renderOrderLatestActivity(array $events): string {
         $out = '<section class="pw-wrap mrc-admin-panel">';
         $out .= '<div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Latest Activity')) . '</h2></div></div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table"><thead><tr>';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table"><thead><tr>';
         foreach ([$this->_('Time'), $this->_('Area'), $this->_('Event'), $this->_('Details')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
         }
@@ -681,7 +681,7 @@ trait ProcessMercatoOrderDetailPanels {
             : [$this->_('Invoice'), $this->_('Customer'), $this->_('Total'), $this->_('Payment'), $this->_('Created'), ''];
 
         if (!$orders->count()) {
-            $out = '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
+            $out = '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
             $out .= '<thead><tr>';
             foreach ($headings as $heading) {
                 $out .= '<th>' . $this->e($heading) . '</th>';
@@ -692,7 +692,7 @@ trait ProcessMercatoOrderDetailPanels {
             return $out . '<p class="uk-text-muted mrc-admin-empty-note">' . $this->e($this->_('No orders yet.')) . '</p>';
         }
 
-        $out = '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out = '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ($headings as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';

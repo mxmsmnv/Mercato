@@ -75,9 +75,14 @@ final class MercatoDiscountService extends Wire {
             return 0.0;
         }
 
+        $subtotal = is_finite($subtotal) ? max(0.0, $subtotal) : 0.0;
+        $shipping = is_finite($shipping) ? max(0.0, $shipping) : 0.0;
+        $percent = is_finite($rule->percent) ? max(0.0, min(100.0, $rule->percent)) : 0.0;
+        $amount = is_finite($rule->amount) ? max(0.0, $rule->amount) : 0.0;
+
         $discount = match ($rule->type) {
-            MercatoDiscountType::PERCENTAGE => $subtotal * max(0.0, min(100.0, $rule->percent)) / 100,
-            MercatoDiscountType::FIXED => $rule->amount,
+            MercatoDiscountType::PERCENTAGE => $subtotal * $percent / 100,
+            MercatoDiscountType::FIXED => $amount,
             MercatoDiscountType::FREE_SHIPPING => $shipping,
             default => 0.0,
         };
@@ -105,7 +110,7 @@ final class MercatoDiscountService extends Wire {
      */
     public function applyFinalShippingAmount(array $discount, float $shipping): array {
         if (!empty($discount['valid']) && ($discount['type'] ?? '') === MercatoDiscountType::FREE_SHIPPING) {
-            $discount['amount'] = round(max(0.0, $shipping), 2);
+            $discount['amount'] = round(is_finite($shipping) ? max(0.0, $shipping) : 0.0, 2);
         }
         return $discount;
     }
@@ -278,13 +283,19 @@ final class MercatoDiscountService extends Wire {
     }
 
     public function recordAuditEvent(string $event, array $discount, array $context = []): void {
+        $email = strtolower(trim((string) ($context['email'] ?? '')));
+        $at = strrpos($email, '@');
+        $maskedEmail = $email === '' ? '' : ($at === false
+            ? substr($email, 0, 1) . '***'
+            : substr($email, 0, 1) . '***' . substr($email, $at));
         $payload = [
             'event' => $event,
             'code' => (string) ($discount['code'] ?? ''),
             'valid' => !empty($discount['valid']),
             'amount' => round((float) ($discount['amount'] ?? 0), 2),
             'message' => (string) ($discount['message'] ?? ''),
-            'email' => (string) ($context['email'] ?? ''),
+            'email' => $maskedEmail,
+            'email_hash' => $email !== '' ? hash('sha256', $email) : '',
             'source' => (string) ($context['source'] ?? ''),
             'order_page_id' => (int) ($context['order_page_id'] ?? 0),
             'invoice' => (string) ($context['invoice'] ?? ''),

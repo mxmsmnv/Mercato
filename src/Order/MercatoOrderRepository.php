@@ -427,18 +427,16 @@ class MercatoOrderRepository extends Wire {
             }
         }
 
-        if ((string) ($this->commerce->quote_inventory_policy ?? 'none') === 'on_acceptance') {
-            $quoteTemplate = $this->wire('sanitizer')->selectorValue((string) ($this->commerce->quote_template ?? 'mrc-quote'));
-            $quotes = $this->wire('pages')->find("template=$quoteTemplate, include=all, mrc_inventory_reserved=1");
-            foreach ($quotes as $quote) {
-                $until = strtotime((string) $quote->mrc_inventory_reserved_until);
-                if ($until !== false && $until < $now) continue;
-                $items = json_decode((string) $quote->mrc_items, true);
-                foreach (is_array($items) ? $items : [] as $item) {
-                    if (!is_array($item) || $this->getItemProductId($item) !== $productId) continue;
-                    if ($variantId !== null && (string) ($item['variant_id'] ?? '') !== $variantId) continue;
-                    $reserved += (int) ceil((float) ($item['quantity'] ?? 1));
-                }
+        $quoteTemplate = $this->wire('sanitizer')->selectorValue((string) ($this->commerce->quote_template ?? 'mrc-quote'));
+        $quotes = $this->wire('pages')->find("template=$quoteTemplate, include=all, mrc_inventory_reserved=1");
+        foreach ($quotes as $quote) {
+            $until = strtotime((string) $quote->mrc_inventory_reserved_until);
+            if ($until !== false && $until < $now) continue;
+            $items = json_decode((string) $quote->mrc_items, true);
+            foreach (is_array($items) ? $items : [] as $item) {
+                if (!is_array($item) || $this->getItemProductId($item) !== $productId) continue;
+                if ($variantId !== null && (string) ($item['variant_id'] ?? '') !== $variantId) continue;
+                $reserved += (int) ceil((float) ($item['quantity'] ?? 1));
             }
         }
 

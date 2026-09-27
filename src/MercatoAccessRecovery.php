@@ -135,6 +135,6 @@ trait MercatoAccessRecovery {
             $content .= '<form method="post" action="' . $this->h($recoveryUrl) . '">' . $csrfInput . '<button>' . $this->h($state['action_label']) . '</button></form>';
         }
         $content .= '<p><a href="' . $this->h($receiptUrl) . '">' . $this->h($state['back_label']) . '</a></p>';
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>' . $this->h($state['title']) . '</title>' . $this->renderPublicOrderStatusStyles() . '</head><body><main class="mrc-public-status"><section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Order ' . $invoice . '</p><h1>' . $this->h($state['title']) . '</h1></section><section class="mrc-status-card">' . $content . '</section></main></body></html>';
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>' . $this->h($state['title']) . '</title>' . $this->renderPublicOrderStatusStyles() . '</head><body><main class="mrc-public-status"><section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Order ' . $invoice . '</p><h1>' . $this->h($state['title']) . '</h1></section><section class="mrc-status-card">' . $content . '</section></main></body></html>';
     }
 }

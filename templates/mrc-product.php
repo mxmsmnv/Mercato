@@ -14,6 +14,7 @@ if (($templateOverride = $commerce->getStorefrontTemplateOverridePath('mrc-produ
     return;
 }
 require_once __DIR__ . '/mrc-storefront.php';
+mrc_storefront_private_headers();
 $cart     = $commerce->cart();
 $checkoutPage = $pages->get('/' . ltrim((string) ($commerce->cancel_page ?: 'checkout'), '/') . '/');
 $checkoutUrl = ($checkoutPage && $checkoutPage->id) ? $checkoutPage->url : $config->urls->root . 'checkout/';
@@ -117,7 +118,7 @@ $productPanelClass = $isVanilla
     : 'mx-auto w-full max-w-7xl px-4 pb-16 md:px-8';
 $productHeaderClass = $isVanilla
     ? 'mrc-product-header'
-    : 'mb-8 flex flex-wrap items-center justify-between gap-6 border-b border-[#d8cdbc] pb-6';
+    : 'mrc-product-header mb-8 flex flex-wrap items-center justify-between gap-6 border-b border-[#d8cdbc] pb-6';
 $productCartClass = $isVanilla
     ? 'mrc-product-cart'
     : 'flex min-w-[min(100%,340px)] flex-wrap items-center justify-end gap-3 border border-[#d8cdbc] bg-[#fffaf2]/90 p-3';
@@ -241,6 +242,9 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
             text-decoration: none;
         }
         .mrc-related-card-title { font-weight: 700; }
+        .mrc-product-header h1,
+        .mrc-description,
+        .mrc-related-card-title { overflow-wrap: anywhere; }
         @media (max-width: 720px) {
             .mrc-product-header { display: grid; }
             .mrc-product-cart { justify-content: flex-start; }
@@ -345,7 +349,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
 <?php endif; ?>
 
 <div class="<?= $productHeaderClass ?>">
-    <div>
+    <div class="<?= $isVanilla ? '' : 'min-w-0 flex-1' ?>">
         <span class="<?= $ui['kicker'] ?>">Product</span>
         <h1 class="<?= $isVanilla ? '' : 'mrc-display max-w-3xl text-5xl font-semibold leading-none md:text-7xl' ?>"><?= $sanitizer->entities($page->title) ?></h1>
     </div>
@@ -405,7 +409,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
         <?php endif; ?>
 
         <?php if ($page->mrc_description): ?>
-            <div class="<?= $ui['description'] ?>"><?= $page->mrc_description ?></div>
+            <div class="mrc-description <?= $ui['description'] ?>"><?= $page->mrc_description ?></div>
         <?php endif; ?>
 
         <form class="<?= $ui['form'] ?>" method="post" action="">
@@ -466,7 +470,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
         <p><span class="<?= $inCartClass ?>"><?= (int) $cartProductTotalQuantity ?> in cart</span></p>
     <?php endif; ?>
     <?php if ($page->mrc_description): ?>
-        <div class="<?= $ui['description'] ?>"><?= $page->mrc_description ?></div>
+        <div class="mrc-description <?= $ui['description'] ?>"><?= $page->mrc_description ?></div>
     <?php endif; ?>
     <form class="<?= $ui['form'] ?>" method="post" action="">
         <input type="hidden" name="mrc_action" value="add_to_cart">

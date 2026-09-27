@@ -33,6 +33,20 @@ if (!str_contains($experience, "'/order/receipt/'") || !str_contains($experience
 if (substr_count($endpoints, "resolveOrderPublicRouteCode(\$code") < 3) {
     throw new RuntimeException('Status, receipt, and receipt PDF handlers must resolve opaque route codes.');
 }
+$pdfHandler = strstr($endpoints, 'public function handleOrderReceiptPdf');
+$pdfHandler = is_string($pdfHandler) ? strstr($pdfHandler, 'public function handleOrderPackingSlipPdf', true) : false;
+if (!is_string($pdfHandler)) throw new RuntimeException('Receipt PDF handler could not be inspected.');
+$pdfDenial = strpos($pdfHandler, 'if (!$ok)');
+foreach (["header('Cache-Control: private, no-store", "header('X-Robots-Tag: noindex", "header('Referrer-Policy: no-referrer"] as $header) {
+    $position = strpos($pdfHandler, $header);
+    if ($pdfDenial === false || $position === false || $position > $pdfDenial) throw new RuntimeException('Receipt PDF success and denial responses must share private/noindex headers: ' . $header);
+}
+$downloadHandler = strstr($endpoints, 'public function handleOrderDownload');
+$downloadHandler = is_string($downloadHandler) ? strstr($downloadHandler, 'public function handleReadApi', true) : false;
+if (!is_string($downloadHandler)) throw new RuntimeException('Signed download handler could not be inspected.');
+foreach (["header('Cache-Control: private, no-store", "header('X-Robots-Tag: noindex", "header('Referrer-Policy: no-referrer", "header('X-Content-Type-Options: nosniff"] as $header) {
+    if (!str_contains($downloadHandler, $header)) throw new RuntimeException('Signed download success and denial responses must share privacy headers: ' . $header);
+}
 foreach (['getOrderStatusUrl($order)', 'getOrderReceiptUrl($order)', 'getOrderReceiptPdfUrl($order)'] as $redirect) {
     if (!str_contains($endpoints, "header('Location: ' . \$this->{$redirect}")) {
         throw new RuntimeException('Legacy public-order links must redirect to clean routes: ' . $redirect);

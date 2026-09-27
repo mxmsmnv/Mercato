@@ -4,8 +4,8 @@ namespace ProcessWire;
 trait ProcessMercatoNotificationTemplates {
 
     public function ___executeNotifications(): string {
-        if (!$this->hasCommercePermission(self::PERMISSION_ADMIN)) {
-            return $this->renderAccessDenied(self::PERMISSION_ADMIN, 'notifications');
+        if (!$this->hasCommercePermission(self::PERMISSION_MANAGE_NOTIFICATIONS)) {
+            return $this->renderAccessDenied(self::PERMISSION_MANAGE_NOTIFICATIONS, 'notifications');
         }
 
         /** @var Mercato $commerce */

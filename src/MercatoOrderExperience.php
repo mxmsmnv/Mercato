@@ -102,12 +102,15 @@ trait MercatoOrderExperience {
             $request = $hooked + $request;
         }
 
+        $returnEmail = (string) ($request['email'] ?? '');
+        $returnEmailAt = strrpos($returnEmail, '@');
         $this->recordEvent('mercato-returns', [
             'event' => 'return_requested',
             'request_id' => (string) ($request['request_id'] ?? ''),
             'order_id' => (int) $order->id,
             'invoice' => (string) ($order->mrc_invoice_number ?: $order->title),
-            'email' => (string) ($request['email'] ?? ''),
+            'recipient' => $returnEmailAt === false ? '' : substr($returnEmail, 0, 1) . '***' . substr($returnEmail, $returnEmailAt),
+            'recipient_hash' => $returnEmail !== '' ? hash('sha256', strtolower($returnEmail)) : '',
             'status' => (string) ($request['status'] ?? 'requested'),
             'reason' => (string) ($request['reason'] ?? ''),
             'items' => $request['items'] ?? [],

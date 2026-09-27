@@ -340,9 +340,25 @@ class MercatoProductList extends Wire {
     public function getShipping(): float {
         $sum = 0.0;
         foreach ($this->items as $item) {
+            if (in_array(strtolower(trim((string) ($item['product_type'] ?? 'physical'))), ['digital', 'service'], true)) {
+                continue;
+            }
             $sum += (float) ($item['sum_shipping'] ?? 0);
         }
         return round($sum, 2);
+    }
+
+    /**
+     * Whether at least one cart line needs a physical fulfilment address.
+     */
+    public function requiresShipping(): bool {
+        foreach ($this->items as $item) {
+            $type = strtolower(trim((string) ($item['product_type'] ?? 'physical')));
+            if (!in_array($type, ['digital', 'service'], true)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

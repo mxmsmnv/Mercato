@@ -9,13 +9,25 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-09-27
+
 ### Added
 
-- Native push registrations can independently select order-status, payment, delivery, and account-security notifications while retaining the legacy all-events topic.
+- Comprehensive automated verification across unit, integration, contract, ProcessWire boundary, release, and Chromium/Firefox/WebKit browser layers.
+- End-to-end order-to-cash coverage for physical, digital, service, mixed, guest, and authenticated purchases, including quotes, payment recovery, refunds, cancellation, fulfilment, inventory, notifications, signed documents, and exact cleanup.
+- Deterministic Stripe, Mollie, and PayPal provider emulators plus retry, timeout, replay, idempotency, reconciliation, queue, cron, crash-resume, and degraded-dependency scenarios without external side effects.
+- Full configuration, role, permission, CSRF, ownership, MCP session, public API, localization, large-data, and fresh-install lifecycle matrices.
+- Keyboard, assistive-semantics, contrast, responsive, overflow, loading, empty, error, translated, and long-content coverage across storefront and administration surfaces.
+- Guarded reproducible release validation with exact archive contents, supported PHP/ProcessWire matrices, persistence gates, and fail-closed cleanup checks.
 
 ### Fixed
 
-- Fresh ProcessWire installation preflight now loads Mercato's Composer autoloader before checking enabled Stripe methods, preventing false `stripe/stripe-php is missing` failures after a successful dependency install (issues #17 and #18).
+- Corrected physical versus digital/service checkout requirements, shipping charges, profile retention, private cache behavior, and accessible readiness feedback.
+- Hardened payment, refund, reconciliation, quote, reservation, inventory, and fulfilment state transitions against duplicate, stale, delayed, conflicting, non-finite, and out-of-order input.
+- Added crash-safe background-job locking, bounded retry behavior, partial-failure isolation, and fail-fast handling for programming errors.
+- Tightened least-privilege administration, customer ownership, signed-route privacy, webhook validation, secret redaction, and recipient minimization.
+- Improved transactional notification idempotency, retry handling, template authorization, provider audit sanitization, and deterministic delivery boundaries.
+- Fixed Firefox startup on macOS 27 and resolved keyboard focus, live-region semantics, color contrast, narrow-screen reflow, table scrolling, and long multilingual-content overflow.
 
 ## [1.4.1] - 2026-08-28
 

@@ -1,6 +1,17 @@
 <?php
 namespace ProcessWire;
 
+if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_private_headers')) {
+    /** Prevent browser/history caches from replaying session-specific cart and account markup. */
+    function mrc_storefront_private_headers(): void {
+        if (headers_sent()) return;
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('Vary: Cookie', false);
+    }
+}
+
 if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     function mrc_storefront_assets(bool $isVanilla): string {
         if ($isVanilla) {
@@ -19,6 +30,7 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     --mrc-line: #d6cbbb;
     --mrc-muted: #746858;
     --mrc-gold: #a5917c;
+    --mrc-gold-ink: #6b5848;
     --mrc-rust: #7d3a31;
     --mrc-radius: 6px;
     --mrc-radius-sm: 6px;
@@ -142,6 +154,9 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     transform: translateY(-16px);
     z-index: 40;
 }
+.mrc-menu-panel[hidden] {
+    display: none;
+}
 .mrc-menu-panel.is-open {
     opacity: 1;
     pointer-events: auto;
@@ -183,6 +198,7 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
 }
 .mrc-hero-copy {
     align-self: end;
+    min-width: 0;
     padding-bottom: clamp(24px, 5vw, 76px);
 }
 .mrc-hero-title {
@@ -191,6 +207,8 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     line-height: .86;
     margin: 0;
     max-width: 840px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .mrc-content-page .mrc-hero {
     min-height: auto;
@@ -215,6 +233,7 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     background: var(--mrc-line);
     border-radius: var(--mrc-radius);
     min-height: 420px;
+    min-width: 0;
     overflow: hidden;
     position: relative;
 }
@@ -264,9 +283,10 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     right: 0;
 }
 .mrc-slider-dots {
+    align-items: center;
     bottom: 18px;
     display: flex;
-    gap: 8px;
+    gap: 12px;
     position: absolute;
     right: 18px;
     z-index: 2;
@@ -281,6 +301,17 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
 }
 .mrc-slider-dot.is-active {
     background: var(--mrc-cream);
+}
+.mrc-slider-toggle {
+    background: rgba(27,46,41,.82);
+    border: 1px solid rgba(255,250,242,.7);
+    border-radius: var(--mrc-pill);
+    color: var(--mrc-ivory);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    min-height: 32px;
+    padding: 6px 12px;
 }
 .mrc-run-text {
     border-block: 1px solid var(--mrc-line);
@@ -337,7 +368,7 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     margin: 0;
 }
 .mrc-link {
-    color: var(--mrc-gold);
+    color: var(--mrc-gold-ink);
     display: inline-flex;
     font-size: 13px;
     font-weight: 800;
@@ -387,6 +418,22 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     list-style: none;
     margin: 0;
     padding: 0;
+}
+.mrc-footer-inner > *,
+.mrc-footer-links,
+.mrc-footer-links li,
+.mrc-footer-links a,
+.mrc-menu-list a,
+.mrc-collection-tile,
+.mrc-collection-tile > span,
+.mrc-collection-tile .mrc-display {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.mrc-collection-tile,
+.mrc-collection-tile > span {
+    max-width: 100%;
 }
 .mrc-reveal {
     opacity: 1;
@@ -761,6 +808,9 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     font-weight: 600;
     line-height: .86;
 }
+.mrc-proof-item .mrc-kicker {
+    color: var(--mrc-cream);
+}
 .mrc-page-cta {
     align-items: end;
     background: var(--mrc-rust);
@@ -790,8 +840,12 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
     gap: 12px;
     justify-content: flex-end;
 }
+.mrc-page-cta .mrc-page-cta-secondary {
+    border-color: var(--mrc-cream);
+    color: var(--mrc-cream);
+}
 .mrc-luxury-theme table th {
-    color: var(--mrc-gold);
+    color: var(--mrc-rust);
     font-size: 12px;
     font-weight: 800;
     letter-spacing: .18em;
@@ -800,6 +854,21 @@ if (!function_exists(__NAMESPACE__ . '\\mrc_storefront_assets')) {
 .mrc-luxury-theme table td,
 .mrc-luxury-theme table th {
     border-color: var(--mrc-line) !important;
+}
+.mrc-account-panel {
+    min-width: 0;
+}
+.mrc-private-panel {
+    min-width: 0;
+}
+.mrc-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+}
+.mrc-table-wrap .mrc-table {
+    width: 100%;
 }
 @media (max-width: 900px) {
     .mrc-site-nav { display: none; }
@@ -885,11 +954,25 @@ document.addEventListener('DOMContentLoaded', function () {
     syncHeader();
     window.addEventListener('scroll', syncHeader, { passive: true });
     if (toggle && panel && header) {
-        toggle.addEventListener('click', function () {
-            var open = !panel.classList.contains('is-open');
+        var setMenuOpen = function (open, returnFocus) {
+            panel.hidden = !open;
             panel.classList.toggle('is-open', open);
             header.classList.toggle('is-open', open);
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                var firstLink = panel.querySelector('a[href]');
+                if (firstLink) firstLink.focus();
+            } else if (returnFocus) {
+                toggle.focus();
+            }
+        };
+        toggle.addEventListener('click', function () {
+            setMenuOpen(panel.hidden, false);
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape' || panel.hidden) return;
+            event.preventDefault();
+            setMenuOpen(false, true);
         });
     }
     var revealItems = document.querySelectorAll('.mrc-reveal');
@@ -908,17 +991,60 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-mrc-slider]').forEach(function (slider) {
         var slides = Array.prototype.slice.call(slider.querySelectorAll('[data-mrc-slide]'));
         var dots = Array.prototype.slice.call(slider.querySelectorAll('[data-mrc-dot]'));
+        var controls = slider.querySelector('.mrc-slider-dots');
+        var toggleRotation = null;
+        slider.setAttribute('role', 'region');
+        slider.setAttribute('aria-roledescription', 'carousel');
+        slider.setAttribute('aria-label', 'Featured products');
+        slides.forEach(function (slide, i) {
+            slide.setAttribute('role', 'group');
+            slide.setAttribute('aria-roledescription', 'slide');
+            slide.setAttribute('aria-label', (i + 1) + ' of ' + slides.length);
+        });
+        if (controls) {
+            controls.setAttribute('role', 'group');
+            controls.setAttribute('aria-label', 'Choose featured slide');
+            toggleRotation = document.createElement('button');
+            toggleRotation.className = 'mrc-slider-toggle';
+            toggleRotation.type = 'button';
+            toggleRotation.setAttribute('data-mrc-slider-toggle', '');
+            controls.appendChild(toggleRotation);
+        }
         if (slides.length < 2) return;
         var current = 0;
+        var timer = null;
+        var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         var show = function (index) {
             current = index % slides.length;
-            slides.forEach(function (slide, i) { slide.classList.toggle('is-active', i === current); });
-            dots.forEach(function (dot, i) { dot.classList.toggle('is-active', i === current); });
+            slides.forEach(function (slide, i) {
+                var active = i === current;
+                slide.classList.toggle('is-active', active);
+                slide.hidden = !active;
+                slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+            });
+            dots.forEach(function (dot, i) {
+                var active = i === current;
+                dot.classList.toggle('is-active', active);
+                if (active) dot.setAttribute('aria-current', 'true');
+                else dot.removeAttribute('aria-current');
+            });
+        };
+        var setRotating = function (rotating) {
+            if (timer) window.clearInterval(timer);
+            timer = rotating ? window.setInterval(function () { show(current + 1); }, 5200) : null;
+            if (toggleRotation) {
+                toggleRotation.textContent = rotating ? 'Pause slideshow' : 'Play slideshow';
+                toggleRotation.setAttribute('aria-label', rotating ? 'Pause automatic slide rotation' : 'Play automatic slide rotation');
+            }
         };
         dots.forEach(function (dot, i) {
             dot.addEventListener('click', function () { show(i); });
         });
-        window.setInterval(function () { show(current + 1); }, 5200);
+        if (toggleRotation) {
+            toggleRotation.addEventListener('click', function () { setRotating(!timer); });
+        }
+        show(0);
+        setRotating(!reducedMotion);
     });
 });
 </script>
@@ -983,7 +1109,7 @@ HTML;
         $out .= '</nav>';
         $out .= '<button class="mrc-menu-toggle mrc-small-caps" type="button" data-mrc-menu-toggle aria-expanded="false" aria-controls="mrc-store-menu"><span>Menu</span><span class="mrc-menu-lines" aria-hidden="true"><span></span><span></span></span></button>';
         $out .= '</div></header>';
-        $out .= '<aside class="mrc-menu-panel" id="mrc-store-menu" data-mrc-menu-panel>';
+        $out .= '<nav class="mrc-menu-panel" id="mrc-store-menu" data-mrc-menu-panel aria-label="Mobile store navigation" hidden>';
         $out .= '<ul class="mrc-menu-list">';
         $out .= '<li><a href="' . $sanitizer->entities($productsUrl) . '">Shop</a></li>';
         foreach ($collections as $collection) {
@@ -994,7 +1120,7 @@ HTML;
         if ($commerce->customerAccountService()->isEnabled()) $out .= '<li><a href="' . $sanitizer->entities($accountUrl) . '">Account</a></li>';
         $out .= '<li><a href="' . $sanitizer->entities($checkoutUrl) . '">' . $sanitizer->entities($cartText) . '</a></li>';
         $out .= '</ul>';
-        $out .= '</aside>';
+        $out .= '</nav>';
         return $out;
     }
 

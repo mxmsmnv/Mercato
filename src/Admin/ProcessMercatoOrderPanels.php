@@ -415,7 +415,7 @@ trait ProcessMercatoOrderPanels {
         }
 
         $headings = [$this->_('Invoice'), $this->_('Customer'), $this->_('Fulfilment'), $this->_('Items'), $this->_('Total'), $this->_('Created'), $this->_('Update')];
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ($headings as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -529,7 +529,7 @@ trait ProcessMercatoOrderPanels {
         $out .= '<h2 class="uk-h3">' . $this->e($this->_('Fulfilment Activity')) . '</h2>';
         $out .= '<p class="uk-text-muted">' . $this->e($this->_('Recent manual shipment, delivery, return, and tracking updates.')) . '</p>';
         $out .= '</div></div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Time'), $this->_('Order'), $this->_('Change'), $this->_('Tracking'), $this->_('Note'), $this->_('User')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -632,7 +632,7 @@ trait ProcessMercatoOrderPanels {
             $out .= '<a class="uk-button uk-button-default" href="' . $this->e($resetUrl) . '">' . $this->e($this->_('Reset')) . '</a>';
         }
         $out .= '</form>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Time'), $this->_('Order'), $this->_('Type'), $this->_('Email'), $this->_('Status'), $this->_('Discount'), $this->_('Message'), $this->_('Actions')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -663,7 +663,7 @@ trait ProcessMercatoOrderPanels {
             $out .= '<td>' . $this->e((string) (($event['recovery_discount_code'] ?? '') ?: '-')) . '</td>';
             $out .= '<td>' . $this->e((string) ($event['message'] ?? '')) . '</td><td>';
             if ($status === 'failed' && $orderId > 0 && !str_starts_with((string) ($event['event'] ?? ''), 'email_delivery_')) {
-                $out .= '<form method="post">' . $this->csrfInput() . '<input type="hidden" name="mrc_retry_notification" value="1"><input type="hidden" name="order_id" value="' . $orderId . '"><input type="hidden" name="notification_event" value="' . $this->e((string) ($event['event'] ?? '')) . '"><button class="uk-button uk-button-small uk-button-default" type="submit">' . $this->e($this->_('Retry')) . '</button></form>';
+                $out .= '<form method="post">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_retry_notification" value="1"><input type="hidden" name="order_id" value="' . $orderId . '"><input type="hidden" name="notification_event" value="' . $this->e((string) ($event['event'] ?? '')) . '"><button class="uk-button uk-button-small uk-button-default" type="submit">' . $this->e($this->_('Retry')) . '</button></form>';
             } else $out .= '-';
             $out .= '</td></tr>';
         }

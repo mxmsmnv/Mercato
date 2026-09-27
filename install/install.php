@@ -698,6 +698,7 @@ function mercato_permission_definitions(): array {
         'mercato-manage-products' => 'Manage Mercato products and product imports',
         'mercato-manage-inventory' => 'Adjust and view Mercato inventory',
         'mercato-fulfil-orders' => 'Update Mercato fulfilment and send fulfilment emails',
+        'mercato-manage-notifications' => 'Design Mercato transactional email templates and shared layouts',
         'mercato-view-customers' => 'View Mercato customers',
         'mercato-manage-customers' => 'Manage Mercato customer notes',
         'mercato-manage-privacy' => 'Review and execute Mercato privacy actions',
@@ -740,6 +741,7 @@ function mercato_role_definitions(): array {
         'mercato-support' => [
             'title' => 'Mercato Support',
             'permissions' => [
+                'page-edit',
                 'mercato-admin',
                 'mercato-view-orders',
                 'mercato-edit-orders',
@@ -753,6 +755,7 @@ function mercato_role_definitions(): array {
         'mercato-fulfilment' => [
             'title' => 'Mercato Fulfilment',
             'permissions' => [
+                'page-edit',
                 'mercato-admin',
                 'mercato-view-orders',
                 'mercato-fulfil-orders',
@@ -762,6 +765,7 @@ function mercato_role_definitions(): array {
         'mercato-catalog' => [
             'title' => 'Mercato Catalog',
             'permissions' => [
+                'page-edit',
                 'mercato-admin',
                 'mercato-manage-products',
                 'mercato-manage-inventory',
@@ -771,7 +775,7 @@ function mercato_role_definitions(): array {
         ],
         'mercato-manager' => [
             'title' => 'Mercato Manager',
-            'permissions' => array_keys(mercato_permission_definitions()),
+            'permissions' => array_merge(['page-edit'], array_keys(mercato_permission_definitions())),
         ],
     ];
 }

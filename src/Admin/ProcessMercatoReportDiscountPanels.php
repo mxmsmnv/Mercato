@@ -57,7 +57,7 @@ trait ProcessMercatoReportDiscountPanels {
         $out .= '<a class="uk-button uk-button-default" href="' . $this->e($this->exportUrl('tax-shipping-readiness')) . '"><i class="fa fa-download uk-margin-small-right"></i>' . $this->e($this->_('Export CSV')) . '</a>';
         $out .= '<a class="uk-button uk-button-default" href="' . $this->e((string) ($data['settings_url'] ?? '')) . '"><i class="fa fa-sliders uk-margin-small-right"></i>' . $this->e($this->_('Configure')) . '</a>';
         $out .= '</div></div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Area'), $this->_('Current setting'), $this->_('Operational note')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -147,7 +147,7 @@ trait ProcessMercatoReportDiscountPanels {
         $out .= '<p class="uk-text-muted">' . $this->e($this->_('Derived merchant workflow status, separate from payment and fulfilment state.')) . '</p>';
         $out .= '</div>';
         $out .= '</div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Status'), $this->_('Orders'), $this->_('Share')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -184,7 +184,7 @@ trait ProcessMercatoReportDiscountPanels {
         $out .= '<p class="uk-text-muted">' . $this->e($this->_('Distribution of current order payment states.')) . '</p>';
         $out .= '</div>';
         $out .= '</div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Status'), $this->_('Orders'), $this->_('Share')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -218,7 +218,7 @@ trait ProcessMercatoReportDiscountPanels {
         $out .= '<p class="uk-text-muted">' . $this->e($this->_('Top products by paid order revenue.')) . '</p>';
         $out .= '</div>';
         $out .= '</div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Product'), $this->_('Quantity'), $this->_('Orders'), $this->_('Revenue')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -266,7 +266,7 @@ trait ProcessMercatoReportDiscountPanels {
         $out .= '</div>';
 
         $headings = [$this->_('Code'), $this->_('Type'), $this->_('Value'), $this->_('Active'), $this->_('Targets'), $this->_('Schedule'), $this->_('Usage'), $this->_('Customer limit'), ''];
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ($headings as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';

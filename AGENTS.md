@@ -49,6 +49,7 @@ Use these module methods instead of inventing APIs:
 - `$commerce->customerAccountService()`: access customer registration, verification, authentication, profile/address updates, owned order history, and guest-order claim workflows.
 - `$commerce->getRuntimeCompatibilityReport()`: inspect supported runtime/extensions and enabled integration dependency readiness.
 - `$commerce->operationalService()`: access checkout maintenance state, backup/restore evidence, pre-upgrade checks, and PII-free health diagnostics.
+- `$commerce->getBackgroundJobs()` / `$commerce->runBackgroundJobs(array $jobNames = [], array $context = [])`: inspect or run bounded scheduler jobs. Each job uses a site-scoped database advisory lock, reports concurrent execution as `already_running`, continues independent jobs after a failure, and supports explicit bounded retry through `max_attempts` and `retry_delay_ms` context values.
 - `$commerce->analyticsService()` and `$commerce->setAnalyticsConsent(array $categories)`: emit/consume minimized analytics events and manage session consent.
 - `$commerce->setMessage($message)` and `$commerce->getMessage()`: set/read storefront feedback messages.
 - `$commerce->notificationDeliveryService()`: preview or deliver lifecycle email events through the configured transport with retry, redaction, and idempotency controls.

@@ -16,6 +16,7 @@ if (($templateOverride = $commerce->getStorefrontTemplateOverridePath('mrc-succe
     return;
 }
 require_once __DIR__ . '/mrc-storefront.php';
+mrc_storefront_private_headers();
 $ui = $commerce->getFrontendUiClasses();
 $frameworkAssets = $commerce->renderFrontendFrameworkAssets();
 $isVanilla = $commerce->getFrontendFramework() === 'vanilla';

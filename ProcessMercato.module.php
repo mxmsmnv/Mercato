@@ -84,6 +84,7 @@ class ProcessMercato extends Process implements Module {
     protected const PERMISSION_MANAGE_PRODUCTS = 'mercato-manage-products';
     protected const PERMISSION_MANAGE_INVENTORY = 'mercato-manage-inventory';
     protected const PERMISSION_FULFIL_ORDERS = 'mercato-fulfil-orders';
+    protected const PERMISSION_MANAGE_NOTIFICATIONS = 'mercato-manage-notifications';
     protected const PERMISSION_VIEW_CUSTOMERS = 'mercato-view-customers';
     protected const PERMISSION_MANAGE_CUSTOMERS = 'mercato-manage-customers';
     protected const PERMISSION_MANAGE_PRIVACY = 'mercato-manage-privacy';
@@ -108,7 +109,7 @@ class ProcessMercato extends Process implements Module {
         return [
             'title' => 'Mercato Dashboard',
             'summary' => 'Admin dashboard for Mercato orders, products, and revenue.',
-            'version' => 141,
+            'version' => 155,
             'author' => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,
@@ -127,6 +128,7 @@ class ProcessMercato extends Process implements Module {
                 self::PERMISSION_MANAGE_PRODUCTS => 'Manage Mercato products and product imports',
                 self::PERMISSION_MANAGE_INVENTORY => 'Adjust and view Mercato inventory',
                 self::PERMISSION_FULFIL_ORDERS => 'Update Mercato fulfilment and send fulfilment emails',
+                self::PERMISSION_MANAGE_NOTIFICATIONS => 'Design Mercato transactional email templates and shared layouts',
                 self::PERMISSION_VIEW_CUSTOMERS => 'View Mercato customers',
                 self::PERMISSION_MANAGE_CUSTOMERS => 'Manage Mercato customer notes',
                 self::PERMISSION_MANAGE_PRIVACY => 'Review and execute Mercato privacy actions',

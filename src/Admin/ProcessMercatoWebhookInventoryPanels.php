@@ -19,7 +19,7 @@ trait ProcessMercatoWebhookInventoryPanels {
         $out .= $this->renderWebhookSummary($events);
         $out .= $this->renderWebhookFilters($filters);
 
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Time'), $this->_('Gateway'), $this->_('Event'), $this->_('Status'), $this->_('Order'), $this->_('External ID'), $this->_('Message')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -459,7 +459,7 @@ trait ProcessMercatoWebhookInventoryPanels {
         }
         $out .= '</form>';
 
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Time'), $this->_('Event'), $this->_('Product'), $this->_('Quantity'), $this->_('Stock'), $this->_('Order'), $this->_('Context')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';

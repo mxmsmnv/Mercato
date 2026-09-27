@@ -96,8 +96,12 @@ final class MercatoPaymentStatus {
     public static function wouldRegressSettled(string $current, string $incoming): bool {
         $current = strtolower(trim($current));
         $incoming = strtolower(trim($incoming));
-        $settled = [self::PAID, self::PARTIALLY_REFUNDED, self::REFUNDED];
-
-        return in_array($current, $settled, true) && !in_array($incoming, $settled, true);
+        $allowed = match ($current) {
+            self::PAID => [self::PAID, self::PARTIALLY_REFUNDED, self::REFUNDED],
+            self::PARTIALLY_REFUNDED => [self::PARTIALLY_REFUNDED, self::REFUNDED],
+            self::REFUNDED => [self::REFUNDED],
+            default => null,
+        };
+        return $allowed !== null && !in_array($incoming, $allowed, true);
     }
 }

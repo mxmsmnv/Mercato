@@ -14,7 +14,7 @@ trait MercatoStoreServices {
             }
         }
         $data = array_merge(self::getDefaultConfig(), $data);
-        unset($data['mrc_run_installer'], $data['mrc_overwrite_template_files'], $data['production_activation_confirmed']);
+        unset($data['mrc_run_installer'], $data['mrc_overwrite_template_files'], $data['mrc_send_test_email'], $data['mrc_test_email_event'], $data['mrc_test_email_recipient'], $data['production_activation_confirmed']);
         $data['currency'] = MercatoCurrency::isIsoCode((string) ($data['currency'] ?? ''))
             ? MercatoCurrency::normalizeCode((string) $data['currency'])
             : self::getDefaultConfig()['currency'];
@@ -30,6 +30,7 @@ trait MercatoStoreServices {
             if (!is_array($markets) || !array_is_list($markets)) throw new WireException($this->_('Markets must be a valid JSON array.'));
         }
         $data['invoice_prefix'] = self::normalizeInvoicePrefix($data['invoice_prefix'] ?? '');
+        $data['orders_parent'] = self::normalizePagePathConfig($data['orders_parent'] ?? 'orders', 'orders');
         $data['quotes_parent'] = self::normalizePagePathConfig($data['quotes_parent'] ?? 'quotes', 'quotes');
         $data['quote_requests_enabled'] = !empty($data['quote_requests_enabled']);
         $data['quote_expiry_days'] = max(1, min(365, (int) ($data['quote_expiry_days'] ?? 30)));
@@ -63,7 +64,7 @@ trait MercatoStoreServices {
         $data['operational_log_retention_days'] = self::normalizeRetentionDays($data['operational_log_retention_days'] ?? 365, 365, 1);
         $data['provider_reference_retention_days'] = self::normalizeRetentionDays($data['provider_reference_retention_days'] ?? 0, 0, 0);
         $data['signed_link_retention_days'] = self::normalizeRetentionDays($data['signed_link_retention_days'] ?? 3650, 3650, 0);
-        $data['privacy_retention_schedule'] = self::normalizeReservationCleanupSchedule($data['privacy_retention_schedule'] ?? 'everyDay');
+        $data['privacy_retention_schedule'] = self::normalizeReservationCleanupSchedule($data['privacy_retention_schedule'] ?? 'everyDay', 'everyDay');
         $data['privacy_retention_batch_limit'] = max(1, min(500, (int) ($data['privacy_retention_batch_limit'] ?? 100)));
         $data['privacy_policy_version'] = substr(preg_replace('/[^a-zA-Z0-9._-]+/', '', trim((string) ($data['privacy_policy_version'] ?? '1.0'))) ?: '1.0', 0, 40);
         $data['privacy_backup_retention_note'] = trim((string) ($data['privacy_backup_retention_note'] ?? ''));
@@ -75,6 +76,11 @@ trait MercatoStoreServices {
         $data['account_orders_per_page'] = max(1, min(100, (int) ($data['account_orders_per_page'] ?? 10)));
         $data['checkout_enabled'] = !empty($data['checkout_enabled']);
         $data['checkout_maintenance_message'] = substr(trim((string) ($data['checkout_maintenance_message'] ?? '')), 0, 500);
+        $data['headless_api_enabled'] = !empty($data['headless_api_enabled']);
+        $data['headless_api_token_ttl_minutes'] = max(5, min(10080, (int) ($data['headless_api_token_ttl_minutes'] ?? 60)));
+        $data['headless_api_rate_limit_per_minute'] = max(1, min(1000, (int) ($data['headless_api_rate_limit_per_minute'] ?? 60)));
+        $data['headless_api_max_body_bytes'] = max(1024, min(1048576, (int) ($data['headless_api_max_body_bytes'] ?? 65536)));
+        $data['headless_api_allowed_origins'] = self::normalizeHeadlessAllowedOrigins($data['headless_api_allowed_origins'] ?? '');
         $data['preupgrade_backup_required'] = !empty($data['preupgrade_backup_required']);
         $data['backup_max_age_hours'] = max(1, min(8760, (int) ($data['backup_max_age_hours'] ?? 24)));
         $data['backup_evidence'] = trim((string) ($data['backup_evidence'] ?? ''));
@@ -105,7 +111,7 @@ trait MercatoStoreServices {
         $data['shipping_dimensions_enabled'] = !empty($data['shipping_dimensions_enabled']);
         $data['shipping_dimensions_field'] = self::normalizeShippingDimensionsField($data['shipping_dimensions_field'] ?? 'mrc_dimensions');
         $data['shipping_calculation_mode'] = self::normalizeShippingCalculationMode($data['shipping_calculation_mode'] ?? 'flat');
-        $data['shipping_dimensional_divisor'] = max(1.0, min(1000000.0, (float) ($data['shipping_dimensional_divisor'] ?? 5000)));
+        $data['shipping_dimensional_divisor'] = self::normalizeFiniteRange($data['shipping_dimensional_divisor'] ?? 5000, 5000, 1, 1000000);
         $data['shipping_missing_measurements'] = self::normalizeMissingMeasurementsPolicy($data['shipping_missing_measurements'] ?? 'flat');
         $data['shipping_rate_table'] = trim((string) ($data['shipping_rate_table'] ?? ''));
         $data['shipping_provider'] = trim((string) ($data['shipping_provider'] ?? 'manual')) ?: 'manual';
@@ -116,7 +122,7 @@ trait MercatoStoreServices {
         $data['shipping_provider_origin'] = trim((string) ($data['shipping_provider_origin'] ?? ''));
         $data['shipping_provider_service_map'] = trim((string) ($data['shipping_provider_service_map'] ?? ''));
         $data['shipping_provider_handling_fixed'] = self::normalizeMoneyAmount($data['shipping_provider_handling_fixed'] ?? 0);
-        $data['shipping_provider_handling_percent'] = max(-100, min(1000, (float) ($data['shipping_provider_handling_percent'] ?? 0)));
+        $data['shipping_provider_handling_percent'] = self::normalizeFiniteRange($data['shipping_provider_handling_percent'] ?? 0, 0, -100, 1000);
         $data['shipping_provider_allowed_regions'] = trim((string) ($data['shipping_provider_allowed_regions'] ?? ''));
         $data['shipping_provider_package_mode'] = in_array((string) ($data['shipping_provider_package_mode'] ?? 'combined'), ['combined', 'per_item'], true) ? (string) $data['shipping_provider_package_mode'] : 'combined';
         $data['shipping_provider_include_manual_rates'] = !empty($data['shipping_provider_include_manual_rates']);
@@ -137,9 +143,11 @@ trait MercatoStoreServices {
         $data['delivery_regions'] = self::normalizeDeliveryRegions($data['delivery_regions'] ?? '');
         $data['delivery_windows'] = self::normalizeDeliveryWindows($data['delivery_windows'] ?? '');
         $data['store_pickup_locations'] = self::normalizePickupLocations($data['store_pickup_locations'] ?? '');
+        $data['local_delivery_fee'] = self::normalizeMoneyAmount($data['local_delivery_fee'] ?? 0);
         $data['local_delivery_minimum_order'] = self::normalizeMoneyAmount($data['local_delivery_minimum_order'] ?? 0);
         $data['recovery_email_cooldown_minutes'] = self::normalizeRecoveryEmailCooldownMinutes($data['recovery_email_cooldown_minutes'] ?? 1440);
-        $data['recovery_automation_schedule'] = self::normalizeReservationCleanupSchedule($data['recovery_automation_schedule'] ?? 'disabled');
+        $data['recovery_automation_schedule'] = self::normalizeReservationCleanupSchedule($data['recovery_automation_schedule'] ?? 'disabled', 'disabled');
+        $data['recovery_automation_enabled'] = !empty($data['recovery_automation_enabled']);
         $data['recovery_automation_min_age_minutes'] = self::normalizeRecoveryAutomationMinAgeMinutes($data['recovery_automation_min_age_minutes'] ?? 60);
         $data['recovery_automation_batch_limit'] = self::normalizeRecoveryAutomationBatchLimit($data['recovery_automation_batch_limit'] ?? 10);
         $data['recovery_discount_code'] = self::normalizeRecoveryDiscountCode($data['recovery_discount_code'] ?? '');
@@ -280,6 +288,7 @@ trait MercatoStoreServices {
     }
 
     protected static function encodeNotificationTemplates(array $templates): string {
+        if ($templates === []) return '{}';
         return json_encode($templates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}';
     }
 
@@ -293,7 +302,12 @@ trait MercatoStoreServices {
     }
 
     protected function requireNotificationTemplateAdmin(User $user): void {
-        if (!$user->isSuperuser() && !$user->hasPermission('mercato-admin')) throw new WirePermissionException('You cannot edit transactional email templates.');
+        if (!$user->isSuperuser() && (
+            !$user->hasPermission('mercato-admin')
+            || !$user->hasPermission('mercato-manage-notifications')
+        )) {
+            throw new WirePermissionException('You cannot edit transactional email templates.');
+        }
     }
 
     protected function persistNotificationTemplateConfig(array $changes): void {
@@ -741,7 +755,12 @@ trait MercatoStoreServices {
             'fulfilment_label' => (string) ($fulfilment['label'] ?? ''),
         ];
 
-        if ($method === MercatoFulfilmentMethodType::STORE_PICKUP) {
+        if (($fulfilment['requires_shipping'] ?? true) === false) {
+            $shipping['type'] = 'no_shipping';
+            foreach (['address', 'address_2', 'city', 'zip', 'country', 'region', 'delivery_window', 'delivery_note'] as $field) {
+                $shipping[$field] = '';
+            }
+        } elseif ($method === MercatoFulfilmentMethodType::STORE_PICKUP) {
             $pickupLocations = $this->getStorePickupLocations();
             $pickupLocationKey = trim((string) ($data['pickup_location'] ?? ''));
             $pickupLocation = $pickupLocations[$pickupLocationKey] ?? reset($pickupLocations) ?: [];
@@ -1123,7 +1142,7 @@ trait MercatoStoreServices {
     }
 
     public function getRecoveryAutomationSchedule(): string {
-        return self::normalizeReservationCleanupSchedule($this->recovery_automation_schedule ?? 'disabled');
+        return self::normalizeReservationCleanupSchedule($this->recovery_automation_schedule ?? 'disabled', 'disabled');
     }
 
     public function getRecoveryAutomationMinAgeMinutes(): int {

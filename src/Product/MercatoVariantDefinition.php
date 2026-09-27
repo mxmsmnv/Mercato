@@ -117,7 +117,11 @@ final class MercatoVariantDefinition {
                 if (!isset($optionMap[$optionId])) $errors[] = sprintf('Variant "%s" uses unknown option "%s".', $id ?: '?', $optionId);
             }
             if ($variant['price'] !== null && $variant['price'] < 0) $errors[] = sprintf('Variant "%s" price cannot be negative.', $id ?: '?');
+            if ($variant['price'] !== null && !is_finite($variant['price'])) $errors[] = sprintf('Variant "%s" price must be finite.', $id ?: '?');
+            if (!is_finite($variant['price_adjustment'])) $errors[] = sprintf('Variant "%s" price adjustment must be finite.', $id ?: '?');
+            if ($variant['shipping_price'] !== null && !is_finite($variant['shipping_price'])) $errors[] = sprintf('Variant "%s" shipping price must be finite.', $id ?: '?');
             foreach (['weight_kg', 'length_cm', 'width_cm', 'height_cm'] as $measurement) {
+                if ($variant[$measurement] !== null && !is_finite($variant[$measurement])) $errors[] = sprintf('Variant "%s" %s must be finite.', $id ?: '?', $measurement);
                 if ($variant[$measurement] !== null && $variant[$measurement] < 0) $errors[] = sprintf('Variant "%s" %s cannot be negative.', $id ?: '?', $measurement);
             }
             $combination = self::combinationKey($variant['options']);

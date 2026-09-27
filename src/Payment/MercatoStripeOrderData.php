@@ -27,7 +27,8 @@ final class MercatoStripeOrderData {
         $productTypes = [];
 
         foreach ($items as $item) {
-            $quantity = max(0.0, (float) ($item['quantity'] ?? 1));
+            $quantity = (float) ($item['quantity'] ?? 1);
+            $quantity = is_finite($quantity) ? max(0.0, $quantity) : 0.0;
             $quantityTotal += $quantity;
 
             $title = self::scalar($item['title'] ?? ($item['name'] ?? ''));
@@ -112,9 +113,16 @@ final class MercatoStripeOrderData {
     }
 
     private static function limit(string $value, int $length): string {
-        if (function_exists('mb_substr')) {
-            return mb_substr($value, 0, $length, 'UTF-8');
+        if (strlen($value) <= $length) {
+            return $value;
         }
-        return substr($value, 0, $length);
+        if (function_exists('mb_strcut')) {
+            return mb_strcut($value, 0, $length, 'UTF-8');
+        }
+        $bounded = substr($value, 0, $length);
+        while ($bounded !== '' && preg_match('//u', $bounded) !== 1) {
+            $bounded = substr($bounded, 0, -1);
+        }
+        return $bounded;
     }
 }

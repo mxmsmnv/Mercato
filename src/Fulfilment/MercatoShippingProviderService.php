@@ -146,7 +146,9 @@ final class MercatoShippingProviderService extends Wire {
     }
 
     public function redactSnapshot(array $details): array {
-        if (isset($details['provider_shipping']['label']['label_url'])) $details['provider_shipping']['label']['label_url'] = '[redacted]';
+        foreach (['label_url', 'label_data', 'document'] as $key) {
+            if (isset($details['provider_shipping']['label'][$key])) $details['provider_shipping']['label'][$key] = '[redacted]';
+        }
         if (isset($details['manual_label_url'])) $details['manual_label_url'] = '[redacted]';
         return $details;
     }
@@ -177,7 +179,19 @@ final class MercatoShippingProviderService extends Wire {
         unset($rate); return array_values($rates);
     }
     protected function invoke(MercatoShippingProviderInterface $provider, string $method, array $context): array { $result = $this->retry(fn(): array => $provider->$method($context)); if (!is_array($result)) throw new WireException('Shipping provider returned an invalid response.'); return $result; }
-    protected function retry(callable $operation): array { $attempts = max(1, min(4, (int) ($this->commerce->shipping_provider_retries ?? 1) + 1)); $last = null; for ($i = 0; $i < $attempts; $i++) try { return $operation(); } catch (\Throwable $e) { $last = $e; } throw new WireException($last?->getMessage() ?: 'Shipping provider failed.', 502, $last); }
+    protected function retry(callable $operation): array {
+        $attempts = max(1, min(4, (int) ($this->commerce->shipping_provider_retries ?? 1) + 1));
+        $last = null;
+        for ($i = 0; $i < $attempts; $i++) try {
+            return $operation();
+        } catch (\Throwable $e) {
+            // TypeError/Error failures are deterministic contract defects, not
+            // transient carrier failures. Never duplicate an attempted call.
+            if (!$e instanceof \Exception) throw $e;
+            $last = $e;
+        }
+        throw new WireException($last?->getMessage() ?: 'Shipping provider failed.', 502, $last);
+    }
     protected function rateFailure(\Throwable $e, string $provider): array { $policy = (string) ($this->commerce->shipping_provider_failure_policy ?? 'manual_fallback'); $this->audit('rate_failure', ['provider' => $provider, 'policy' => $policy, 'error' => $e->getMessage()]); if ($policy === 'manual_fallback') return ['provider' => $provider, 'rates' => [], 'fallback' => true, 'error' => $e->getMessage()]; throw new WireException('Live shipping rates are unavailable: ' . $e->getMessage(), 503, $e); }
     protected function providerForOrder(array $details): MercatoShippingProviderInterface { $key = (string) ($details['shipping_provider_quote']['provider'] ?? ''); $provider = $this->getProviders()[$key] ?? null; if (!$provider) throw new WireException('The order shipping provider is unavailable.', 503); return $provider; }
     protected function fulfilmentDetails(Page $order): array { $details = json_decode((string) $order->mrc_fulfilment_details, true); return is_array($details) ? $details : []; }

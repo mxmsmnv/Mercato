@@ -17,8 +17,23 @@ $config = ProcessWire::buildConfig($site);
 $config->dbHost = '127.0.0.1';
 $wire = new ProcessWire($config);
 $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser'));
+$wire->set('page', $wire->pages->get('/'));
 /** @var Mercato $commerce */
 $commerce = $wire->modules->get('Mercato');
+$order = null;
+$voidOrder = null;
+$taxLogPath = rtrim((string) $wire->config->paths->logs, '/') . '/mercato-tax.txt';
+$taxLogExisted = is_file($taxLogPath);
+$taxLogBefore = $taxLogExisted ? (string) file_get_contents($taxLogPath) : '';
+register_shutdown_function(static function () use ($wire, &$order, &$voidOrder, $taxLogPath, $taxLogExisted, $taxLogBefore): void {
+    foreach ([$order, $voidOrder] as $fixture) {
+        if (!$fixture instanceof Page || !$fixture->id) continue;
+        $fresh = $wire->pages->get((int) $fixture->id);
+        if ($fresh->id) $wire->pages->delete($fresh, true);
+    }
+    if ($taxLogExisted) file_put_contents($taxLogPath, $taxLogBefore, LOCK_EX);
+    elseif (is_file($taxLogPath)) unlink($taxLogPath);
+});
 
 final class MercatoIntegrationTaxProvider implements MercatoTaxProviderInterface {
     public int $estimateCalls = 0;
@@ -27,9 +42,11 @@ final class MercatoIntegrationTaxProvider implements MercatoTaxProviderInterface
     public int $voidCalls = 0;
     public bool $failFirst = false;
     public bool $slow = false;
+    public bool $programmerError = false;
     public function getTaxProviderKey(): string { return 'integration-fixture'; }
     public function estimate(array $context): array {
         $this->estimateCalls++;
+        if ($this->programmerError) throw new \TypeError('Fixture tax contract defect.');
         if ($this->failFirst && $this->estimateCalls === 1) throw new WireException('Fixture transient failure.');
         if ($this->slow) usleep(1100000);
         $base = max(0, (float) $context['items'][0]['line_total'] - (float) $context['discount']['amount']);
@@ -79,5 +96,12 @@ $provider->slow = true; $provider->failFirst = false;
 $timedOut = false;
 try { $commerce->taxService()->estimate($cart, $customer, $shipping); } catch (WireException $e) { $timedOut = str_contains($e->getMessage(), 'timed out'); }
 $expect($timedOut, 'Configured timeout outcome was not enforced.');
+
+$provider->slow = false;
+$provider->programmerError = true;
+$beforeProgrammerError = $provider->estimateCalls;
+$programmerFailure = false;
+try { $commerce->taxService()->estimate($cart, $customer, $shipping); } catch (WireException $e) { $programmerFailure = str_contains($e->getMessage(), 'contract defect'); }
+$expect($programmerFailure && $provider->estimateCalls === $beforeProgrammerError + 1, 'Deterministic tax contract defect was retried.');
 
 echo 'Mercato tax integration tests passed; fixture orders ' . $order->id . ' and ' . $voidOrder->id . ".\n";

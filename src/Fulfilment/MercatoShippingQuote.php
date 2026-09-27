@@ -9,7 +9,7 @@ final class MercatoShippingQuote {
             $id = substr(trim((string) ($rate['id'] ?? $rate['rate_id'] ?? '')), 0, 160);
             $service = substr(trim((string) ($rate['service'] ?? $rate['service_code'] ?? '')), 0, 160);
             $amount = round((float) ($rate['amount'] ?? 0), 2);
-            if ($id === '' || $service === '' || $amount < 0) continue;
+            if ($id === '' || $service === '' || !is_finite($amount) || $amount < 0) continue;
             $expires = trim((string) ($rate['expires_at'] ?? ''));
             $normalized[] = [
                 'id' => $id,

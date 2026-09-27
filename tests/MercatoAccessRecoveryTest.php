@@ -26,6 +26,7 @@ foreach ([
 foreach (['hasValidToken', '303', 'no-store', 'no-referrer', 'mrc_access_recovery_once'] as $needle) {
     if (!str_contains($endpoint, $needle)) throw new RuntimeException('Mercato access recovery endpoint safeguard is missing: ' . $needle);
 }
+if (!str_contains($trait, '<html lang="en">')) throw new RuntimeException('Default access recovery output must declare its document language.');
 if (!str_contains($delivery, "'{access_recovery_link}' => \$this->commerce->getOrderAccessRecoveryUrl(\$order)")) {
     throw new RuntimeException('Order confirmation does not resolve the signed access recovery link.');
 }

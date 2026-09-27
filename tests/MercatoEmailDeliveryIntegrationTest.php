@@ -4,6 +4,7 @@ $site = getenv('MERCATO_TEST_SITE');
 if (!$site) { echo "Mercato email delivery integration test skipped (set MERCATO_TEST_SITE).\n"; exit(0); }
 $_SERVER['HTTP_HOST'] = 'mercato.test'; $_SERVER['SERVER_NAME'] = 'mercato.test'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
 require $site . '/wire/core/ProcessWire.php'; $config = ProcessWire::buildConfig($site); $config->dbHost = '127.0.0.1'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser')); /** @var Mercato $commerce */ $commerce = $wire->modules->get('Mercato');
+$notificationLogPath=rtrim((string)$wire->config->paths->logs,'/').'/mercato-notifications.txt';$notificationLogExisted=is_file($notificationLogPath);$notificationLogBefore=$notificationLogExisted?(string)file_get_contents($notificationLogPath):'';$lockPaths=[];$overrideState=null;register_shutdown_function(static function()use($notificationLogPath,$notificationLogExisted,$notificationLogBefore,&$lockPaths,&$overrideState):void{if($notificationLogExisted)file_put_contents($notificationLogPath,$notificationLogBefore,LOCK_EX);elseif(is_file($notificationLogPath))unlink($notificationLogPath);foreach($lockPaths as[$path,$existed])if(!$existed&&is_file($path))unlink($path);if(is_array($overrideState)){[$dir,$dirExisted,$file,$fileExisted,$fileBefore]=$overrideState;if($fileExisted)file_put_contents($file,$fileBefore,LOCK_EX);elseif(is_file($file))unlink($file);if(!$dirExisted&&is_dir($dir))@rmdir($dir);}});
 
 final class EmailRetryFixture implements MercatoEmailTransportInterface {
     public int $calls = 0;
@@ -15,18 +16,30 @@ final class EmailWebhookFixture implements MercatoEmailWebhookAdapterInterface {
     public function getName(): string { return 'email-webhook-fixture'; }
     public function verifyAndParse(string $payload, array $headers): array { if (($headers['signature'] ?? '') !== 'valid') throw new WireException('Invalid fixture signature.', 401); return [['event_id' => $payload, 'type' => 'complaint', 'provider_message_id' => 'message-fixture', 'recipient_hash' => hash('sha256', 'hidden@example.test')]]; }
 }
+final class EmailContractDefectFixture implements MercatoEmailTransportInterface {
+    public int $calls = 0;
+    public function getName(): string { return 'contract-defect-fixture'; }
+    public function getSetupStatus(): array { return ['ready' => true, 'errors' => []]; }
+    public function send(array $message): array { $this->calls++; throw new \TypeError('Fixture email contract defect.'); }
+}
 
 $transport = new EmailRetryFixture(); $service = new MercatoEmailDeliveryService($commerce, $transport); $service->setWire($wire);
 $commerce->notification_sender_name = 'Fixture Store'; $commerce->notification_sender_email = 'sender@example.test'; $commerce->notification_reply_to = 'reply@example.test'; $commerce->notification_retries = 2; $commerce->notification_brand_color = '#123456'; $commerce->enabled_notification_events = MercatoEmailEventCatalog::EVENTS;
-$overrideDir = $wire->config->paths->templates . 'mercato/emails/zz'; if (!is_dir($overrideDir)) mkdir($overrideDir, 0775, true); $overrideFile = $overrideDir . '/payment_failed.txt'; file_put_contents($overrideFile, 'Localized {invoice} for {customer}');
+$overrideDir = $wire->config->paths->templates . 'mercato/emails/zz';$overrideFile=$overrideDir.'/payment_failed.txt';$overrideState=[$overrideDir,is_dir($overrideDir),$overrideFile,is_file($overrideFile),is_file($overrideFile)?(string)file_get_contents($overrideFile):'']; if (!is_dir($overrideDir)) mkdir($overrideDir, 0775, true); file_put_contents($overrideFile, 'Localized {invoice} for {customer}');
 $localized = $service->preview('payment_failed', ['invoice' => 'MRC-LOCAL', 'customer' => 'Localized Customer'], ['locale' => 'zz']); unlink($overrideFile); @rmdir($overrideDir);
 if (($localized['text'] ?? '') !== 'Localized MRC-LOCAL for Localized Customer' || !str_contains((string) ($localized['html'] ?? ''), '#123456')) throw new \RuntimeException('Localized override or branding render failed.');
 $key = 'email-integration-' . bin2hex(random_bytes(8));
+$keyLock=rtrim((string)$wire->config->paths->logs,'/').'/mercato-notifications-'.substr(hash('sha256',$key),0,2).'.lock';$lockPaths[]=[$keyLock,is_file($keyLock)];
 $recipient = 'email-' . bin2hex(random_bytes(6)) . '@example.test';
 $first = $service->deliver('payment_failed', $recipient, ['invoice' => 'MRC-TEST', 'customer' => 'Customer', 'reason' => 'Declined', 'payment_link' => 'https://mercato.test/pay?token=signed', 'order_status_link' => 'https://mercato.test/status?token=signed'], ['idempotency_key' => $key, 'business_event_id' => $key]);
 if (($first['status'] ?? '') !== 'sent' || $transport->calls !== 2 || ($first['retry_count'] ?? -1) !== 1 || ($first['provider_message_id'] ?? '') !== 'message-fixture') throw new \RuntimeException('Transport retry/audit flow failed.');
 $duplicate = $service->deliver('payment_failed', $recipient, [], ['idempotency_key' => $key]);
 if (($duplicate['status'] ?? '') !== 'skipped' || $transport->calls !== 2) throw new \RuntimeException('Duplicate email event was not idempotent.');
+$defectTransport = new EmailContractDefectFixture(); $defectService = new MercatoEmailDeliveryService($commerce, $defectTransport); $defectService->setWire($wire);
+$defectKey = 'email-contract-defect-' . bin2hex(random_bytes(8));
+$defectLock=rtrim((string)$wire->config->paths->logs,'/').'/mercato-notifications-'.substr(hash('sha256',$defectKey),0,2).'.lock';$lockPaths[]=[$defectLock,is_file($defectLock)];
+$defect = $defectService->deliver('payment_failed', $recipient, ['invoice' => 'MRC-DEFECT'], ['idempotency_key' => $defectKey, 'business_event_id' => $defectKey]);
+if (($defect['status'] ?? '') !== 'failed' || ($defect['retry_count'] ?? -1) !== 0 || $defectTransport->calls !== 1) throw new \RuntimeException('Deterministic email contract defect was retried.');
 $log = file_get_contents($wire->config->paths->logs . 'mercato-notifications.txt');
 if (str_contains((string) $log, 'sk_live_must_redact') || str_contains((string) $log, $recipient)) throw new \RuntimeException('Email delivery log leaked a secret or recipient address.');
 $adapter = new EmailWebhookFixture();

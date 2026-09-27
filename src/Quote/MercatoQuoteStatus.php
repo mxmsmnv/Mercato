@@ -23,6 +23,7 @@ final class MercatoQuoteStatus {
     }
 
     public static function canTransition(string $from, string $to): bool {
+        if (!in_array($from, self::all(), true) || !in_array($to, self::all(), true)) return false;
         if ($from === $to) return true;
         return in_array($to, match ($from) {
             self::SUBMITTED => [self::UNDER_REVIEW, self::QUOTED, self::DECLINED, self::EXPIRED],

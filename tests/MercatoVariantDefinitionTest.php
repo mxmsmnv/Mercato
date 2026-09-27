@@ -43,4 +43,8 @@ $missingOption = MercatoVariantDefinition::validate($options, [array_merge($vari
 ])]);
 $expect($missingOption['valid'] === false, 'Incomplete combinations must fail validation.');
 
+$nonFinite = MercatoVariantDefinition::validate($options, [array_merge($variants[0], ['price' => NAN])]);
+$expect($nonFinite['valid'] === false, 'Non-finite variant prices must fail validation.');
+$expect(str_contains(implode(' ', $nonFinite['errors']), 'must be finite'), 'Expected non-finite price error.');
+
 echo "Mercato variant definition tests passed.\n";

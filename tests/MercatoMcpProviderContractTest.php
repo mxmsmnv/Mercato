@@ -23,6 +23,8 @@ $tools = [
 
 $expect(str_contains($module, "'mcpProvider' => true"), 'Mercato did not opt in to McpServer discovery.');
 $expect(str_contains($module, 'use MercatoMcpProviderTrait;'), 'Mercato does not compose the MCP provider trait.');
+$expect((bool) preg_match('/public const MODULE_VERSION = \d+;/', $module) && str_contains($module, "'version'  => self::MODULE_VERSION"), 'Mercato module metadata does not use its canonical release version constant.');
+$expect(str_contains($provider, "formatVersion(self::MODULE_VERSION)"), 'MCP discovery version can drift from the installed Mercato release.');
 foreach ($tools as $tool) $expect(str_contains($provider, "'{$tool}'"), "Missing MCP tool: {$tool}");
 $expect(substr_count($provider, "'additionalProperties' => false") >= 2, 'Tool and nested mutation object schemas must be closed.');
 $expect(str_contains($provider, "'mercato_purchase_shipping_label'") && str_contains($provider, "'admin'"), 'Label purchase must require the highest McpServer scope.');

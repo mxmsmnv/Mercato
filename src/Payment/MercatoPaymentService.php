@@ -374,7 +374,8 @@ class MercatoPaymentService extends Wire {
                 $errors[] = $this->commerce->_('Choose an available pickup location.');
             }
         }
-        if (in_array($fulfilmentType, [MercatoFulfilmentMethodType::CARRIER_DELIVERY, MercatoFulfilmentMethodType::LOCAL_DELIVERY], true)) {
+        if (($fulfilment['requires_shipping'] ?? true)
+            && in_array($fulfilmentType, [MercatoFulfilmentMethodType::CARRIER_DELIVERY, MercatoFulfilmentMethodType::LOCAL_DELIVERY], true)) {
             foreach (['address', 'city', 'zip', 'country'] as $field) {
                 if (trim((string) ($data[$field] ?? '')) === '') {
                     $errors[] = $this->commerce->_('Delivery address and postal code are required for this fulfilment method.');

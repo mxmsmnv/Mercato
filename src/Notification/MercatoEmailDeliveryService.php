@@ -80,11 +80,16 @@ final class MercatoEmailDeliveryService extends Wire {
             $maxRetries = max(0, min(5, (int) ($this->commerce->notification_retries ?? 2)));
             $last = [];
             for ($retry = 0; $retry <= $maxRetries; $retry++) {
+                $retryable = true;
                 try { $last = $this->transport->send($message); }
-                catch (\Throwable $e) { $last = ['accepted' => false, 'status' => 'failed', 'message' => $e->getMessage()]; }
-                $status = !empty($last['accepted']) ? 'sent' : ($retry < $maxRetries ? 'retrying' : 'failed');
+                catch (\Throwable $e) {
+                    $last = ['accepted' => false, 'status' => 'failed', 'message' => $e->getMessage()];
+                    $retryable = $e instanceof \Exception;
+                }
+                $status = !empty($last['accepted']) ? 'sent' : ($retryable && $retry < $maxRetries ? 'retrying' : 'failed');
                 $result = $this->record($event, $status, $recipient, $context, ['message' => (string) ($last['message'] ?? ''), 'idempotency_key' => $idempotencyKey, 'retry_count' => $retry, 'provider' => $this->transport->getName(), 'provider_message_id' => (string) ($last['provider_message_id'] ?? ''), 'provider_status' => (string) ($last['status'] ?? '')]);
                 if (!empty($last['accepted'])) return $result + ['rendered' => $rendered];
+                if (!$retryable) return $result + ['rendered' => $rendered];
             }
             return $result + ['rendered' => $rendered];
         } finally {

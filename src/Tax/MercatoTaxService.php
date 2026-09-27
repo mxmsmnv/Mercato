@@ -151,7 +151,16 @@ final class MercatoTaxService extends Wire {
     protected function retry(callable $operation): array {
         $attempts = max(1, min(4, (int) ($this->commerce->tax_provider_retries ?? 1) + 1));
         $last = null;
-        for ($i = 0; $i < $attempts; $i++) try { $result = $operation(); if (!is_array($result)) throw new WireException('Tax provider returned an invalid response.'); return $result; } catch (\Throwable $e) { $last = $e; }
+        for ($i = 0; $i < $attempts; $i++) try {
+            $result = $operation();
+            if (!is_array($result)) throw new WireException('Tax provider returned an invalid response.');
+            return $result;
+        } catch (\Throwable $e) {
+            // Engine/programming errors are deterministic and retrying them can
+            // repeat provider side effects without any chance of recovery.
+            if (!$e instanceof \Exception) throw $e;
+            $last = $e;
+        }
         throw new WireException($last?->getMessage() ?: 'Tax provider failed.', 502, $last);
     }
 

@@ -95,9 +95,11 @@ $wire->pages->save($order);
 $originalProvider = $commerce->shipping_provider;
 $originalSender = $commerce->notification_sender_email;
 $originalTransport = $commerce->notification_transport;
+$originalEnabledNotificationEvents = $commerce->enabled_notification_events;
 $commerce->shipping_provider = 'reference';
 $commerce->notification_sender_email = 'store@example.test';
 $commerce->notification_transport = 'mcp-fixture';
+$commerce->enabled_notification_events = ['shipment_tracking'];
 $commerce->registerGateway('mcp-fixture', new MercatoMcpPaymentFixtureGateway());
 $commerce->addHookAfter('emailTransport', static function (HookEvent $event): void {
     $transport = new MercatoMcpEmailFixtureTransport();
@@ -164,6 +166,19 @@ try {
     $commerce->shipping_provider = $originalProvider;
     $commerce->notification_sender_email = $originalSender;
     $commerce->notification_transport = $originalTransport;
+    $commerce->enabled_notification_events = $originalEnabledNotificationEvents;
+    $operationKeys = [
+        ['verify_payment', 'verify-' . $nonce],
+        ['create_shipment', 'foreign-' . $nonce],
+        ['create_shipment', 'shipment-' . $nonce],
+        ['purchase_shipping_label', 'label-' . $nonce],
+        ['update_tracking', 'tracking-' . $nonce],
+        ['advance_fulfilment', 'advance-' . $nonce],
+        ['send_order_email', 'email-' . $nonce],
+        ['advance_fulfilment', 'regress-' . $nonce],
+    ];
+    $cleanup = $wire->database->prepare('DELETE FROM mercato_mcp_operations WHERE operation_key_hash=:key');
+    foreach ($operationKeys as [$action, $key]) $cleanup->execute([':key' => hash('sha256', $action . ':' . $key)]);
     if ($order instanceof Page && $order->id) $wire->pages->delete($order, true);
 }
 

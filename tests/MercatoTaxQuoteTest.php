@@ -45,6 +45,12 @@ if ($quote['currency'] !== 'USD' || $quote['total_tax'] !== 8.25 || count($quote
 $failed = false;
 try { MercatoTaxQuote::normalize(['currency' => 'USD', 'total_tax' => -1]); } catch (InvalidArgumentException) { $failed = true; }
 if (!$failed) throw new RuntimeException('Negative tax must be rejected.');
+$failed = false;
+try { MercatoTaxQuote::normalize(['currency' => 'USD', 'total_tax' => NAN]); } catch (InvalidArgumentException) { $failed = true; }
+if (!$failed) throw new RuntimeException('Non-finite tax totals must be rejected.');
+$failed = false;
+try { MercatoTaxQuote::normalize(['currency' => 'USD', 'lines' => [['tax' => INF]]]); } catch (InvalidArgumentException) { $failed = true; }
+if (!$failed) throw new RuntimeException('Non-finite tax line values must be rejected.');
 
 $context = [
     'currency' => 'USD', 'display_mode' => 'excluded', 'idempotency_key' => 'estimate-ny',

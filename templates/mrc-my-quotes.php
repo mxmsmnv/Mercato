@@ -8,6 +8,7 @@ if (($templateOverride = $commerce->getStorefrontTemplateOverridePath('mrc-my-qu
     return;
 }
 require_once __DIR__ . '/mrc-storefront.php';
+mrc_storefront_private_headers();
 $ui = $commerce->getFrontendUiClasses();
 $isVanilla = $commerce->getFrontendFramework() === 'vanilla';
 $quotes = $user->isGuest() ? new PageArray() : $commerce->quoteService()->findForCustomer($user);
@@ -24,7 +25,7 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
 <body class="<?= $ui['body'] ?>">
 <?= mrc_storefront_header($commerce, $pages, $config, $sanitizer) ?>
 <main class="<?= $ui['shell'] ?>">
-    <section class="<?= $ui['panel'] ?>">
+    <section class="<?= $ui['panel'] ?> mrc-private-panel">
         <span class="<?= $ui['kicker'] ?>">Account</span>
         <h1>My quote requests</h1>
         <?php if ($user->isGuest()): ?>

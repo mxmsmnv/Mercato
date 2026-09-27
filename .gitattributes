@@ -3,7 +3,16 @@
 /.mercato-local export-ignore
 /tests export-ignore
 /tools export-ignore
+/AGENTS.md export-ignore
+/ACCEPTANCE.md export-ignore
+/TESTING.md export-ignore
 /scripts/build-release.sh export-ignore
+/scripts/check-licenses.php export-ignore
+/scripts/run-acceptance.php export-ignore
+/scripts/run-fresh-install.php export-ignore
+/scripts/run-processwire-matrix.php export-ignore
+/scripts/run-tests.php export-ignore
+/scripts/validate-acceptance.php export-ignore
 /.DS_Store export-ignore
 /.gitignore export-ignore
 /phpunit.xml.dist export-ignore

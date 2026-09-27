@@ -5,6 +5,18 @@ if ($missing) { fwrite(STDERR, 'Missing release runtime files: ' . implode(', ',
 require $root . '/vendor/autoload.php';
 if (!class_exists('Stripe\\StripeClient')) { fwrite(STDERR, "Stripe SDK is not autoloadable.\n"); exit(1); }
 if (in_array('--release', $argv, true)) {
-    $forbidden = ['.env', '.DS_Store', '.mercato-local', '.git', '.github', 'tests']; foreach ($forbidden as $name) if (file_exists($root . '/' . $name)) { fwrite(STDERR, "Forbidden release path present: $name\n"); exit(1); }
+    $forbidden = [
+        '.env', '.DS_Store', '.mercato-local', '.git', '.github', 'tests',
+        'AGENTS.md', 'ACCEPTANCE.md', 'TESTING.md',
+        'scripts/build-release.sh', 'scripts/check-licenses.php', 'scripts/run-acceptance.php',
+        'scripts/run-fresh-install.php', 'scripts/run-processwire-matrix.php', 'scripts/run-tests.php',
+        'scripts/validate-acceptance.php',
+    ];
+    foreach ($forbidden as $name) {
+        if (file_exists($root . '/' . $name)) {
+            fwrite(STDERR, "Forbidden release path present: $name\n");
+            exit(1);
+        }
+    }
 }
 echo "Mercato runtime manifest verified.\n";

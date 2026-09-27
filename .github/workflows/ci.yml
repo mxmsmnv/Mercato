@@ -57,6 +57,48 @@ jobs:
       - run: npm ci
       - run: php scripts/validate-acceptance.php
       - run: npx playwright test -c tests/e2e/playwright.config.js --list
+  processwire-boundary:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - processwire: '3.0.200'
+            php: '8.1'
+          - processwire: '3.0.246'
+            php: '8.3'
+          - processwire: '3.0.265'
+            php: '8.5'
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: mercato-ci-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=mercato-ci-root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, filter, gd, hash, json, mysqli, pdo_mysql, session, zip
+          coverage: none
+      - uses: ramsey/composer-install@v3
+        with:
+          dependency-versions: locked
+      - run: php scripts/run-processwire-matrix.php
+        env:
+          MERCATO_PROCESSWIRE_MATRIX: ${{ matrix.processwire }}
+          MERCATO_FRESH_DB_HOST: 127.0.0.1
+          MERCATO_FRESH_DB_PORT: 3306
+          MERCATO_FRESH_DB_USER: root
+          MERCATO_FRESH_DB_PASS: mercato-ci-root
+          MERCATO_FRESH_CONFIRM: I_UNDERSTAND_THIS_CREATES_AND_DROPS_A_DISPOSABLE_DATABASE
   release-smoke:
     runs-on: ubuntu-latest
     steps:
@@ -67,6 +109,8 @@ jobs:
         with:
           php-version: '8.1'
           coverage: none
-      - run: scripts/build-release.sh 0.0.0-ci
-      - run: unzip -l dist/mercato-0.0.0-ci.zip | tee /tmp/release-files.txt
-      - run: '! grep -E "(^|/)(tests|\.git|\.github|\.mercato-local|\.env|\.DS_Store)(/|$)" /tmp/release-files.txt'
+      - id: package
+        run: echo "version=$(php -r '$p=json_decode(file_get_contents("package.json"),true);echo $p["version"];')" >> "$GITHUB_OUTPUT"
+      - run: scripts/build-release.sh ${{ steps.package.outputs.version }}
+      - run: unzip -l dist/mercato-${{ steps.package.outputs.version }}.zip | tee /tmp/release-files.txt
+      - run: '! grep -E "(^|/)(tests|\.git|\.github|\.mercato-local|\.env|\.DS_Store)(/|$)|(^|/)(AGENTS|ACCEPTANCE|TESTING)\.md$|(^|/)scripts/(build-release\.sh|check-licenses\.php|run-acceptance\.php|run-fresh-install\.php|run-processwire-matrix\.php|run-tests\.php|validate-acceptance\.php)$" /tmp/release-files.txt'

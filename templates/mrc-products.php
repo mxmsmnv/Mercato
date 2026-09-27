@@ -13,6 +13,7 @@ if (($templateOverride = $commerce->getStorefrontTemplateOverridePath('mrc-produ
     return;
 }
 require_once __DIR__ . '/mrc-storefront.php';
+mrc_storefront_private_headers();
 $cart = $commerce->cart();
 $ui = $commerce->getFrontendUiClasses();
 $frameworkAssets = $commerce->renderFrontendFrameworkAssets();
@@ -283,6 +284,9 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
         .mrc-mini-cart-total { font-size: 18px; font-weight: 700; }
         .mrc-mini-cart-empty { color: var(--pw-muted-color, rgba(0,0,0,0.55)); }
         .mrc-mini-cart form { margin: 0; }
+        .mrc-catalog-panel h1,
+        .mrc-product-card h2 { overflow-wrap: anywhere; }
+        .mrc-sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); white-space: nowrap; }
         @media (max-width: 720px) {
             .mrc-catalog-header { display: grid; }
             .mrc-mini-cart { justify-content: flex-start; }
@@ -427,12 +431,12 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
                 $collectionImageUrl = $collectionProduct->mrc_images->first()->url;
             }
             ?>
-            <a class="relative min-h-[220px] overflow-hidden rounded-md bg-[#d8cdbc] text-[#fffaf2] no-underline" href="<?= $sanitizer->entities($collection->url) ?>">
+            <a class="mrc-collection-tile relative min-h-[220px] overflow-hidden rounded-md bg-[#d8cdbc] text-[#fffaf2] no-underline" href="<?= $sanitizer->entities($collection->url) ?>">
                 <?php if ($collectionImageUrl !== ''): ?>
                     <img class="absolute inset-0 h-full w-full object-cover" src="<?= $sanitizer->entities($collectionImageUrl) ?>" alt="<?= $sanitizer->entities($collection->title) ?>">
                 <?php endif; ?>
                 <span class="absolute inset-0 bg-[#33251f]/35"></span>
-                <span class="absolute bottom-0 left-0 right-0 p-5">
+                <span class="absolute bottom-0 left-0 right-0 bg-[#33251f]/90 p-5">
                     <span class="block text-xs font-semibold uppercase tracking-[0.24em]">Collection</span>
                     <span class="mrc-display mt-2 block text-3xl font-semibold"><?= $sanitizer->entities($collection->title) ?></span>
                 </span>
@@ -440,7 +444,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
         <?php endforeach; ?>
     </section>
     <?php endif; ?>
-    <section class="<?= $catalogPanelClass ?>">
+    <section id="mrc-catalog-results" class="<?= $catalogPanelClass ?>" aria-busy="false">
         <?php if ($message): ?>
             <div class="<?= $ui['message'] ?>"><?= $sanitizer->entities($message) ?></div>
         <?php endif; ?>
@@ -470,9 +474,10 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
                 <?php endif; ?>
             </aside>
         </div>
+        <p class="mrc-sr-only" role="status" aria-live="polite" data-mrc-loading-status></p>
         <?= mrc_storefront_filter_form($filterState, $collections, $sanitizer, $page->url, true) ?>
         <?php if ($products->count() === 0): ?>
-            <p>No products are available yet.</p>
+            <p role="status">No products are available yet.</p>
         <?php else: ?>
             <div class="<?= $catalogGridClass ?>">
                 <?php foreach ($products as $product): ?>
@@ -554,6 +559,16 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
         <?php endif; ?>
     </section>
 </main>
+<script>
+document.querySelectorAll('[data-mrc-product-filters]').forEach(function (form) {
+    form.addEventListener('submit', function () {
+        var results = document.getElementById('mrc-catalog-results');
+        var status = document.querySelector('[data-mrc-loading-status]');
+        if (results) results.setAttribute('aria-busy', 'true');
+        if (status) status.textContent = 'Loading products…';
+    });
+});
+</script>
 <?php if (!$isVanilla): ?>
 <?= mrc_storefront_footer($commerce, $pages, $config, $sanitizer) ?>
 <?php endif; ?>

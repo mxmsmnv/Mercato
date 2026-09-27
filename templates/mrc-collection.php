@@ -13,6 +13,7 @@ if (($templateOverride = $commerce->getStorefrontTemplateOverridePath('mrc-colle
     return;
 }
 require_once __DIR__ . '/mrc-storefront.php';
+mrc_storefront_private_headers();
 
 $cart = $commerce->cart();
 $ui = $commerce->getFrontendUiClasses();
@@ -112,6 +113,10 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'collection', 'page
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600;700&display=swap');
         .mrc-luxury-theme { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
         .mrc-display { font-family: "Cormorant Garamond", Georgia, serif; letter-spacing: 0; }
+        .mrc-collection-hero-copy { min-width: 0; }
+        .mrc-collection-hero-copy h1,
+        .mrc-collection-hero-copy div,
+        .mrc-collection-hero-copy p { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
         @media (prefers-reduced-motion: reduce) {
             .mrc-section-reveal { animation: none; }
         }
@@ -122,7 +127,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'collection', 'page
 <?php if (!$isVanilla): ?>
 <?= mrc_storefront_header($commerce, $pages, $config, $sanitizer, 'collections') ?>
 <section class="mrc-section-reveal mx-auto grid w-full max-w-7xl gap-8 px-4 pb-10 pt-3 md:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
-    <div class="pb-4">
+    <div class="mrc-collection-hero-copy pb-4">
         <span class="<?= $ui['kicker'] ?>">Collection</span>
         <h1 class="mrc-display max-w-3xl text-6xl font-semibold leading-[0.92] text-[#33251f] md:text-8xl"><?= $sanitizer->entities($page->title ?: 'Collection') ?></h1>
         <?php if ($page->hasField('mrc_description') && $page->mrc_description): ?>

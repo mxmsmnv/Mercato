@@ -70,6 +70,7 @@ final class MercatoFulfilmentService extends Wire {
     }
 
     protected function buildMethod(string $type, MercatoProductList $cart, array $customerData, bool $validate): array {
+        $requiresShipping = $cart->requiresShipping();
         $hook = $this->commerce->beforeCalculateShipping($type, $cart, $customerData, $validate);
         if (is_array($hook)) {
             $type = trim((string) ($hook['type'] ?? $type)) ?: $type;
@@ -99,11 +100,12 @@ final class MercatoFulfilmentService extends Wire {
                 'pickup_instructions' => (string) ($location['instructions'] ?? $this->commerce->store_pickup_instructions ?? ''),
                 'pickup_hours' => (string) ($location['hours'] ?? ''),
                 'pickup_locations' => $locations,
+                'requires_shipping' => $requiresShipping,
             ], $cart, $customerData, $validate);
         }
 
         if ($type === MercatoFulfilmentMethodType::LOCAL_DELIVERY) {
-            if ($validate) {
+            if ($validate && $requiresShipping) {
                 $this->assertDeliveryAddress($customerData);
                 $this->assertDeliveryCountryAllowed($customerData);
             }
@@ -111,14 +113,17 @@ final class MercatoFulfilmentService extends Wire {
             $zones = preg_split('/[\r\n,]+/', strtoupper((string) ($this->commerce->local_delivery_postcodes ?? ''))) ?: [];
             $zones = array_values(array_filter(array_map('trim', $zones)));
             $matchedZone = $this->matchLocalDeliveryZone($postcode, $zones);
-            $available = !$zones || $matchedZone !== '';
-            if ($validate && !$available) {
+            // Keep local delivery selectable before the shopper has entered a
+            // postcode; final resolution still validates a complete address
+            // and rejects postcodes outside every configured zone.
+            $available = !$requiresShipping || !$zones || $postcode === '' || $matchedZone !== '';
+            if ($validate && $requiresShipping && !$available) {
                 throw new WireException($this->commerce->_('Local delivery is not available for this postal code.'));
             }
             $minimumOrder = $this->commerce->getLocalDeliveryMinimumOrder();
             $subtotal = round((float) $cart->getSubtotal(), 2);
             $meetsMinimum = $minimumOrder <= 0 || $subtotal >= $minimumOrder;
-            if ($validate && !$meetsMinimum) {
+            if ($validate && $requiresShipping && !$meetsMinimum) {
                 throw new WireException(sprintf(
                     $this->commerce->_('Local delivery requires a minimum order of %s.'),
                     $this->commerce->formatPrice($minimumOrder)
@@ -134,15 +139,16 @@ final class MercatoFulfilmentService extends Wire {
             return $this->finalizeMethod([
                 'type' => $type,
                 'label' => trim((string) ($this->commerce->local_delivery_label ?? '')) ?: $this->commerce->_('Local delivery'),
-                'amount' => round(max(0, (float) ($this->commerce->local_delivery_fee ?? 0)), 2),
+                'amount' => $requiresShipping ? round(max(0, (float) ($this->commerce->local_delivery_fee ?? 0)), 2) : 0.0,
                 'details' => $details,
                 'available' => $available && $meetsMinimum,
                 'minimum_order' => $minimumOrder,
                 'local_delivery_zone' => $matchedZone,
+                'requires_shipping' => $requiresShipping,
             ], $cart, $customerData, $validate);
         }
 
-        if ($validate) {
+        if ($validate && $requiresShipping) {
             $this->assertDeliveryAddress($customerData);
             $this->assertDeliveryCountryAllowed($customerData);
         }
@@ -172,7 +178,9 @@ final class MercatoFulfilmentService extends Wire {
 
         return $this->finalizeMethod([
             'type' => MercatoFulfilmentMethodType::CARRIER_DELIVERY,
-            'label' => trim((string) ($this->commerce->carrier_delivery_label ?? '')) ?: $this->commerce->_('Delivery'),
+            'label' => $requiresShipping
+                ? (trim((string) ($this->commerce->carrier_delivery_label ?? '')) ?: $this->commerce->_('Delivery'))
+                : $this->commerce->_('No shipping required'),
             'amount' => $amount,
             'details' => $details,
             'available' => true,
@@ -180,6 +188,7 @@ final class MercatoFulfilmentService extends Wire {
             'free_shipping_threshold' => $threshold,
             'free_shipping_applied' => $freeShippingApplied,
             'shipping_calculation' => $calculation,
+            'requires_shipping' => $requiresShipping,
         ], $cart, $customerData, $validate);
     }
 

@@ -13,4 +13,18 @@ if (in_array('duplicate_attempt', $normalLifecycle['issues'], true)) throw new R
 $refund = MercatoPaymentReconciliationAudit::classify(['status' => 'partially_refunded', 'paid' => true, 'total' => 100, 'refunded_amount' => 20], ['status' => 'partially_refunded', 'refunded_amount' => 25]);
 if (!in_array('refund_mismatch', $refund['issues'], true)) throw new RuntimeException('Refund mismatch classification failed.');
 if (!MercatoPaymentReconciliationAudit::classify(['status' => 'paid', 'paid' => true, 'total' => 100], ['status' => 'paid', 'refunded_amount' => 0])['healthy']) throw new RuntimeException('Healthy state misclassified.');
+$amountCases = [
+    'negative local refund' => [['status' => 'paid', 'paid' => true, 'total' => 100, 'refunded_amount' => -1], ['status' => 'paid']],
+    'negative remote refund' => [['status' => 'paid', 'paid' => true, 'total' => 100, 'refunded_amount' => 0], ['status' => 'paid', 'refunded_amount' => -1]],
+    'negative total' => [['status' => 'paid', 'paid' => true, 'total' => -1, 'refunded_amount' => 0], ['status' => 'paid']],
+    'non-finite local refund' => [['status' => 'paid', 'paid' => true, 'total' => 100, 'refunded_amount' => NAN], ['status' => 'paid']],
+    'non-finite remote refund' => [['status' => 'paid', 'paid' => true, 'total' => 100, 'refunded_amount' => 0], ['status' => 'paid', 'refunded_amount' => INF]],
+];
+foreach ($amountCases as $label => [$local, $remote]) {
+    $classified = MercatoPaymentReconciliationAudit::classify($local, $remote);
+    if (!in_array('refund_mismatch', $classified['issues'], true)) throw new RuntimeException("Invalid reconciliation amount was accepted: $label.");
+    if (json_encode($classified) === false) throw new RuntimeException("Invalid reconciliation amount produced a non-serializable audit: $label.");
+}
+$roundingBoundary = MercatoPaymentReconciliationAudit::classify(['status' => 'partially_refunded', 'paid' => true, 'total' => 100, 'refunded_amount' => 20], ['status' => 'partially_refunded', 'refunded_amount' => 20.004]);
+if (!$roundingBoundary['healthy']) throw new RuntimeException('Sub-cent reconciliation rounding boundary was misclassified.');
 echo "Mercato payment reconciliation audit tests passed.\n";

@@ -52,7 +52,7 @@ trait ProcessMercatoAdminHelpers {
             'notifications' => [
                 'label' => $this->_('Notifications'),
                 'path' => 'notifications/',
-                'permission' => self::PERMISSION_ADMIN,
+                'permission' => self::PERMISSION_MANAGE_NOTIFICATIONS,
             ],
             'products' => [
                 'label' => $this->_('Products'),
@@ -129,7 +129,7 @@ trait ProcessMercatoAdminHelpers {
         $out .= $this->renderAdminNav($active);
         $out .= '<section class="pw-wrap mrc-admin-panel">';
         $out .= '<h2 class="uk-h3">' . $this->e($this->_('Access denied')) . '</h2>';
-        $out .= '<p class="uk-alert uk-alert-danger">' . $this->e(sprintf($this->_('This Mercato action requires the "%s" permission.'), $permission)) . '</p>';
+        $out .= '<p class="uk-alert uk-alert-danger" role="alert" aria-live="assertive">' . $this->e(sprintf($this->_('This Mercato action requires the "%s" permission.'), $permission)) . '</p>';
         $out .= '</section></div>';
         return $out;
     }
@@ -328,7 +328,7 @@ trait ProcessMercatoAdminHelpers {
     protected function renderSkeletonRows(int $rows, int $columns): string {
         $out = '';
         for ($row = 0; $row < $rows; $row++) {
-            $out .= '<tr class="mrc-skeleton-row">';
+            $out .= '<tr class="mrc-skeleton-row" aria-hidden="true">';
             for ($column = 0; $column < $columns; $column++) {
                 $width = 42 + (($row + $column) % 4) * 13;
                 $out .= '<td><span class="mrc-skeleton" style="width:' . $width . '%"></span></td>';

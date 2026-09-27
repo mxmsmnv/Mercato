@@ -13,6 +13,7 @@ if (($templateOverride = $commerce->getStorefrontTemplateOverridePath('mrc-page'
     return;
 }
 require_once __DIR__ . '/mrc-storefront.php';
+mrc_storefront_private_headers();
 
 $ui = $commerce->getFrontendUiClasses();
 $frameworkAssets = $commerce->renderFrontendFrameworkAssets();
@@ -230,7 +231,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'content']);
             <article class="mrc-message-panel">
                 <span class="<?= $ui['kicker'] ?>">Message preview</span>
                 <h2 class="mrc-display">Service request</h2>
-                <form class="mrc-contact-form" action="<?= $sanitizer->entities($checkoutUrl) ?>">
+                <form class="mrc-contact-form" method="get" action="<?= $sanitizer->entities($checkoutUrl) ?>">
                     <label><span class="<?= $ui['kicker'] ?>">Name</span><input type="text" value="" placeholder="Customer name"></label>
                     <label><span class="<?= $ui['kicker'] ?>">Email</span><input type="email" value="" placeholder="customer@example.com"></label>
                     <label><span class="<?= $ui['kicker'] ?>">Message</span><textarea placeholder="Question about an order, delivery, pickup, or product care"></textarea></label>
@@ -277,7 +278,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'content']);
                 <p><?= $sanitizer->entities($cta[1]) ?></p>
                 <div>
                     <a class="<?= $ui['button'] ?>" href="<?= $sanitizer->entities($productsUrl) ?>">Shop products</a>
-                    <a class="<?= $ui['buttonSecondary'] ?>" href="<?= $sanitizer->entities($collectionsUrl) ?>">View collections</a>
+                    <a class="mrc-page-cta-secondary <?= $ui['buttonSecondary'] ?>" href="<?= $sanitizer->entities($collectionsUrl) ?>">View collections</a>
                 </div>
             </div>
         </div>

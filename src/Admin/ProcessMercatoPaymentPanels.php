@@ -13,7 +13,7 @@ trait ProcessMercatoPaymentPanels {
         }
         $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Reconciliation Queue')) . '</h2><p class="uk-text-muted">' . $this->e($this->_('Paid/unfinalized, finalized/unpaid, duplicate-attempt, missing-webhook, and refund mismatch states. Remote state changes only after an authorized verification.')) . '</p></div></div>';
         if (!$rows) return $out . '<p class="uk-alert uk-alert-success">' . $this->e($this->_('No mismatch states detected in the latest 100 orders.')) . '</p></section>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Order')) . '</th><th>' . $this->e($this->_('Local')) . '</th><th>' . $this->e($this->_('Remote')) . '</th><th>' . $this->e($this->_('Issues')) . '</th><th></th></tr></thead><tbody>';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Order')) . '</th><th>' . $this->e($this->_('Local')) . '</th><th>' . $this->e($this->_('Remote')) . '</th><th>' . $this->e($this->_('Issues')) . '</th><th></th></tr></thead><tbody>';
         foreach ($rows as [$order, $audit]) $out .= '<tr><td>' . $this->e((string) ($order->mrc_invoice_number ?: $order->title)) . '</td><td>' . $this->e((string) $audit['local_status']) . '</td><td>' . $this->e((string) $audit['remote_status']) . '</td><td>' . $this->e(implode(', ', (array) $audit['issues'])) . '</td><td><a class="uk-button uk-button-default" href="' . $this->e($this->orderDetailUrl($order)) . '">' . $this->e($this->_('Inspect')) . '</a></td></tr>';
         return $out . '</tbody></table></div></section>';
     }
@@ -25,7 +25,7 @@ trait ProcessMercatoPaymentPanels {
         $out .= '<p class="uk-text-muted">' . $this->e($this->_('Gateway attempt lifecycle for this order, including retries and client-side confirmations.')) . '</p></div>';
         $out .= '<div class="mrc-panel-actions"><a class="uk-button uk-button-default" href="' . $this->e($this->exportUrl('payment-attempts')) . '"><i class="fa fa-download uk-margin-small-right"></i>' . $this->e($this->_('Export attempts')) . '</a></div></div>';
 
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Time'), $this->_('Event'), $this->_('Gateway'), $this->_('Method'), $this->_('Amount'), $this->_('Status'), $this->_('Context'), $this->_('External ID'), $this->_('Attempt ID')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -78,7 +78,7 @@ trait ProcessMercatoPaymentPanels {
         $out .= $this->renderPaymentAttemptFilters($filters);
 
         $headings = [$this->_('Time'), $this->_('Event'), $this->_('Gateway'), $this->_('Method'), $this->_('Order'), $this->_('Amount'), $this->_('Status'), $this->_('Context'), $this->_('External ID'), $this->_('Attempt ID')];
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ($headings as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -384,7 +384,7 @@ trait ProcessMercatoPaymentPanels {
         $out .= $this->renderRefundQuickFilters($filters);
         $out .= $this->renderRefundFilters($filters);
 
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Time'), $this->_('Event'), $this->_('Order'), $this->_('Gateway'), $this->_('Gateway Status'), $this->_('Refund ID'), $this->_('Amount'), $this->_('Payment'), $this->_('Reason'), $this->_('Actions')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';

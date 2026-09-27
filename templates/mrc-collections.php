@@ -13,6 +13,7 @@ if (($templateOverride = $commerce->getStorefrontTemplateOverridePath('mrc-colle
     return;
 }
 require_once __DIR__ . '/mrc-storefront.php';
+mrc_storefront_private_headers();
 
 $ui = $commerce->getFrontendUiClasses();
 $frameworkAssets = $commerce->renderFrontendFrameworkAssets();
@@ -281,6 +282,9 @@ foreach (['collection', 'availability', 'sort', 'type', 'min_price', 'max_price'
             line-height: 1.75;
             margin: 18px 0 0;
         }
+        .mrc-collections-route .mrc-collections-route-kicker {
+            color: var(--mrc-cream);
+        }
         .mrc-collections-route-grid {
             display: grid;
             gap: 12px;
@@ -442,7 +446,7 @@ foreach (['collection', 'availability', 'sort', 'type', 'min_price', 'max_price'
                         <?php endif; ?>
                     </span>
                     <span class="mrc-collection-card-body">
-                        <span class="mrc-small-caps" style="color:var(--mrc-gold)">Collection</span>
+                        <span class="mrc-small-caps" style="color:var(--mrc-gold-ink)">Collection</span>
                         <span class="mrc-collection-card-title">
                             <strong class="mrc-display"><?= $sanitizer->entities($collection->title) ?></strong>
                             <span class="mrc-small-caps"><?= $collectionProductCount ?> item<?= $collectionProductCount === 1 ? '' : 's' ?></span>
@@ -458,7 +462,7 @@ foreach (['collection', 'availability', 'sort', 'type', 'min_price', 'max_price'
 
     <section class="mrc-collections-route">
         <div>
-            <span class="<?= $ui['kicker'] ?>">Demo journeys</span>
+            <span class="mrc-collections-route-kicker <?= $ui['kicker'] ?>">Demo journeys</span>
             <h2 class="mrc-display">Four routes that prove the shop.</h2>
             <p>Collections should not be decoration. They help testers jump into the exact commerce behaviors they need to verify.</p>
         </div>
@@ -496,7 +500,7 @@ foreach (['collection', 'availability', 'sort', 'type', 'min_price', 'max_price'
                         </span>
                         <span class="mrc-card-body">
                             <span class="mrc-card-title mrc-display"><?= $sanitizer->entities($product->title) ?></span>
-                            <span class="mrc-small-caps" style="color:var(--mrc-gold)"><?= $commerce->formatPrice((float) $product->mrc_price) ?></span>
+                            <span class="mrc-small-caps" style="color:var(--mrc-gold-ink)"><?= $commerce->formatPrice((float) $product->mrc_price) ?></span>
                         </span>
                     </a>
                 <?php endforeach; ?>

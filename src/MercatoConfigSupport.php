@@ -45,7 +45,7 @@ trait MercatoConfigSupport {
         if (!is_array($value)) {
             $value = trim((string) $value) !== '' ? explode(',', (string) $value) : [];
         }
-        $value = array_values(array_unique(array_filter(array_map('strval', $value))));
+        $value = array_values(array_unique(array_filter(array_map(static fn($method): string => trim((string) $method), $value))));
         $value = array_values(array_intersect($value, $allowed));
         return $value ?: ['stripe-card'];
     }
@@ -63,7 +63,7 @@ trait MercatoConfigSupport {
         if (!is_array($value)) {
             $value = trim((string) $value) !== '' ? explode(',', (string) $value) : [];
         }
-        $value = array_values(array_unique(array_filter(array_map('strval', $value))));
+        $value = array_values(array_unique(array_filter(array_map(static fn($method): string => trim((string) $method), $value))));
         $value = array_values(array_intersect($value, $allowed));
         return $value ?: ['carrier_delivery'];
     }
@@ -88,9 +88,10 @@ trait MercatoConfigSupport {
         return $minutes;
     }
 
-    protected static function normalizeReservationCleanupSchedule(mixed $value): string {
+    protected static function normalizeReservationCleanupSchedule(mixed $value, string $fallback = 'every30Minutes'): string {
         $value = trim((string) $value);
-        return array_key_exists($value, self::getReservationCleanupScheduleOptions()) ? $value : 'every30Minutes';
+        $fallback = array_key_exists($fallback, self::getReservationCleanupScheduleOptions()) ? $fallback : 'every30Minutes';
+        return array_key_exists($value, self::getReservationCleanupScheduleOptions()) ? $value : $fallback;
     }
 
     protected static function normalizeRetentionDays(mixed $value, int $default, int $min = 0, int $max = 3650): int {
@@ -115,9 +116,16 @@ trait MercatoConfigSupport {
 
     protected static function normalizeMoneyAmount(mixed $value): float {
         $amount = round((float) $value, 2);
+        if (!is_finite($amount)) return 0.0;
         if ($amount < 0) return 0.0;
         if ($amount > 100000000) return 100000000.0;
         return $amount;
+    }
+
+    protected static function normalizeFiniteRange(mixed $value, float $default, float $min, float $max, int $precision = 6): float {
+        $number = (float) $value;
+        if (!is_finite($number)) return $default;
+        return round(max($min, min($max, $number)), $precision);
     }
 
     protected static function normalizeShippingDimensionsField(mixed $value): string {
@@ -138,6 +146,7 @@ trait MercatoConfigSupport {
 
     protected static function normalizeTaxRate(mixed $value): float {
         $rate = round((float) $value, 4);
+        if (!is_finite($rate)) return 0.0;
         if ($rate < 0) return 0.0;
         if ($rate > 100) return 100.0;
         return $rate;
@@ -199,7 +208,7 @@ trait MercatoConfigSupport {
         $parts = is_array($value) ? $value : preg_split('/[\s,;]+/', (string) $value);
         $codes = [];
         foreach ($parts ?: [] as $part) {
-            $code = strtoupper(preg_replace('/[^A-Z]/', '', (string) $part) ?: '');
+            $code = preg_replace('/[^A-Z]/', '', strtoupper((string) $part)) ?: '';
             if (strlen($code) === 2) {
                 $codes[] = $code;
             }
@@ -295,6 +304,24 @@ trait MercatoConfigSupport {
             }
         }
         return implode("\n", array_values($normalized));
+    }
+
+    protected static function normalizeHeadlessAllowedOrigins(mixed $value): string {
+        $values = is_array($value) ? $value : preg_split('/[\r\n,]+/', (string) $value);
+        $origins = [];
+        foreach ((array) $values as $candidate) {
+            $candidate = rtrim(trim((string) $candidate), '/');
+            if ($candidate === '' || str_contains($candidate, '*') || filter_var($candidate, FILTER_VALIDATE_URL) === false) continue;
+            $parts = parse_url($candidate);
+            if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https' || empty($parts['host'])) continue;
+            if (isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])) continue;
+            if (isset($parts['path']) && $parts['path'] !== '') continue;
+            $host = strtolower((string) $parts['host']);
+            $key = 'https://' . $host . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
+            $origins[$key] = $key;
+        }
+        ksort($origins, SORT_STRING);
+        return implode("\n", array_values($origins));
     }
 
     public static function getPaymentMethodOptions(): array {

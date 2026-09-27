@@ -35,4 +35,23 @@ $bounded = MercatoStripeOrderData::fromPendingOrder([
 ]);
 if (strlen($bounded['description']) > 500 || strlen($bounded['metadata']['mrc_skus']) > 450 || strlen($bounded['metadata']['mrc_product_types']) > 450) throw new RuntimeException('Stripe projection exceeded provider-safe bounds.');
 
+$empty = MercatoStripeOrderData::fromPendingOrder([]);
+if ($empty !== ['description' => 'Mercato order', 'metadata' => []]) throw new RuntimeException('Empty Stripe order projection is not deterministic.');
+
+$largeItems = [];
+for ($index = 0; $index < 1000; $index++) {
+    $largeItems[] = ['title' => 'Product ' . $index, 'sku' => 'SKU-' . $index, 'product_type' => $index % 2 ? 'physical' : 'digital', 'quantity' => 1];
+}
+$large = MercatoStripeOrderData::fromPendingOrder(['mrc_order_page_id' => 99, 'mrc_items' => $largeItems]);
+if (($large['metadata']['mrc_line_item_count'] ?? '') !== '1000' || ($large['metadata']['mrc_quantity_total'] ?? '') !== '1000') throw new RuntimeException('Large Stripe projection lost aggregate counts.');
+if (strlen($large['description']) > 500 || strlen($large['metadata']['mrc_skus']) > 450 || strlen($large['metadata']['mrc_product_types']) > 450) throw new RuntimeException('Large Stripe projection exceeded provider-safe bounds.');
+if (preg_match('//u', $large['description']) !== 1) throw new RuntimeException('Large Stripe projection split a UTF-8 code point at the provider byte boundary.');
+
+$localized = MercatoStripeOrderData::fromPendingOrder(['items' => [['title' => str_repeat('陶器', 300), 'sku' => str_repeat('商品', 300), 'quantity' => 1]]]);
+if (strlen($localized['description']) > 500 || strlen($localized['metadata']['mrc_skus']) > 450) throw new RuntimeException('Localized Stripe projection exceeded provider byte bounds.');
+if (preg_match('//u', $localized['description']) !== 1 || preg_match('//u', $localized['metadata']['mrc_skus']) !== 1) throw new RuntimeException('Localized Stripe projection is not valid UTF-8.');
+
+$nonFinite = MercatoStripeOrderData::fromPendingOrder(['items' => [['title' => 'Broken quantity', 'quantity' => NAN]]]);
+if (str_contains(strtolower(json_encode($nonFinite) ?: ''), 'nan')) throw new RuntimeException('Non-finite quantity leaked into Stripe projection.');
+
 echo "Mercato Stripe order data tests passed.\n";

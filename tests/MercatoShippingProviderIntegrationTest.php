@@ -5,14 +5,14 @@ $site = getenv('MERCATO_TEST_SITE');
 if (!$site) { echo "Mercato shipping provider integration test skipped (set MERCATO_TEST_SITE).\n"; exit(0); }
 $_SERVER['HTTP_HOST'] = 'mercato.test'; $_SERVER['SERVER_NAME'] = 'mercato.test'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SCRIPT_NAME'] = '/index.php'; $_SERVER['SCRIPT_FILENAME'] = $site . '/index.php';
 require $site . '/wire/core/ProcessWire.php';
-$config = ProcessWire::buildConfig($site); $config->dbHost = '127.0.0.1'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser'));
+$config = ProcessWire::buildConfig($site); $config->dbHost = '127.0.0.1'; $wire = new ProcessWire($config); $wire->users->setCurrentUser($wire->users->get('template=user, roles.name=superuser')); $wire->set('page', $wire->pages->get('/')); $order = null; $shippingLogPath=rtrim((string)$wire->config->paths->logs,'/').'/mercato-shipping-provider.txt';$shippingLogExisted=is_file($shippingLogPath);$shippingLogBefore=$shippingLogExisted?(string)file_get_contents($shippingLogPath):''; register_shutdown_function(static function () use ($wire, &$order,$shippingLogPath,$shippingLogExisted,$shippingLogBefore): void { if ($order instanceof Page && $order->id) { $fresh = $wire->pages->get((int) $order->id); if ($fresh->id) $wire->pages->delete($fresh, true); } if($shippingLogExisted)file_put_contents($shippingLogPath,$shippingLogBefore,LOCK_EX);elseif(is_file($shippingLogPath))unlink($shippingLogPath); });
 /** @var Mercato $commerce */ $commerce = $wire->modules->get('Mercato');
 $expect = static function (bool $condition, string $message): void { if (!$condition) throw new \RuntimeException($message); };
 final class ShippingFailureFixture implements MercatoShippingProviderInterface {
-    public int $calls = 0; public bool $slow = false; public bool $alwaysFail = false;
+    public int $calls = 0; public bool $slow = false; public bool $alwaysFail = false; public bool $programmerError = false;
     public function __construct(private MercatoShippingProviderInterface $delegate) {}
     public function getShippingProviderKey(): string { return 'failure-fixture'; }
-    public function quoteRates(array $context): array { $this->calls++; if ($this->slow) usleep(1100000); if ($this->alwaysFail || $this->calls === 1) throw new WireException('Fixture carrier failure.'); return $this->delegate->quoteRates($context); }
+    public function quoteRates(array $context): array { $this->calls++; if ($this->programmerError) throw new \TypeError('Fixture shipping contract defect.'); if ($this->slow) usleep(1100000); if ($this->alwaysFail || $this->calls === 1) throw new WireException('Fixture carrier failure.'); return $this->delegate->quoteRates($context); }
     public function createShipment(array $context): array { return $this->delegate->createShipment($context); }
     public function purchaseLabel(array $context): array { return $this->delegate->purchaseLabel($context); }
     public function getLabel(array $context): array { return $this->delegate->getLabel($context); }
@@ -47,4 +47,5 @@ $commerce->shipping_provider = 'failure-fixture'; $commerce->shipping_provider_r
 $retried = $commerce->shippingProviderService()->quoteRates($cart, $customer); $expect(count($retried['rates']) === 2 && $failureFixture->calls === 2, 'Provider retry fixture failed.');
 $failureFixture->slow = true; $failureFixture->calls = 1; $commerce->shipping_provider_timeout_seconds = 1; $timedOut = false; try { $commerce->shippingProviderService()->quoteRates($cart, $customer); } catch (WireException $e) { $timedOut = str_contains($e->getMessage(), 'timed out'); } $expect($timedOut, 'Provider timeout fixture failed.');
 $failureFixture->slow = false; $failureFixture->alwaysFail = true; $commerce->shipping_provider_failure_policy = 'manual_fallback'; $fallback = $commerce->shippingProviderService()->quoteRates($cart, $customer); $expect(!empty($fallback['fallback']) && $fallback['rates'] === [], 'Explicit manual fallback fixture failed.');
+$failureFixture->alwaysFail = false; $failureFixture->programmerError = true; $failureFixture->calls = 0; $commerce->shipping_provider_failure_policy = 'fail_closed'; $programmerFailure = false; try { $commerce->shippingProviderService()->quoteRates($cart, $customer); } catch (WireException $e) { $programmerFailure = str_contains($e->getMessage(), 'contract defect'); } $expect($programmerFailure && $failureFixture->calls === 1, 'Deterministic shipping contract defect was retried.');
 echo 'Mercato shipping provider integration tests passed; fixture order ' . $order->id . ".\n";

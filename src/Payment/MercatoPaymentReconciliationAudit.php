@@ -20,8 +20,15 @@ final class MercatoPaymentReconciliationAudit {
             if ($id !== '' && in_array((string) ($attempt['status'] ?? ''), [MercatoPaymentStatus::PAID, 'succeeded', 'completed'], true)) $external[$id] = ($external[$id] ?? 0) + 1;
         }
         if (count(array_filter($keys, static fn(array $ids): bool => count($ids) > 1)) > 0 || count($external) > 1) $issues[] = 'duplicate_attempt';
-        $localRefund = round((float) ($local['refunded_amount'] ?? 0), 2); $remoteRefund = isset($remote['refunded_amount']) ? round((float) $remote['refunded_amount'], 2) : null; $total = round((float) ($local['total'] ?? 0), 2);
-        if ($localRefund > $total || ($remoteRefund !== null && abs($remoteRefund - $localRefund) >= 0.01) || ($localStatus === MercatoPaymentStatus::REFUNDED && abs($localRefund - $total) >= 0.01)) $issues[] = 'refund_mismatch';
+        $localRefundRaw = round((float) ($local['refunded_amount'] ?? 0), 2); $remoteRefundRaw = isset($remote['refunded_amount']) ? round((float) $remote['refunded_amount'], 2) : null; $totalRaw = round((float) ($local['total'] ?? 0), 2);
+        $invalidAmounts = !is_finite($localRefundRaw) || !is_finite($totalRaw) || $localRefundRaw < 0 || $totalRaw < 0
+            || ($remoteRefundRaw !== null && (!is_finite($remoteRefundRaw) || $remoteRefundRaw < 0));
+        // Keep the public audit payload JSON-safe even when corrupt provider or
+        // stored data contains NAN/INF; the mismatch issue preserves the signal.
+        $localRefund = is_finite($localRefundRaw) ? $localRefundRaw : 0.0;
+        $remoteRefund = $remoteRefundRaw === null ? null : (is_finite($remoteRefundRaw) ? $remoteRefundRaw : null);
+        $total = is_finite($totalRaw) ? $totalRaw : 0.0;
+        if ($invalidAmounts || $localRefund > $total || ($remoteRefund !== null && abs($remoteRefund - $localRefund) >= 0.01) || ($localStatus === MercatoPaymentStatus::REFUNDED && abs($localRefund - $total) >= 0.01)) $issues[] = 'refund_mismatch';
         $issues = array_values(array_unique($issues));
         return ['healthy' => !$issues, 'issues' => $issues, 'local_status' => $localStatus, 'remote_status' => $remoteStatus, 'local_refunded' => $localRefund, 'remote_refunded' => $remoteRefund];
     }

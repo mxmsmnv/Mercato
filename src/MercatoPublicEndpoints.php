@@ -146,7 +146,7 @@ trait MercatoPublicEndpoints {
 
         header('Content-Type: text/html; charset=utf-8');
         http_response_code($ok ? 200 : 400);
-        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow,noarchive"><title>Mercato recovery emails</title></head><body>';
+        echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow,noarchive"><title>Mercato recovery emails</title></head><body>';
         echo '<main style="font-family: system-ui, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 20px;">';
         echo '<h1>' . ($ok ? 'Recovery emails disabled' : 'Invalid unsubscribe link') . '</h1>';
         echo '<p>' . ($ok ? 'This email address will no longer receive Mercato recovery payment-link reminders.' : 'The unsubscribe link is invalid or expired.') . '</p>';
@@ -299,7 +299,7 @@ trait MercatoPublicEndpoints {
     }
 
     protected function renderPublicOrderAccessRecoveryError(): string {
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>Access recovery unavailable</title>' . $this->renderPublicOrderStatusStyles() . '</head><body><main class="mrc-public-status"><section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Private order link</p><h1>Access recovery unavailable</h1><p>The link is invalid or expired.</p></section></main></body></html>';
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>Access recovery unavailable</title>' . $this->renderPublicOrderStatusStyles() . '</head><body><main class="mrc-public-status"><section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Private order link</p><h1>Access recovery unavailable</h1><p>The link is invalid or expired.</p></section></main></body></html>';
     }
 
     public function handleOrderReceiptPdf(HookEvent $event): void {
@@ -317,6 +317,10 @@ trait MercatoPublicEndpoints {
             header('Location: ' . $this->getOrderReceiptPdfUrl($order), true, 302);
             exit;
         }
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
+        header('Referrer-Policy: no-referrer');
         if (!$ok) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
@@ -327,9 +331,6 @@ trait MercatoPublicEndpoints {
         $invoice = preg_replace('/[^A-Za-z0-9_.-]+/', '-', (string) ($order->mrc_invoice_number ?: $order->title)) ?: 'receipt';
         $pdf = $this->renderPublicOrderReceiptPdf($order);
         header('Content-Type: application/pdf');
-        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
-        header('Pragma: no-cache');
-        header('X-Robots-Tag: noindex, nofollow, noarchive');
         header('Content-Disposition: inline; filename="receipt-' . $invoice . '.pdf"');
         header('Content-Length: ' . strlen($pdf));
         echo $pdf;
@@ -364,6 +365,11 @@ trait MercatoPublicEndpoints {
         $fileIndex = (int) $input->get('file');
         $token = (string) $input->get->text('token');
         $download = $this->getOrderDownloadFile($order, $productId, $fileIndex, $token);
+        header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+        header('Pragma: no-cache');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Robots-Tag: noindex, nofollow, noarchive');
+        header('Referrer-Policy: no-referrer');
         if (!$download) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
@@ -503,7 +509,7 @@ trait MercatoPublicEndpoints {
     }
 
     protected function renderPublicOrderStatusError(): string {
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Order status unavailable</title>' . $this->renderPublicOrderStatusStyles() . '</head><body>'
             . '<main class="mrc-public-status"><section class="mrc-status-card">'
             . '<p class="mrc-kicker">Mercato</p><h1>Order status unavailable</h1>'
@@ -516,7 +522,7 @@ trait MercatoPublicEndpoints {
             ? '<p class="mrc-status-alert">' . $this->h($message) . '</p>'
             : '';
 
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Find order status</title>' . $this->renderPublicOrderStatusStyles() . '</head><body>'
             . '<main class="mrc-public-status"><section class="mrc-status-card">'
             . '<p class="mrc-kicker">Mercato</p><h1>Find order status</h1>'
@@ -530,7 +536,7 @@ trait MercatoPublicEndpoints {
     }
 
     protected function renderPublicOrderReceiptError(): string {
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Receipt unavailable</title>' . $this->renderPublicOrderStatusStyles() . '</head><body>'
             . '<main class="mrc-public-status"><section class="mrc-status-card">'
             . '<p class="mrc-kicker">Mercato</p><h1>Receipt unavailable</h1>'
@@ -751,7 +757,7 @@ trait MercatoPublicEndpoints {
             $downloadHtml = '<section class="mrc-status-card"><h2>Downloads</h2><ul>' . $downloadRows . '</ul></section>';
         }
 
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Receipt ' . $this->h($invoice) . '</title>' . $this->renderPublicOrderStatusStyles() . '<style>@media print {.mrc-print-actions{display:none}.mrc-public-status{margin:0;width:100%}body{background:#fff}.mrc-status-card{border-color:#aaa}}</style></head><body>'
             . '<main class="mrc-public-status">'
             . '<section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Receipt</p><h1>Receipt ' . $this->h($invoice) . '</h1>'
@@ -759,7 +765,7 @@ trait MercatoPublicEndpoints {
             . '<p class="mrc-print-actions"><button onclick="window.print()">Print receipt</button>' . $pdfAction . '</p></section>'
             . '<section class="mrc-status-grid"><div class="mrc-status-card"><h2>Customer</h2><p>' . $this->h(trim((string) $order->mrc_first_name . ' ' . (string) $order->mrc_last_name)) . '</p><p>' . $this->h((string) $order->mrc_email) . '</p></div>'
             . '<div class="mrc-status-card"><h2>Addresses</h2><p><strong>Billing</strong><br>' . nl2br($this->h($billingAddress ?: '-')) . '</p><p><strong>' . $this->h($fulfilmentLabel) . '</strong><br>' . nl2br($this->h($shippingAddress ?: '-')) . '</p></div>' . $merchantHtml . '</section>'
-            . '<section class="mrc-status-card"><h2>Items</h2><table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>' . $rows . '</tbody><tfoot>'
+            . '<section class="mrc-status-card mrc-status-table-card" tabindex="0" aria-label="Receipt items"><h2>Items</h2><table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>' . $rows . '</tbody><tfoot>'
             . ($subtotal > 0 ? '<tr><td colspan="3">Subtotal</td><td>' . $this->h($this->formatPrice($subtotal)) . '</td></tr>' : '')
             . '<tr><td colspan="3">' . $this->h($fulfilmentLabel) . '</td><td>' . ($shippingTotal > 0 ? $this->h($this->formatPrice($shippingTotal)) : 'Free') . '</td></tr>'
             . ($discountTotal > 0 ? '<tr><td colspan="3">Discount</td><td>-' . $this->h($this->formatPrice($discountTotal)) . '</td></tr>' : '')
@@ -1042,7 +1048,7 @@ trait MercatoPublicEndpoints {
             ? '<p class="mrc-status-actions"><a class="mrc-primary-action" href="' . $this->h($retryPaymentUrl) . '">Retry payment</a></p>'
             : '';
 
-        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive">'
             . '<title>Order ' . $this->h($invoice) . ' status</title>' . $this->renderPublicOrderStatusStyles() . '</head><body>'
             . '<main class="mrc-public-status">'
             . '<section class="mrc-status-card mrc-status-hero"><p class="mrc-kicker">Order status</p><h1>Order ' . $this->h($invoice) . '</h1>'
@@ -1055,7 +1061,7 @@ trait MercatoPublicEndpoints {
             . '<dt>Order</dt><dd>' . $this->h((string) $orderStatus['label']) . '</dd><dt>Payment</dt><dd>' . $this->h($this->humanizeStatus($paymentStatus)) . '</dd><dt>' . $this->h($fulfilmentLabel) . '</dt><dd>' . $this->h($this->humanizeStatus($fulfilmentStatus)) . '</dd></dl>'
             . ($detailText !== '' ? '<p>' . nl2br($this->h($detailText)) . '</p>' : '') . $trackingHtml . $receiptHtml . $retryHtml . '</div>'
             . '<div class="mrc-status-card"><h2>Customer</h2><p>' . $this->h(trim((string) $order->mrc_first_name . ' ' . (string) $order->mrc_last_name)) . '</p><p>' . $this->h((string) $order->mrc_email) . '</p></div></section>'
-            . '<section class="mrc-status-card"><h2>Items</h2><table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>' . $rows . '</tbody><tfoot>'
+            . '<section class="mrc-status-card mrc-status-table-card" tabindex="0" aria-label="Order items"><h2>Items</h2><table><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead><tbody>' . $rows . '</tbody><tfoot>'
             . '<tr><td colspan="3">' . $this->h($fulfilmentLabel) . '</td><td>' . ($shippingTotal > 0 ? $this->h($this->formatPrice($shippingTotal)) : 'Free') . '</td></tr>'
             . ($discountTotal > 0 ? '<tr><td colspan="3">Discount</td><td>-' . $this->h($this->formatPrice($discountTotal)) . '</td></tr>' : '')
             . ($refund['refunded'] > 0 ? '<tr><td colspan="3">Refunded</td><td>-' . $this->h($this->formatPrice((float) $refund['refunded'])) . '</td></tr>' : '')
@@ -1069,14 +1075,16 @@ trait MercatoPublicEndpoints {
     protected function renderPublicOrderStatusStyles(): string {
         return '<style>
             @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap");
-            :root { --mrc-ink:#1b2e29; --mrc-paper:#f3f2f0; --mrc-ivory:#ece9e4; --mrc-cream:#fffaf2; --mrc-line:#d6cbbb; --mrc-muted:#746858; --mrc-gold:#a5917c; --mrc-rust:#7d3a31; }
+            :root { --mrc-ink:#1b2e29; --mrc-paper:#f3f2f0; --mrc-ivory:#ece9e4; --mrc-cream:#fffaf2; --mrc-line:#d6cbbb; --mrc-muted:#746858; --mrc-gold:#6e5b4d; --mrc-rust:#7d3a31; }
+            *, *::before, *::after { box-sizing: border-box; }
             body { margin: 0; background: var(--mrc-paper); color: var(--mrc-ink); font-family: Inter, Avenir, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
             .mrc-public-status { width: min(1120px, calc(100% - 32px)); margin: clamp(28px, 6vw, 74px) auto; display: grid; gap: 18px; }
-            .mrc-status-card { background: var(--mrc-cream); border: 1px solid var(--mrc-line); padding: clamp(22px, 4vw, 44px); box-shadow: 0 28px 80px rgba(27,46,41,.1); }
+            .mrc-status-card { background: var(--mrc-cream); border: 1px solid var(--mrc-line); min-width: 0; padding: clamp(22px, 4vw, 44px); box-shadow: 0 28px 80px rgba(27,46,41,.1); }
+            .mrc-status-table-card { overflow-x: auto; }
             .mrc-status-hero { display: grid; gap: 12px; }
             .mrc-kicker { margin: 0; color: var(--mrc-gold); font-size: 11px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; }
             h1, h2, p { margin-top: 0; }
-            h1 { font-family: "Cormorant Garamond", Georgia, serif; font-size: clamp(44px, 7vw, 86px); font-weight: 600; line-height: .92; margin-bottom: 0; }
+            h1 { font-family: "Cormorant Garamond", Georgia, serif; font-size: clamp(44px, 7vw, 86px); font-weight: 600; line-height: .92; margin-bottom: 0; overflow-wrap: anywhere; }
             h2 { font-family: "Cormorant Garamond", Georgia, serif; font-size: clamp(28px, 3vw, 40px); font-weight: 600; }
             .mrc-status-pills { display: flex; flex-wrap: wrap; gap: 10px; }
             .mrc-status-pills span { display: inline-flex; border: 1px solid var(--mrc-line); padding: 7px 12px; }
@@ -1085,7 +1093,7 @@ trait MercatoPublicEndpoints {
             .mrc-status-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 18px; }
             dl { display: grid; grid-template-columns: 140px 1fr; gap: 8px 14px; margin: 0 0 16px; }
             dt { color: var(--mrc-muted); }
-            dd { margin: 0; font-weight: 650; }
+            dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
             table { width: 100%; border-collapse: collapse; }
             th, td { border-bottom: 1px solid var(--mrc-line); padding: 12px; text-align: left; }
             th { color: var(--mrc-gold); font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }

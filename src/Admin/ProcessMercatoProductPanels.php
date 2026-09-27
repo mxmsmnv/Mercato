@@ -60,7 +60,7 @@ trait ProcessMercatoProductPanels {
             $out .= $this->renderProductBulkActions();
         }
 
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table mrc-products-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table mrc-products-table">';
         $out .= '<thead><tr>';
         $headings = $compact
             ? [$this->_('Product'), $this->_('Collections'), $this->_('Price'), $this->_('Stock'), $this->_('Policy')]
@@ -179,7 +179,7 @@ trait ProcessMercatoProductPanels {
         $out .= '</div><div class="mrc-panel-actions">';
         $out .= '<a class="uk-button uk-button-default" href="' . $this->e($this->exportUrl('product-events')) . '"><i class="fa fa-download uk-margin-small-right"></i>' . $this->e($this->_('Export activity')) . '</a>';
         $out .= '</div></div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
         $out .= '<thead><tr><th>' . $this->e($this->_('Time')) . '</th><th>' . $this->e($this->_('Event')) . '</th><th>' . $this->e($this->_('Product')) . '</th><th>' . $this->e($this->_('Details')) . '</th><th>' . $this->e($this->_('User')) . '</th></tr></thead><tbody>';
         if (!$events) {
             $out .= $this->renderSkeletonRows(3, 5);
@@ -333,7 +333,7 @@ trait ProcessMercatoProductPanels {
             $out .= '<p class="uk-text-muted mrc-admin-empty-note">' . $this->e($this->_('Order metrics and order rows require the mercato-view-orders permission.')) . '</p></section>';
             return $out;
         }
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
         $out .= '<thead><tr><th>' . $this->e($this->_('Invoice')) . '</th><th>' . $this->e($this->_('Customer')) . '</th><th>' . $this->e($this->_('Quantity')) . '</th><th>' . $this->e($this->_('Payment')) . '</th><th>' . $this->e($this->_('Total')) . '</th><th>' . $this->e($this->_('Created')) . '</th><th></th></tr></thead><tbody>';
         if (!$orders->count()) {
             $out .= $this->renderSkeletonRows(3, 7);
@@ -687,7 +687,8 @@ trait ProcessMercatoProductPanels {
 
         $out .= '<form method="post" action="' . $this->e($this->adminUrl('products/')) . '" class="mrc-import-form">';
         $out .= $this->renderCsrfInput();
-        $out .= '<textarea class="uk-textarea" name="mrc_products_csv" rows="8" spellcheck="false">' . $this->e((string) $this->wire('input')->post->textarea('mrc_products_csv')) . '</textarea>';
+        $out .= '<label class="uk-form-label" for="mrc-products-csv">' . $this->e($this->_('Import Products CSV')) . '</label>';
+        $out .= '<textarea id="mrc-products-csv" class="uk-textarea" name="mrc_products_csv" rows="8" spellcheck="false">' . $this->e((string) $this->wire('input')->post->textarea('mrc_products_csv')) . '</textarea>';
         $out .= '<div class="mrc-import-actions">';
         $out .= '<button class="uk-button uk-button-default" type="submit" name="mrc_import_products" value="preview"><i class="fa fa-eye uk-margin-small-right"></i>' . $this->e($this->_('Preview')) . '</button>';
         $out .= '<button class="uk-button uk-button-primary" type="submit" name="mrc_import_products" value="import"><i class="fa fa-upload uk-margin-small-right"></i>' . $this->e($this->_('Import')) . '</button>';

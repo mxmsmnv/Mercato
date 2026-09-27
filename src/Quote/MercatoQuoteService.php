@@ -127,7 +127,19 @@ final class MercatoQuoteService extends Wire {
         }
         $details = json_decode((string) $quote->mrc_quote_details, true);
         $details = is_array($details) ? $details : [];
+        $inventoryPolicy = (string) ($details['inventory_reservation'] ?? $this->commerce->quote_inventory_policy ?? 'none');
         $details['history'] = is_array($details['history'] ?? null) ? $details['history'] : [];
+        $lastEvent = $details['history'] ? end($details['history']) : null;
+        $sameAmount = $amount === null || round(max(0, $amount), 2) === round((float) $quote->mrc_quote_amount, 2);
+        if (
+            $from === $status
+            && is_array($lastEvent)
+            && (string) ($lastEvent['to'] ?? '') === $status
+            && (string) ($lastEvent['note'] ?? '') === trim($note)
+            && $sameAmount
+        ) {
+            return $quote;
+        }
         $details['history'][] = [
             'from' => $from,
             'to' => $status,
@@ -135,7 +147,7 @@ final class MercatoQuoteService extends Wire {
             'at' => date(DATE_ATOM),
             'actor' => (string) ($this->wire('user')->name ?? 'system'),
         ];
-        if ($status === MercatoQuoteStatus::ACCEPTED && (string) $this->commerce->quote_inventory_policy === 'on_acceptance') {
+        if ($status === MercatoQuoteStatus::ACCEPTED && $inventoryPolicy === 'on_acceptance') {
             $this->reserveAcceptedQuote($quote);
         } elseif (in_array($status, [MercatoQuoteStatus::DECLINED, MercatoQuoteStatus::EXPIRED, MercatoQuoteStatus::CONVERTED], true)) {
             $this->releaseQuoteReservation($quote);
@@ -199,7 +211,10 @@ final class MercatoQuoteService extends Wire {
     public function verifyToken(Page $quote, string $token): bool {
         try {
             $expires = strtotime((string) $quote->mrc_quote_expires);
-            return ($expires === false || $expires >= time()) && $token !== '' && hash_equals($this->getToken($quote), $token);
+            return (string) $quote->mrc_quote_status !== MercatoQuoteStatus::EXPIRED
+                && ($expires === false || $expires >= time())
+                && $token !== ''
+                && hash_equals($this->getToken($quote), $token);
         } catch (\Throwable) {
             return false;
         }
@@ -314,8 +329,9 @@ final class MercatoQuoteService extends Wire {
     protected function sendMail(string $recipient, string $subject, string $body): void {
         $recipient = (string) $this->wire('sanitizer')->email($recipient);
         $sender = (string) $this->wire('sanitizer')->email((string) $this->commerce->notification_sender_email);
+        $recipientContext = $this->recipientLogContext($recipient);
         if ($recipient === '' || $sender === '') {
-            $this->record('quote_notification_skipped', null, ['recipient' => $recipient, 'reason' => 'missing_recipient_or_sender']);
+            $this->record('quote_notification_skipped', null, $recipientContext + ['reason' => 'missing_recipient_or_sender']);
             return;
         }
         try {
@@ -324,10 +340,18 @@ final class MercatoQuoteService extends Wire {
             $reply = (string) $this->wire('sanitizer')->email((string) $this->commerce->notification_reply_to);
             if ($reply !== '') $mail->header('Reply-To', $reply);
             $sent = (int) $mail->send();
-            $this->record($sent > 0 ? 'quote_notification_sent' : 'quote_notification_failed', null, ['recipient' => $recipient]);
+            $this->record($sent > 0 ? 'quote_notification_sent' : 'quote_notification_failed', null, $recipientContext);
         } catch (\Throwable $e) {
-            $this->record('quote_notification_failed', null, ['recipient' => $recipient, 'message' => $e->getMessage()]);
+            $this->record('quote_notification_failed', null, $recipientContext + ['message' => $e->getMessage()]);
         }
+    }
+
+    protected function recipientLogContext(string $recipient): array {
+        $at = strrpos($recipient, '@');
+        return [
+            'recipient' => $at === false ? '' : substr($recipient, 0, 1) . '***' . substr($recipient, $at),
+            'recipient_hash' => $recipient !== '' ? hash('sha256', strtolower($recipient)) : '',
+        ];
     }
 
     protected function record(string $event, ?Page $quote, array $context = []): void {

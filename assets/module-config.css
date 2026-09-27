@@ -1,0 +1,33 @@
+#ModuleEditForm,
+#ModuleEditForm .InputfieldContent {
+  min-width: 0;
+}
+
+#ModuleEditForm #ModuleInfo .InputfieldContent {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+#ModuleEditForm #ModuleInfo table {
+  min-width: 32rem;
+}
+
+#ModuleEditForm a:not(.ui-button):not(.uk-button) {
+  color: #075f5a;
+  text-decoration: underline;
+  text-decoration-thickness: .08em;
+  text-underline-offset: .12em;
+}
+
+#ModuleEditForm .label {
+  color: #30363b;
+}
+
+body.dark-theme #ModuleEditForm a:not(.ui-button):not(.uk-button) {
+  color: #9fe8e2;
+}
+
+body.dark-theme #ModuleEditForm .label {
+  color: #f2f4f5;
+}

@@ -31,7 +31,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
         $out .= $this->renderRecoveryBulkActions($rows, $filters);
 
         $headings = [$this->_('Order'), $this->_('Customer'), $this->_('Payment'), $this->_('Attempt'), $this->_('Age'), $this->_('Recovery'), ''];
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ($headings as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -181,7 +181,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
         $out .= '</div>';
 
         if ($preview) {
-            $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
+            $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
             $out .= '<thead><tr><th>' . $this->e($this->_('Preview order')) . '</th><th>' . $this->e($this->_('Email')) . '</th><th>' . $this->e($this->_('Age')) . '</th><th>' . $this->e($this->_('Discount')) . '</th></tr></thead><tbody>';
             $orders = (array) ($preview['orders'] ?? []);
             if (!$orders) {
@@ -200,7 +200,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
             $out .= '</tbody></table></div>';
         }
 
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small mrc-admin-table">';
         $out .= '<thead><tr><th>' . $this->e($this->_('Suppressed recovery email')) . '</th><th></th></tr></thead><tbody>';
         if (!$suppressedEmails) {
             $out .= '<tr><td colspan="2" class="uk-text-muted">' . $this->e($this->_('No suppressed recovery emails.')) . '</td></tr>';
@@ -226,7 +226,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
         $out .= '<div class="mrc-panel-actions"><a class="uk-button uk-button-default" href="' . $this->e($this->exportUrl('recovery-events')) . '"><i class="fa fa-download uk-margin-small-right"></i>' . $this->e($this->_('Export activity')) . '</a></div></div>';
 
         $headings = [$this->_('Time'), $this->_('Status'), $this->_('Order'), $this->_('Email'), $this->_('Discount'), $this->_('Message'), $this->_('User')];
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ($headings as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -380,7 +380,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
         $out .= '</div>';
 
         $headings = [$this->_('Customer'), $this->_('Segments'), $this->_('Orders'), $this->_('Paid'), $this->_('Pending'), $this->_('Processing'), $this->_('Failed'), $this->_('Canceled'), $this->_('Revenue'), $this->_('Last order'), ''];
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ($headings as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';
@@ -503,7 +503,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
         if (!$canManage) return $out . '<p class="uk-text-muted">' . $this->e($this->_('Privacy-management permission is required.')) . '</p></section>';
         $action = $this->customerDetailUrl($customer); $out .= '<div class="mrc-admin-panel-head"><form method="post" action="' . $this->e($action) . '" class="mrc-inline-form">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_privacy_action" value="review"><button class="uk-button uk-button-default" type="submit">' . $this->e($this->_('Dry-run review')) . '</button></form></div>';
         $out .= '<form method="post" action="' . $this->e($action) . '" class="mrc-order-note-form">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_privacy_action" value="anonymize"><textarea class="uk-textarea" name="privacy_reason" required placeholder="' . $this->e($this->_('Request/legal review reason')) . '"></textarea><label><input class="uk-checkbox" type="checkbox" name="privacy_confirmed" value="1" required> ' . $this->e($this->_('I reviewed the dry-run and understand signed links will be invalidated.')) . '</label><button class="uk-button uk-button-danger" type="submit">' . $this->e($this->_('Anonymize customer data')) . '</button></form>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Order')) . '</th><th>' . $this->e($this->_('Legal hold')) . '</th><th>' . $this->e($this->_('Action')) . '</th></tr></thead><tbody>'; foreach ($orders as $order) { $hold = (bool) ($order->mrc_privacy_legal_hold ?? false); $out .= '<tr><td>' . $this->e((string) ($order->mrc_invoice_number ?: $order->title)) . '</td><td>' . ($hold ? $this->e($this->_('Active')) : $this->e($this->_('None'))) . '</td><td><form method="post" action="' . $this->e($action) . '" class="mrc-inline-form">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_privacy_action" value="' . ($hold ? 'release_hold' : 'hold') . '"><input type="hidden" name="order_id" value="' . (int) $order->id . '"><input class="uk-input" name="privacy_reason" required placeholder="' . $this->e($this->_('Reason')) . '"><button class="uk-button uk-button-default" type="submit">' . $this->e($hold ? $this->_('Release') : $this->_('Hold')) . '</button></form></td></tr>'; } return $out . '</tbody></table></div></section>';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-small"><thead><tr><th>' . $this->e($this->_('Order')) . '</th><th>' . $this->e($this->_('Legal hold')) . '</th><th>' . $this->e($this->_('Action')) . '</th></tr></thead><tbody>'; foreach ($orders as $order) { $hold = (bool) ($order->mrc_privacy_legal_hold ?? false); $out .= '<tr><td>' . $this->e((string) ($order->mrc_invoice_number ?: $order->title)) . '</td><td>' . ($hold ? $this->e($this->_('Active')) : $this->e($this->_('None'))) . '</td><td><form method="post" action="' . $this->e($action) . '" class="mrc-inline-form">' . $this->renderCsrfInput() . '<input type="hidden" name="mrc_privacy_action" value="' . ($hold ? 'release_hold' : 'hold') . '"><input type="hidden" name="order_id" value="' . (int) $order->id . '"><input class="uk-input" name="privacy_reason" required placeholder="' . $this->e($this->_('Reason')) . '"><button class="uk-button uk-button-default" type="submit">' . $this->e($hold ? $this->_('Release') : $this->_('Hold')) . '</button></form></td></tr>'; } return $out . '</tbody></table></div></section>';
     }
 
     protected function renderCustomerNotesPanel(array $customer, array $result = []): string {
@@ -593,7 +593,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
         $out = '<section class="pw-wrap mrc-admin-panel">';
         $out .= '<div class="mrc-admin-panel-head"><div><h2 class="uk-h3">' . $this->e($this->_('Customer Activity')) . '</h2>';
         $out .= '<p class="uk-text-muted">' . $this->e($this->_('Latest payment, fulfilment, refund, email, inventory, order note, and customer note events across this customer history.')) . '</p></div></div>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr><th>' . $this->e($this->_('Time')) . '</th><th>' . $this->e($this->_('Order')) . '</th><th>' . $this->e($this->_('Area')) . '</th><th>' . $this->e($this->_('Event')) . '</th><th>' . $this->e($this->_('Details')) . '</th></tr></thead><tbody>';
 
         if (!$events) {
@@ -700,7 +700,7 @@ trait ProcessMercatoRecoveryCustomerPanels {
             $out .= '<a class="uk-button uk-button-default" href="' . $this->e($this->adminUrl('discounts/')) . '">' . $this->e($this->_('Reset')) . '</a>';
         }
         $out .= '</form>';
-        $out .= '<div class="mrc-admin-table-wrap"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
+        $out .= '<div class="mrc-admin-table-wrap" tabindex="0"><table class="uk-table uk-table-divider uk-table-hover uk-table-small mrc-admin-table">';
         $out .= '<thead><tr>';
         foreach ([$this->_('Time'), $this->_('Event'), $this->_('Code'), $this->_('Customer'), $this->_('Amount'), $this->_('Order'), $this->_('Message')] as $heading) {
             $out .= '<th>' . $this->e($heading) . '</th>';

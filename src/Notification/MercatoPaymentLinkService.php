@@ -78,12 +78,15 @@ final class MercatoPaymentLinkService extends Wire {
     }
 
     protected function record(Page $order, string $status, string $message, string $recipient = ''): array {
+        $recipient = (string) $this->wire('sanitizer')->email($recipient);
+        $at = strrpos($recipient, '@');
         $payload = [
             'event' => 'payment_link_email',
             'status' => $status,
             'order_id' => (int) $order->id,
             'invoice' => (string) ($order->mrc_invoice_number ?: $order->title),
-            'recipient' => $recipient,
+            'recipient' => $at === false ? '' : substr($recipient, 0, 1) . '***' . substr($recipient, $at),
+            'recipient_hash' => $recipient !== '' ? hash('sha256', strtolower($recipient)) : '',
             'message' => $message,
             'recovery_discount_code' => $this->getRecoveryDiscountCode(),
         ];

@@ -384,20 +384,74 @@ trait MercatoOrderApi {
             }
             $job = is_array($jobs[$name]) ? $jobs[$name] : [];
             $startedAt = microtime(true);
+            $attempts = 0;
+            $lockAcquired = false;
+            $siteIdentity = (string) $this->wire('config')->dbName . '|' . (string) $this->wire('config')->paths->root;
+            $lockName = 'mrc_bg_' . substr(hash('sha256', $siteIdentity . '|' . $name), 0, 56);
             try {
-                $result = $this->runBackgroundJob($name, $context + [
-                    'job' => $name,
-                    'label' => (string) ($job['label'] ?? $name),
-                    'schedule' => (string) ($job['schedule'] ?? ''),
-                ]);
-                $results[$name] = is_array($result) ? $result : ['ok' => true];
+                if (!$this->acquireBackgroundJobLock($lockName)) {
+                    $results[$name] = [
+                        'ok' => false,
+                        'skipped' => true,
+                        'reason' => 'already_running',
+                        'message' => 'The background job is already running.',
+                        'attempts' => 0,
+                    ];
+                } else {
+                    $lockAcquired = true;
+                    $maxAttempts = max(1, min(5, (int) ($context['max_attempts'] ?? $job['max_attempts'] ?? 1)));
+                    $retryDelayMs = max(0, min(5000, (int) ($context['retry_delay_ms'] ?? $job['retry_delay_ms'] ?? 0)));
+                    do {
+                        $attempts++;
+                        try {
+                            $result = $this->runBackgroundJob($name, array_merge($context, [
+                                'job' => $name,
+                                'label' => (string) ($job['label'] ?? $name),
+                                'schedule' => (string) ($job['schedule'] ?? ''),
+                                'attempt' => $attempts,
+                                'max_attempts' => $maxAttempts,
+                            ]));
+                            $result = is_array($result) ? $result : ['ok' => true];
+                            $retryableResult = empty($result['ok']) && !empty($result['retryable']);
+                            if (!$retryableResult || $attempts >= $maxAttempts) {
+                                $results[$name] = $result + ['attempts' => $attempts];
+                                break;
+                            }
+                        } catch (\Throwable $e) {
+                            // Retry provider/runtime exceptions only. Engine
+                            // errors are deterministic and must fail fast while
+                            // allowing the next independent job to continue.
+                            if (!$e instanceof \Exception || $attempts >= $maxAttempts) throw $e;
+                        }
+                        if ($retryDelayMs > 0) usleep($retryDelayMs * 1000);
+                    } while ($attempts < $maxAttempts);
+                }
             } catch (\Throwable $e) {
                 $this->wire('log')->save('mercato-background-jobs', sprintf('%s failed: %s', $name, $e->getMessage()));
-                $results[$name] = ['ok' => false, 'error' => $e->getMessage()];
+                $results[$name] = ['ok' => false, 'error' => $e->getMessage(), 'attempts' => $attempts];
+            } finally {
+                if ($lockAcquired) {
+                    try {
+                        $this->releaseBackgroundJobLock($lockName);
+                    } catch (\Throwable $e) {
+                        $this->wire('log')->save('mercato-background-jobs', sprintf('%s lock release failed: %s', $name, $e->getMessage()));
+                    }
+                }
             }
-            $this->recordEvent('mercato-background-jobs', ['event' => 'background_job', 'job' => $name, 'status' => !empty($results[$name]['ok']) ? 'completed' : (!empty($results[$name]['skipped']) ? 'skipped' : 'failed'), 'source' => substr((string) ($context['source'] ?? 'manual'), 0, 40), 'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000)], 'background_job');
+            $this->recordEvent('mercato-background-jobs', ['event' => 'background_job', 'job' => $name, 'status' => !empty($results[$name]['ok']) ? 'completed' : (!empty($results[$name]['skipped']) ? 'skipped' : 'failed'), 'source' => substr((string) ($context['source'] ?? 'manual'), 0, 40), 'attempts' => (int) ($results[$name]['attempts'] ?? $attempts), 'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000)], 'background_job');
         }
         return $results;
+    }
+
+    private function acquireBackgroundJobLock(string $name): bool {
+        $statement = $this->wire('database')->prepare('SELECT GET_LOCK(:name, 0)');
+        $statement->execute([':name' => $name]);
+        return (int) $statement->fetchColumn() === 1;
+    }
+
+    private function releaseBackgroundJobLock(string $name): void {
+        $statement = $this->wire('database')->prepare('SELECT RELEASE_LOCK(:name)');
+        $statement->execute([':name' => $name]);
     }
 
 }

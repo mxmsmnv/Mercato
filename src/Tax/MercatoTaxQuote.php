@@ -8,40 +8,53 @@ final class MercatoTaxQuote {
         $totalTax = round((float) ($quote['total_tax'] ?? 0), 2);
         $taxable = round((float) ($quote['taxable_amount'] ?? 0), 2);
         $exempt = round((float) ($quote['exempt_amount'] ?? 0), 2);
+        if (!is_finite($totalTax) || !is_finite($taxable) || !is_finite($exempt)) throw new \InvalidArgumentException('Tax quote amounts must be finite.');
         if ($totalTax < 0 || $taxable < 0 || $exempt < 0) throw new \InvalidArgumentException('Tax quote amounts cannot be negative.');
         $lines = [];
         foreach ((array) ($quote['lines'] ?? []) as $line) {
             if (!is_array($line)) continue;
             $tax = round((float) ($line['tax'] ?? $line['tax_amount'] ?? 0), 2);
+            $lineTaxable = round((float) ($line['taxable_amount'] ?? 0), 2);
+            $lineExempt = round((float) ($line['exempt_amount'] ?? 0), 2);
+            $lineRate = round((float) ($line['rate'] ?? $line['tax_rate'] ?? 0), 6);
+            if (!is_finite($tax) || !is_finite($lineTaxable) || !is_finite($lineExempt) || !is_finite($lineRate)) throw new \InvalidArgumentException('Tax line amounts and rates must be finite.');
             if ($tax < 0) throw new \InvalidArgumentException('Tax line amount cannot be negative.');
             $lines[] = [
                 'line_id' => substr(trim((string) ($line['line_id'] ?? $line['id'] ?? '')), 0, 160),
                 'tax_code' => substr(trim((string) ($line['tax_code'] ?? '')), 0, 120),
-                'taxable_amount' => round(max(0, (float) ($line['taxable_amount'] ?? 0)), 2),
-                'exempt_amount' => round(max(0, (float) ($line['exempt_amount'] ?? 0)), 2),
+                'taxable_amount' => max(0, $lineTaxable),
+                'exempt_amount' => max(0, $lineExempt),
                 'tax' => $tax,
-                'rate' => round(max(0, (float) ($line['rate'] ?? $line['tax_rate'] ?? 0)), 6),
+                'rate' => max(0, $lineRate),
                 'jurisdiction' => substr(trim((string) ($line['jurisdiction'] ?? '')), 0, 160),
             ];
         }
         $jurisdictions = [];
         foreach ((array) ($quote['jurisdictions'] ?? []) as $jurisdiction) {
             if (!is_array($jurisdiction)) continue;
+            $jurisdictionRate = round((float) ($jurisdiction['rate'] ?? 0), 6);
+            $jurisdictionTax = round((float) ($jurisdiction['tax'] ?? 0), 2);
+            if (!is_finite($jurisdictionRate) || !is_finite($jurisdictionTax)) throw new \InvalidArgumentException('Tax jurisdiction amounts and rates must be finite.');
             $jurisdictions[] = [
                 'country' => strtoupper(substr(trim((string) ($jurisdiction['country'] ?? '')), 0, 2)),
                 'region' => strtoupper(substr(trim((string) ($jurisdiction['region'] ?? '')), 0, 80)),
                 'name' => substr(trim((string) ($jurisdiction['name'] ?? '')), 0, 160),
                 'type' => substr(trim((string) ($jurisdiction['type'] ?? '')), 0, 80),
-                'rate' => round(max(0, (float) ($jurisdiction['rate'] ?? 0)), 6),
-                'tax' => round(max(0, (float) ($jurisdiction['tax'] ?? 0)), 2),
+                'rate' => max(0, $jurisdictionRate),
+                'tax' => max(0, $jurisdictionTax),
             ];
         }
         $shipping = is_array($quote['shipping'] ?? null) ? $quote['shipping'] : [];
+        $shippingTaxable = round((float) ($shipping['taxable_amount'] ?? 0), 2);
+        $shippingExempt = round((float) ($shipping['exempt_amount'] ?? 0), 2);
+        $shippingTax = round((float) ($shipping['tax'] ?? 0), 2);
+        $shippingRate = round((float) ($shipping['rate'] ?? 0), 6);
+        if (!is_finite($shippingTaxable) || !is_finite($shippingExempt) || !is_finite($shippingTax) || !is_finite($shippingRate)) throw new \InvalidArgumentException('Shipping tax amounts and rates must be finite.');
         $normalizedShipping = [
-            'taxable_amount' => round(max(0, (float) ($shipping['taxable_amount'] ?? 0)), 2),
-            'exempt_amount' => round(max(0, (float) ($shipping['exempt_amount'] ?? 0)), 2),
-            'tax' => round(max(0, (float) ($shipping['tax'] ?? 0)), 2),
-            'rate' => round(max(0, (float) ($shipping['rate'] ?? 0)), 6),
+            'taxable_amount' => max(0, $shippingTaxable),
+            'exempt_amount' => max(0, $shippingExempt),
+            'tax' => max(0, $shippingTax),
+            'rate' => max(0, $shippingRate),
             'jurisdiction' => substr(trim((string) ($shipping['jurisdiction'] ?? '')), 0, 160),
         ];
         $exemptions = [];

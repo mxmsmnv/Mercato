@@ -76,9 +76,9 @@
   display: flex;
   justify-content: space-between;
   gap: .5rem;
-  color: inherit;
-  opacity: .7;
+  color: var(--mrc-notification-muted);
 }
+.mrc-notification-picker .uk-active small { color: #fff; }
 .mrc-notification-picker em { font-style: normal; font-weight: 600; }
 .mrc-notification-workspace,
 .mrc-notification-layout {
@@ -102,6 +102,11 @@
 .mrc-notification-workspace > header p,
 .mrc-notification-layout > header p { max-width: 62ch; margin: 0; color: var(--mrc-notification-muted); }
 .mrc-notification-workspace > header code { padding: .35rem .55rem; }
+.mrc-notification-workspace .uk-label,
+.mrc-notification-preview-head .uk-label {
+  background: #075f5a;
+  color: #fff;
+}
 .mrc-notification-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(19rem, .7fr);
@@ -251,8 +256,8 @@ body.dark-theme .mrc-admin-dashboard {
     color: var(--pw-text-color, #111);
 }
 .mrc-admin-nav .uk-subnav-pill > .uk-active > a {
-    background: var(--pw-main-color, #eb1d61);
-    color: var(--pw-button-color, #fff);
+    background: #7a1f3d;
+    color: #fff;
 }
 .mrc-settings-link {
     align-items: center;
@@ -282,6 +287,15 @@ body.dark-theme .mrc-admin-dashboard {
     border: 1px solid var(--pw-border-color, rgba(0,0,0,0.16));
     padding: var(--pw-spacing, 25px);
     margin-bottom: var(--pw-spacing, 25px);
+}
+.mrc-admin-dashboard a:focus-visible,
+.mrc-admin-dashboard button:focus-visible,
+.mrc-admin-dashboard input:focus-visible,
+.mrc-admin-dashboard select:focus-visible,
+.mrc-admin-dashboard textarea:focus-visible,
+.mrc-admin-dashboard [tabindex]:focus-visible {
+    outline: 3px solid var(--pw-main-color, #eb1d61) !important;
+    outline-offset: 2px;
 }
 .mrc-admin-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .mrc-admin-header p { margin: 0; color: var(--pw-muted-color, rgba(0,0,0,0.55)); }
@@ -837,6 +851,13 @@ body.dark-theme .mrc-admin-dashboard {
 .mrc-admin-table { width: 100%; }
 .mrc-admin-table th { color: var(--pw-muted-color, rgba(0,0,0,0.55)); }
 .mrc-admin-table small { color: var(--pw-muted-color, rgba(0,0,0,0.55)); }
+.mrc-admin-dashboard table a:not(.uk-button) {
+    color: #075f5a;
+    text-decoration: underline;
+    text-decoration-thickness: .08em;
+    text-underline-offset: .12em;
+}
+body.dark-theme .mrc-admin-dashboard table a:not(.uk-button) { color: #9fe8e2; }
 .mrc-admin-empty-note { margin: 12px 0 0; }
 .mrc-admin-stat-grid {
     display: grid;

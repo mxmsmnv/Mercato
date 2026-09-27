@@ -14,6 +14,7 @@ if (($templateOverride = $commerce->getStorefrontTemplateOverridePath('mrc-check
     return;
 }
 require_once __DIR__ . '/mrc-storefront.php';
+mrc_storefront_private_headers();
 $error = '';
 $paymentLinkOrder = null;
 $paymentLinkToken = '';
@@ -295,11 +296,11 @@ $values = [
     'payment_method' => $input->post->text('payment_method') ?: 'stripe-card',
 ];
 
-if (!$input->post('mrc_action') && !$paymentLinkOrder && $commerce->customerAccountService()->isEnabled() && $commerce->customerAccountService()->isVerified($user)) {
+if (!$paymentLinkOrder && $commerce->customerAccountService()->isEnabled() && $commerce->customerAccountService()->isVerified($user)) {
     $accountProfile = $commerce->customerAccountService()->profile($user);
     $accountAddress = (array) ($accountProfile['addresses'][0] ?? []);
     foreach (['first_name', 'last_name', 'phone'] as $profileKey) if ($values[$profileKey] === '') $values[$profileKey] = (string) ($accountProfile[$profileKey] ?? '');
-    $values['email'] = (string) $accountProfile['email'];
+    if (trim((string) $values['email']) === '') $values['email'] = (string) $accountProfile['email'];
     foreach (['address', 'address_2', 'city', 'zip', 'country'] as $addressKey) if ($values[$addressKey] === '' || ($addressKey === 'country' && $values[$addressKey] === $defaultCountry)) $values[$addressKey] = (string) ($accountAddress[$addressKey] ?? $values[$addressKey]);
 }
 
@@ -379,7 +380,8 @@ $selectedPickupLocations = is_array($selectedFulfilment['pickup_locations'] ?? n
 if ($values['pickup_location'] === '' && count($selectedPickupLocations) > 0) {
     $values['pickup_location'] = (string) array_key_first($selectedPickupLocations);
 }
-$deliveryAddressRequired = $values['fulfilment_method'] !== 'store_pickup';
+$deliveryAddressRequired = !empty($selectedFulfilment['requires_shipping'])
+    && (string) ($selectedFulfilment['type'] ?? '') !== 'store_pickup';
 $orderTotal = round(max(0, $cart->getSubtotal() + (float) $selectedFulfilment['amount'] - $discountAmount), 2);
 $taxRates = $commerce->getTaxRatesForOrder($cart, (float) $selectedFulfilment['amount']);
 $taxLabel = $commerce->getTaxLabel();
@@ -520,7 +522,7 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
             padding-top: 24px;
         }
         .mrc-checkout-page .mrc-checkout-summary .mrc-kicker {
-            color: var(--mrc-gold);
+            color: var(--mrc-gold-ink);
         }
         .mrc-checkout-summary-title {
             color: var(--mrc-ink);
@@ -695,7 +697,8 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
     </style>
     <?php endif; ?>
     <style>
-        .mrc-address-fields[hidden] { display: none !important; }
+        .mrc-address-fields[hidden],
+        #mrc-pickup-location-field[hidden] { display: none !important; }
         .mrc-empty-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 8px; }
         .mrc-empty-products { margin-top: 28px; }
         .mrc-empty-product-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 14px; }
@@ -864,13 +867,13 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
         </div>
 
         <?php if ($error): ?>
-            <div class="<?= $ui['error'] ?>"><?= $sanitizer->entities($error) ?></div>
+            <div class="<?= $ui['error'] ?>" role="alert" aria-live="assertive"><?= $sanitizer->entities($error) ?></div>
         <?php endif; ?>
         <?php if ($couponError): ?>
-            <div class="<?= $ui['error'] ?>"><?= $sanitizer->entities($couponError) ?></div>
+            <div class="<?= $ui['error'] ?>" role="alert" aria-live="assertive"><?= $sanitizer->entities($couponError) ?></div>
         <?php endif; ?>
         <?php if ($cartMessage): ?>
-            <div class="<?= $ui['message'] ?>"><?= $sanitizer->entities($cartMessage) ?></div>
+            <div class="<?= $ui['message'] ?>" role="status" aria-live="polite"><?= $sanitizer->entities($cartMessage) ?></div>
         <?php endif; ?>
 
         <?php if ($cart->count() === 0): ?>
@@ -967,6 +970,7 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
                                     data-label="<?= $sanitizer->entities($method['label']) ?>"
                                     data-fee="<?= (float) $method['amount'] ?>"
                                     data-details="<?= $sanitizer->entities($method['details']) ?>"
+                                    data-requires-address="<?= !empty($method['requires_shipping']) && (string) ($method['type'] ?? '') !== 'store_pickup' ? '1' : '0' ?>"
                                     <?= empty($method['available']) ? 'disabled' : '' ?>
                                     <?= $values['fulfilment_method'] === (string) ($method['selection_key'] ?? $method['type']) ? 'selected' : '' ?>
                                 ><?= $sanitizer->entities($method['label']) ?> - <?= (float) $method['amount'] > 0 ? $commerce->formatPrice((float) $method['amount']) : 'Free' ?><?= empty($method['available']) ? ' (unavailable)' : '' ?></option>
@@ -1089,16 +1093,16 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
                         </span>
                     </label>
                 <?php endif; ?>
-                <p class="mrc-checkout-actions">
+                <div class="mrc-checkout-actions">
                     <?php if ($commerce->shippingProviderService()->isEnabled()): ?>
                         <button class="<?= $ui['buttonSecondary'] ?>" type="submit" name="mrc_action" value="refresh_shipping" formnovalidate>Update delivery rates</button>
                     <?php endif; ?>
-                    <?php if (!$checkoutAvailable): ?><p class="<?= $ui['message'] ?>"><?= $sanitizer->entities($commerce->operationalService()->checkoutMessage()) ?></p><?php endif; ?>
+                    <?php if (!$checkoutAvailable): ?><p class="<?= $ui['message'] ?>" role="status" aria-live="polite"><?= $sanitizer->entities($commerce->operationalService()->checkoutMessage()) ?></p><?php endif; ?>
                     <button class="<?= $ui['button'] ?>" type="submit" name="mrc_action" value="checkout" <?= !$checkoutAvailable ? 'disabled aria-disabled="true"' : '' ?>>Continue to payment</button>
                     <?php if (!empty($commerce->quote_requests_enabled) && !$paymentLinkOrder): ?>
                         <button class="<?= $ui['buttonSecondary'] ?>" type="submit" name="mrc_action" value="request_quote" formnovalidate <?= !$checkoutAvailable ? 'disabled aria-disabled="true"' : '' ?>>Request a quote</button>
                     <?php endif; ?>
-                </p>
+                </div>
             </form>
 
             <?php if ($clientSecret && $publishableKey): ?>
@@ -1253,7 +1257,7 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
                     <?php endif; ?>
                 </p>
                 <?php if ($couponMessage): ?>
-                    <p><?= $sanitizer->entities($couponMessage) ?></p>
+                    <p role="status" aria-live="polite"><?= $sanitizer->entities($couponMessage) ?></p>
                 <?php endif; ?>
             </form>
         <?php endif; ?>
@@ -1293,7 +1297,7 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
     const refreshFulfilment = () => {
         const option = method.options[method.selectedIndex];
         const amount = Number(option.dataset.fee || 0);
-        const addressRequired = option.value !== 'store_pickup';
+        const addressRequired = option.dataset.requiresAddress === '1';
         label.textContent = option.dataset.label || option.textContent;
         fee.textContent = amount > 0 ? format(amount) : 'Free';
         total.textContent = format(Math.max(0, subtotal + amount - discount));
