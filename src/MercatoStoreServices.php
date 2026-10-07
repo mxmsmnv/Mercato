@@ -160,7 +160,11 @@ trait MercatoStoreServices {
         $data['order_status_template_file'] = self::normalizeReceiptTemplateFile($data['order_status_template_file'] ?? '');
         $data['access_recovery_enabled'] = !empty($data['access_recovery_enabled']);
         $data['receipt_pdf_url_template'] = self::normalizeReceiptPdfUrlTemplate($data['receipt_pdf_url_template'] ?? '');
-        if (empty($previousConfig['production']) && !empty($data['production'])) {
+        // setConfigData() also runs while ProcessWire hydrates a module from its
+        // already-saved configuration. That is not a new production activation.
+        $persistedConfig = (array) $this->wire('modules')->getConfig($this);
+        $wasProduction = !empty($previousConfig['production']) || !empty($persistedConfig['production']);
+        if (!$wasProduction && !empty($data['production'])) {
             if (!$productionActivationConfirmed) throw new WireException($this->_('Confirm the production activation checklist before enabling production mode.'));
             $productionErrors = MercatoProductionGuard::validate($data, $this->getHttpRoot());
             if ($productionErrors) throw new WireException($this->_('Production activation blocked: ') . implode(' ', $productionErrors));
