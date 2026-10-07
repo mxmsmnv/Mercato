@@ -909,7 +909,7 @@ $seoHead = $commerce->seoService()->render($page, ['private' => true]);
                                 </a>
                                 <div>
                                     <p class="mrc-empty-product-title"><?= $sanitizer->entities($product->title) ?></p>
-                                    <p class="mrc-empty-product-meta"><?= $commerce->formatPrice((float) $product->mrc_price) ?></p>
+                                    <p class="mrc-empty-product-meta"><?= $commerce->isProductInquiryOnly($product) ? 'Price on request' : $commerce->formatPrice((float) $product->mrc_price) ?></p>
                                 </div>
                                 <a class="<?= $ui['buttonSecondary'] ?>" href="<?= $product->url ?>">View product</a>
                             </article>

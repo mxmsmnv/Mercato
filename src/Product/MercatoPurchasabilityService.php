@@ -60,6 +60,7 @@ final class MercatoPurchasabilityService extends Wire {
             ? ($variant['price'] !== null ? (float) $variant['price'] : (float) $product->mrc_price + (float) $variant['price_adjustment'])
             : ($product && $product->hasField('mrc_price') ? (float) $product->mrc_price : 0.0);
         $hasValidPrice = $resolvedPrice > 0;
+        $inquiryOnly = $product && $product->id && $this->commerce->isProductInquiryOnly($product);
 
         if (!$product || !$product->id || !$product->template || $product->template->name !== 'mrc-product') {
             $errors[] = $this->commerce->_('Product is no longer available.');
@@ -74,6 +75,9 @@ final class MercatoPurchasabilityService extends Wire {
             }
             if (!$purchasableType) {
                 $errors[] = $this->commerce->_('Product type is not purchasable.');
+            }
+            if ($inquiryOnly) {
+                $errors[] = $this->commerce->_('This product is available by inquiry only.');
             }
             if (!$hasValidPrice) {
                 $errors[] = $this->commerce->_('Product does not have a valid price.');
@@ -97,6 +101,7 @@ final class MercatoPurchasabilityService extends Wire {
             'product_status' => $productStatus,
             'product_type' => $productType,
             'purchasable_type' => $purchasableType,
+            'inquiry_only' => $inquiryOnly,
             'has_valid_price' => $hasValidPrice,
             'stock_policy' => $stockPolicy,
             'allows_oversell' => $allowsOversell,

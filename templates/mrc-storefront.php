@@ -1056,6 +1056,14 @@ HTML;
         return ($page && $page->id) ? $page->url : rtrim((string) $config->urls->root, '/') . '/' . trim($path, '/') . '/';
     }
 
+    function mrc_storefront_inquiry_url($pages, $config, Mercato $commerce, Page $product): string {
+        $email = trim((string) $commerce->quote_merchant_email);
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return 'mailto:' . $email . '?subject=' . rawurlencode('Product inquiry: ' . $product->title);
+        }
+        return mrc_storefront_page_url($pages, $config, 'contact-us') . '?product=' . rawurlencode($product->title);
+    }
+
     function mrc_storefront_cart_icon(): string {
         return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h8.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>';
     }
@@ -1202,6 +1210,9 @@ HTML;
         }
         if ($state['max_price'] > 0) {
             $parts[] = 'mrc_price<=' . number_format((float) $state['max_price'], 2, '.', '');
+        }
+        if ($state['min_price'] > 0 || $state['max_price'] > 0 || in_array($state['sort'], ['price-asc', 'price-desc'], true)) {
+            $parts[] = 'mrc_inquiry_only=0';
         }
         $sort = match ($state['sort']) {
             'price-asc' => 'sort=mrc_price, sort=title',

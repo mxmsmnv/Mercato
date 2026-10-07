@@ -54,6 +54,8 @@ $stockPolicy = (string) $purchasability['stock_policy'];
 $allowsOversell = (bool) $purchasability['allows_oversell'];
 $remainingStock = (int) $purchasability['remaining_stock'];
 $canAddToCart = (bool) $purchasability['ok'];
+$inquiryOnly = $commerce->isProductInquiryOnly($page);
+$inquiryUrl = $inquiryOnly ? mrc_storefront_inquiry_url($pages, $config, $commerce, $page) : '';
 $stockLabel = (string) $purchasability['stock_label'];
 $unavailableLabel = (string) $purchasability['unavailable_label'];
 $resolvedPrice = (float) ($purchasability['resolved_price'] ?? $page->mrc_price);
@@ -392,8 +394,8 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
                 <?php endif; ?>
             </p>
         <?php endif; ?>
-        <p class="<?= $ui['price'] ?>"><?= $commerce->formatPrice($resolvedPrice) ?></p>
-        <?php if ($page->hasField('mrc_shipping_price')): ?>
+        <p class="<?= $ui['price'] ?>"><?= $inquiryOnly ? 'Price on request' : $commerce->formatPrice($resolvedPrice) ?></p>
+        <?php if (!$inquiryOnly && $page->hasField('mrc_shipping_price')): ?>
             <p class="<?= $ui['shipping'] ?>">
                 Shipping: <?= $resolvedShipping > 0 ? $commerce->formatPrice($resolvedShipping) : 'Free' ?>
                 <?php if ($page->hasField('mrc_shipping_note') && $page->mrc_shipping_note): ?>
@@ -412,6 +414,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
             <div class="mrc-description <?= $ui['description'] ?>"><?= $page->mrc_description ?></div>
         <?php endif; ?>
 
+        <?php if ($inquiryOnly): ?><p><a class="<?= $ui['button'] ?>" href="<?= $sanitizer->entities($inquiryUrl) ?>">Request details</a></p><?php else: ?>
         <form class="<?= $ui['form'] ?>" method="post" action="">
             <input type="hidden" name="mrc_action" value="add_to_cart">
             <?= $csrfInput ?>
@@ -437,6 +440,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
                 <?php endif; ?>
             </div>
         </form>
+        <?php endif; ?>
     </aside>
 </section>
 <?php else: ?>
@@ -454,8 +458,8 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
             <img class="<?= $ui['image'] ?>" src="<?= $sanitizer->entities($productImageUrl) ?>" alt="<?= $sanitizer->entities($page->title) ?>">
         </div>
     <?php endif; ?>
-    <p class="<?= $ui['price'] ?>"><?= $commerce->formatPrice($resolvedPrice) ?></p>
-    <?php if ($page->hasField('mrc_shipping_price')): ?>
+    <p class="<?= $ui['price'] ?>"><?= $inquiryOnly ? 'Price on request' : $commerce->formatPrice($resolvedPrice) ?></p>
+    <?php if (!$inquiryOnly && $page->hasField('mrc_shipping_price')): ?>
         <p class="<?= $ui['shipping'] ?>">
             Shipping: <?= $resolvedShipping > 0 ? $commerce->formatPrice($resolvedShipping) : 'Free' ?>
             <?php if ($page->hasField('mrc_shipping_note') && $page->mrc_shipping_note): ?>
@@ -472,6 +476,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
     <?php if ($page->mrc_description): ?>
         <div class="mrc-description <?= $ui['description'] ?>"><?= $page->mrc_description ?></div>
     <?php endif; ?>
+    <?php if ($inquiryOnly): ?><p><a class="<?= $ui['button'] ?>" href="<?= $sanitizer->entities($inquiryUrl) ?>">Request details</a></p><?php else: ?>
     <form class="<?= $ui['form'] ?>" method="post" action="">
         <input type="hidden" name="mrc_action" value="add_to_cart">
         <?= $csrfInput ?>
@@ -496,6 +501,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
             <?php endif; ?>
         </div>
     </form>
+    <?php endif; ?>
 <?php endif; ?>
 
 <?php if ($relatedProducts): ?>
@@ -505,7 +511,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'product', 'image' 
             <?php foreach ($relatedProducts as $relatedProduct): ?>
                 <a class="<?= $relatedCardClass ?>" href="<?= $sanitizer->entities($relatedProduct->url) ?>">
                     <span class="<?= $relatedCardTitleClass ?>"><?= $sanitizer->entities($relatedProduct->title) ?></span>
-                    <span class="<?= $ui['price'] ?>"><?= $commerce->formatPrice((float) $relatedProduct->mrc_price) ?></span>
+                    <span class="<?= $ui['price'] ?>"><?= $commerce->isProductInquiryOnly($relatedProduct) ? 'Price on request' : $commerce->formatPrice((float) $relatedProduct->mrc_price) ?></span>
                 </a>
             <?php endforeach; ?>
         </div>

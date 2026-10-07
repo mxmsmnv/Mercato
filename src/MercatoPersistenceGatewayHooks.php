@@ -290,6 +290,11 @@ trait MercatoPersistenceGatewayHooks {
         return $this->purchasabilityService()->evaluate($product, $requestedQuantity, $cartQuantity, $excludeOrderId, $variantReference);
     }
 
+    /** Inquiry-only products remain in the catalog but have no public price or online checkout. */
+    public function isProductInquiryOnly(Page $product): bool {
+        return $product->hasField('mrc_inquiry_only') && (bool) $product->getUnformatted('mrc_inquiry_only');
+    }
+
     // -----------------------------------------------------------------------
     // Hooks
     // -----------------------------------------------------------------------

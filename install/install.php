@@ -158,6 +158,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         ['name' => 'mrc_images',      'type' => 'FieldtypeImage',   'label' => 'Product Images',    'extra' => ['extensions' => 'jpg jpeg png gif webp', 'maxFiles' => 0]],
         ['name' => 'mrc_sku',         'type' => 'FieldtypeText',    'label' => 'SKU'],
         ['name' => 'mrc_product_type', 'type' => 'FieldtypeText',    'label' => 'Product Type'],
+        ['name' => 'mrc_inquiry_only', 'type' => 'FieldtypeCheckbox', 'label' => 'Inquiry only (hide price and disable online purchase)'],
         ['name' => 'mrc_product_status', 'type' => 'FieldtypeText', 'label' => 'Product Status'],
         ['name' => 'mrc_seo_title', 'type' => 'FieldtypeText', 'label' => 'SEO Title'],
         ['name' => 'mrc_seo_description', 'type' => 'FieldtypeTextarea', 'label' => 'SEO Meta Description'],
@@ -365,7 +366,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         $fg->name = 'mrc-product';
         foreach ([
             'title', 'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
-            'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_product_status', 'mrc_stripe_price_id',
+            'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_inquiry_only', 'mrc_product_status', 'mrc_stripe_price_id',
             'mrc_variant_options', 'mrc_variants',
             'mrc_market_prices',
             'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
@@ -588,7 +589,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         $added = false;
         foreach ([
             'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
-            'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_product_status', 'mrc_stripe_price_id',
+            'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_inquiry_only', 'mrc_product_status', 'mrc_stripe_price_id',
             'mrc_variant_options', 'mrc_variants',
             'mrc_market_prices',
             'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_collections', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
@@ -981,6 +982,7 @@ function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void
         'title',
         'mrc_sku',
         'mrc_product_type',
+        'mrc_inquiry_only',
         'mrc_product_status',
         'mrc_stripe_price_id',
         'mrc_digital_files',
@@ -1027,6 +1029,7 @@ function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void
         'title' => ['columnWidth' => 50],
         'mrc_sku' => ['columnWidth' => 25],
         'mrc_product_type' => ['columnWidth' => 25],
+        'mrc_inquiry_only' => ['columnWidth' => 25],
         'mrc_product_status' => ['columnWidth' => 25],
         'mrc_stripe_price_id' => ['columnWidth' => 50],
         'mrc_digital_files' => ['columnWidth' => 100],

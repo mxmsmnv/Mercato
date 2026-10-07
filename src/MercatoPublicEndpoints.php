@@ -475,6 +475,7 @@ trait MercatoPublicEndpoints {
     }
 
     protected function serializeProductForReadApi(Page $product): array {
+        $inquiryOnly = $this->isProductInquiryOnly($product);
         $type = $product->hasField('mrc_product_type') ? strtolower(trim((string) $product->mrc_product_type)) : '';
         $definition = $this->variantService()->getDefinition($product);
         $variants = [];
@@ -482,9 +483,14 @@ trait MercatoPublicEndpoints {
             if ($variant['status'] === 'archived') continue;
             $purchasability = $this->getProductPurchasability($product, 1, 0, 0, (string) $variant['id']);
             $publicVariant = $variant;
+            if ($inquiryOnly) {
+                $publicVariant['price'] = null;
+                $publicVariant['price_adjustment'] = null;
+                $publicVariant['shipping_price'] = null;
+            }
             $publicVariant['images'] = $this->variantService()->resolveImageUrls($product, (array) $variant['images']);
             $variants[] = $publicVariant + [
-                'resolved_price' => (float) $purchasability['resolved_price'],
+                'resolved_price' => $inquiryOnly ? null : (float) $purchasability['resolved_price'],
                 'available_stock' => (int) $purchasability['available_stock'],
                 'purchasable' => (bool) $purchasability['ok'],
             ];
@@ -495,11 +501,12 @@ trait MercatoPublicEndpoints {
             'title' => (string) $product->title,
             'url' => (string) $product->url,
             'sku' => $product->hasField('mrc_sku') ? (string) $product->mrc_sku : '',
-            'price' => $product->hasField('mrc_price') ? round((float) $product->mrc_price, 2) : 0.0,
+            'price' => $inquiryOnly ? null : ($product->hasField('mrc_price') ? round((float) $product->mrc_price, 2) : 0.0),
+            'price_on_request' => $inquiryOnly,
             'currency' => MercatoCurrency::normalizeCode((string) ($this->currency ?? 'GBP')),
             'tax_rate' => $product->hasField('mrc_tax_rate') ? round((float) $product->mrc_tax_rate, 4) : 0.0,
             'tax_code' => $product->hasField('mrc_tax_code') ? (string) $product->mrc_tax_code : '',
-            'shipping_price' => $product->hasField('mrc_shipping_price') ? round((float) $product->mrc_shipping_price, 2) : 0.0,
+            'shipping_price' => $inquiryOnly ? null : ($product->hasField('mrc_shipping_price') ? round((float) $product->mrc_shipping_price, 2) : 0.0),
             'product_type' => in_array($type, ['physical', 'digital', 'service', 'placeholder', 'recurring', 'bundle'], true) ? $type : 'physical',
             'stock_policy' => $product->hasField('mrc_stock_policy') ? (string) $product->mrc_stock_policy : '',
             'has_variants' => $variants !== [],

@@ -57,6 +57,8 @@ as proof that the layer can ship a real storefront.
 ## What It Includes
 
 - Product pages with price, tax rate, stock, shipping notes, digital files, and collections.
+- An **Inquiry only** product checkbox (`mrc_inquiry_only`) for products that may be displayed but not priced or purchased online. It works independently of product type and stock policy. The demo storefront displays “Price on request” and a contact action; custom site templates can supply their own inquiry form. The public read/headless APIs return `price: null` and `price_on_request: true`, mask variant prices, and omit public Product offers. Price sorting and ranges exclude these products.
+  Existing installations should run Mercato's installer/repair from module settings (without template overwrite) to add the checkbox to the product editor; existing products remain unchanged until it is enabled for them.
 - Cart and checkout templates with quantity updates, discounts, fulfilment options, policy acceptance, and payment selection.
 - Orders stored as ProcessWire pages under a hidden orders parent.
 - Admin dashboard under **Setup → Mercato** for orders, products, customers, discounts, payments, refunds, fulfilment, reports, webhooks, and launch readiness.

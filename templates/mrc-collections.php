@@ -500,7 +500,7 @@ foreach (['collection', 'availability', 'sort', 'type', 'min_price', 'max_price'
                         </span>
                         <span class="mrc-card-body">
                             <span class="mrc-card-title mrc-display"><?= $sanitizer->entities($product->title) ?></span>
-                            <span class="mrc-small-caps" style="color:var(--mrc-gold-ink)"><?= $commerce->formatPrice((float) $product->mrc_price) ?></span>
+                            <span class="mrc-small-caps" style="color:var(--mrc-gold-ink)"><?= $commerce->isProductInquiryOnly($product) ? 'Price on request' : $commerce->formatPrice((float) $product->mrc_price) ?></span>
                         </span>
                     </a>
                 <?php endforeach; ?>

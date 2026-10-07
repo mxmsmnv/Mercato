@@ -379,7 +379,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
                 <div class="mrc-hero-slide-caption">
                     <p class="text-xs font-semibold uppercase tracking-[0.26em]">New season</p>
                     <p class="mrc-display mt-2 text-5xl font-semibold"><?= $sanitizer->entities($slideProduct->title) ?></p>
-                    <p class="mt-2 max-w-md text-sm leading-6"><?= $commerce->formatPrice((float) $slideProduct->mrc_price) ?> · <?= $sanitizer->entities((string) ($slideProduct->mrc_shipping_note ?: 'Ready for checkout test')) ?></p>
+                    <p class="mt-2 max-w-md text-sm leading-6"><?= $commerce->isProductInquiryOnly($slideProduct) ? 'Price on request' : $commerce->formatPrice((float) $slideProduct->mrc_price) ?><?= $commerce->isProductInquiryOnly($slideProduct) ? '' : ' · ' . $sanitizer->entities((string) ($slideProduct->mrc_shipping_note ?: 'Ready for checkout test')) ?></p>
                 </div>
             </article>
             <?php $slideIndex++; ?>
@@ -516,7 +516,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
                                     <span class="<?= $inCartClass ?>"><?= (int) $inCartQuantity ?> in cart</span>
                                 <?php endif; ?>
                             </div>
-                            <p class="<?= $ui['price'] ?>"><?= $commerce->formatPrice((float) $product->mrc_price) ?></p>
+                            <p class="<?= $ui['price'] ?>"><?= $commerce->isProductInquiryOnly($product) ? 'Price on request' : $commerce->formatPrice((float) $product->mrc_price) ?></p>
                             <?php if ($reviewSummary): ?>
                                 <p class="<?= $reviewSummaryClass ?>">
                                     <?php if ((string) ($reviewSummary['url'] ?? '') !== ''): ?>
@@ -526,7 +526,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
                                     <?php endif; ?>
                                 </p>
                             <?php endif; ?>
-                            <?php if ($product->hasField('mrc_shipping_price')): ?>
+                            <?php if (!$commerce->isProductInquiryOnly($product) && $product->hasField('mrc_shipping_price')): ?>
                                 <p class="<?= $productMetaClass ?>">
                                     Shipping: <?= ((float) $product->mrc_shipping_price > 0) ? $commerce->formatPrice((float) $product->mrc_shipping_price) : 'Free' ?>
                                 </p>
@@ -534,7 +534,9 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'catalog', 'page_nu
                             <p class="<?= $productMetaClass ?>"><?= $sanitizer->entities($stockLabel) ?></p>
                         </div>
                         <div class="<?= $productCardActionsClass ?>">
-                            <?php if ($hasVariants): ?>
+                            <?php if ($commerce->isProductInquiryOnly($product)): ?>
+                                <a class="<?= $ui['button'] ?> mrc-cart-button" href="<?= $sanitizer->entities($product->url) ?>"><span>Request details</span></a>
+                            <?php elseif ($hasVariants): ?>
                                 <a class="<?= $ui['button'] ?> mrc-cart-button" href="<?= $sanitizer->entities($product->url) ?>"><span>Choose options</span></a>
                             <?php elseif ($available): ?>
                                 <form class="mrc-card-purchase-form" method="post" action="<?= $sanitizer->entities($page->url) ?>">

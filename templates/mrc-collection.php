@@ -192,6 +192,7 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'collection', 'page
                     $allowsOversell = (bool) $purchasability['allows_oversell'];
                     $remainingStock = (int) $purchasability['remaining_stock'];
                     $available = (bool) $purchasability['ok'];
+                    $inquiryOnly = $commerce->isProductInquiryOnly($product);
                     $stockLabel = (string) $purchasability['stock_label'];
                     $unavailableLabel = (string) $purchasability['unavailable_label'];
                     ?>
@@ -205,11 +206,13 @@ $seoHead = $commerce->seoService()->render($page, ['type' => 'collection', 'page
                         </a>
                         <div>
                             <h3 class="<?= $isVanilla ? '' : 'm-0 text-lg font-medium leading-tight text-[#33251f]' ?>"><?= $sanitizer->entities($product->title) ?></h3>
-                            <p class="<?= $ui['price'] ?>"><?= $commerce->formatPrice((float) $product->mrc_price) ?></p>
+                            <p class="<?= $ui['price'] ?>"><?= $inquiryOnly ? 'Price on request' : $commerce->formatPrice((float) $product->mrc_price) ?></p>
                             <p class="<?= $isVanilla ? 'mrc-product-card-meta' : 'text-sm text-[#7a6758]' ?>"><?= $sanitizer->entities($stockLabel) ?></p>
                         </div>
                         <div class="<?= $isVanilla ? 'mrc-product-card-actions' : 'mt-auto grid gap-3 border-t border-[#e4d9c8] pt-4' ?>">
-                            <?php if ($hasVariants): ?>
+                            <?php if ($inquiryOnly): ?>
+                                <a class="<?= $ui['button'] ?> mrc-cart-button" href="<?= $sanitizer->entities($product->url) ?>"><span>Request details</span></a>
+                            <?php elseif ($hasVariants): ?>
                                 <a class="<?= $ui['button'] ?> mrc-cart-button" href="<?= $sanitizer->entities($product->url) ?>"><span>Choose options</span></a>
                             <?php elseif ($available): ?>
                                 <form class="mrc-card-purchase-form" method="post" action="<?= $sanitizer->entities($page->url) ?>">

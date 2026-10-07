@@ -77,6 +77,9 @@ final class MercatoSeoService extends Wire {
     }
 
     private function productSchema(Page $product, string $canonical, string $description, string $image): array {
+        if ($this->commerce->isProductInquiryOnly($product)) {
+            return array_filter(['@context' => 'https://schema.org', '@type' => 'Product', 'name' => (string) $product->title, 'description' => $description, 'sku' => $product->hasField('mrc_sku') ? (string) $product->mrc_sku : '', 'image' => $image !== '' ? [$image] : [], 'url' => $canonical], static fn(mixed $value): bool => $value !== '' && $value !== []);
+        }
         $variants = array_values(array_filter($this->commerce->variantService()->getDefinition($product)['variants'], static fn(array $variant): bool => ($variant['status'] ?? '') === 'active'));
         $prices = $variants ? array_map(static fn(array $variant): float => (float) $variant['price'], $variants) : [(float) $product->mrc_price];
         $currency = (string) $this->commerce->currency; $variantOffers = [];
