@@ -27,16 +27,18 @@ final class MercatoRefundService extends Wire {
             throw new WireException($this->commerce->_('Only paid or partially refunded orders can be refunded.'));
         }
 
+        $precision = MercatoCurrency::decimalPlaces((string) $order->mrc_currency);
+        $minimum = 1 / (10 ** $precision);
         $total = $this->commerce->orderRepository()->getTotalAmount($order);
-        $alreadyRefunded = round((float) $order->mrc_refunded_amount, 2);
-        $pendingRefund = round((float) $order->mrc_refund_pending_amount, 2);
+        $alreadyRefunded = round((float) $order->mrc_refunded_amount, $precision);
+        $pendingRefund = round((float) $order->mrc_refund_pending_amount, $precision);
         if ($pendingRefund > 0) {
             throw new WireException($this->commerce->_('A refund is already pending gateway confirmation.'));
         }
-        $remaining = round(max(0, $total - $alreadyRefunded - $pendingRefund), 2);
-        $amount = round($amount, 2);
+        $remaining = round(max(0, $total - $alreadyRefunded - $pendingRefund), $precision);
+        $amount = round($amount, $precision);
         if ($amount <= 0 || $amount > $remaining) {
-            throw new WireException(sprintf($this->commerce->_('Refund amount must be between 0.01 and %s.'), $this->commerce->formatPrice($remaining)));
+            throw new WireException(sprintf($this->commerce->_('Refund amount must be between %s and %s.'), $this->commerce->formatPrice($minimum), $this->commerce->formatPrice($remaining)));
         }
 
         $pending = $this->commerce->orderRepository()->pageToPendingData($order);
@@ -51,10 +53,10 @@ final class MercatoRefundService extends Wire {
             throw new WireException($this->commerce->_('The gateway rejected the refund request.'));
         }
         $isConfirmed = in_array($gatewayStatus, ['succeeded', 'refunded'], true);
-        $refundedAmount = $isConfirmed ? round($alreadyRefunded + $amount, 2) : $alreadyRefunded;
+        $refundedAmount = $isConfirmed ? round($alreadyRefunded + $amount, $precision) : $alreadyRefunded;
         $pendingAmount = $isConfirmed ? 0.0 : $amount;
         $isFull = $refundedAmount >= $total;
-        $isFullRequested = round($alreadyRefunded + $pendingAmount, 2) >= $total;
+        $isFullRequested = round($alreadyRefunded + $pendingAmount, $precision) >= $total;
         $newStatus = $isConfirmed
             ? ($isFull ? MercatoPaymentStatus::REFUNDED : MercatoPaymentStatus::PARTIALLY_REFUNDED)
             : ($isFullRequested ? MercatoPaymentStatus::REFUND_PENDING : MercatoPaymentStatus::PARTIAL_REFUND_PENDING);
@@ -97,7 +99,7 @@ final class MercatoRefundService extends Wire {
             'amount' => $amount,
             'total_refunded' => $refundedAmount,
             'pending_amount' => $pendingAmount,
-            'remaining' => round(max(0, $total - $refundedAmount - $pendingAmount), 2),
+            'remaining' => round(max(0, $total - $refundedAmount - $pendingAmount), $precision),
             'status' => $newStatus,
             'gateway_refund' => $refund,
             'inventory' => $inventory,
@@ -120,7 +122,8 @@ final class MercatoRefundService extends Wire {
             throw new WireException($this->commerce->_('This order has no pending refund to reconcile.'));
         }
 
-        $amount = round((float) $order->mrc_refund_pending_amount, 2);
+        $precision = MercatoCurrency::decimalPlaces((string) $order->mrc_currency);
+        $amount = round((float) $order->mrc_refund_pending_amount, $precision);
         if ($amount <= 0) {
             throw new WireException($this->commerce->_('Pending refund amount is missing.'));
         }
@@ -139,7 +142,7 @@ final class MercatoRefundService extends Wire {
         $isConfirmed = in_array($gatewayStatus, ['succeeded', 'refunded'], true);
         $isRejected = in_array($gatewayStatus, ['failed', 'canceled', 'cancelled'], true);
         $total = $this->commerce->orderRepository()->getTotalAmount($order);
-        $alreadyRefunded = round((float) $order->mrc_refunded_amount, 2);
+        $alreadyRefunded = round((float) $order->mrc_refunded_amount, $precision);
 
         if (!$isConfirmed && !$isRejected) {
             $this->eventLog->setWire($this->wire());
@@ -156,7 +159,7 @@ final class MercatoRefundService extends Wire {
             ];
         }
 
-        $refundedAmount = $isConfirmed ? round($alreadyRefunded + $amount, 2) : $alreadyRefunded;
+        $refundedAmount = $isConfirmed ? round($alreadyRefunded + $amount, $precision) : $alreadyRefunded;
         $isFull = $isConfirmed && $refundedAmount >= $total;
         $newStatus = $isRejected
             ? ($alreadyRefunded > 0 ? MercatoPaymentStatus::PARTIALLY_REFUNDED : MercatoPaymentStatus::PAID)

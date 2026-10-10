@@ -29,7 +29,7 @@ $expect = static function (bool $condition, string $message) use (&$checks): voi
 };
 
 $defaults = Mercato::getDefaultConfig();
-$expect(count($defaults) === 181, 'Default configuration inventory changed; update the explicit matrix.');
+$expect(count($defaults) === 182, 'Default configuration inventory changed; update the explicit matrix.');
 $inputfields = Mercato::getModuleConfigInputfields($defaults);
 $names = [];
 foreach ($inputfields->getAll() as $inputfield) {
@@ -48,8 +48,8 @@ $unsafeMutationFields = array_merge($storageOnlyFields, ['production']);
 $safeFields = array_values(array_diff(array_keys($defaults), $unsafeMutationFields));
 $expect(array_values(array_diff(array_keys($names), array_keys($defaults), $transientFields)) === [], 'Config UI contains a field without a default.');
 $expect(array_values(array_diff(array_keys($defaults), array_keys($names), $storageOnlyFields)) === [], 'A user-configurable default is missing from the config UI.');
-$expect(count($names) === 178, 'Config input inventory changed; update the explicit matrix.');
-$expect(count($safeFields) === 171, 'Safe config mutation inventory changed; update the explicit matrix.');
+$expect(count($names) === 179, 'Config input inventory changed; update the explicit matrix.');
+$expect(count($safeFields) === 172, 'Safe config mutation inventory changed; update the explicit matrix.');
 
 $modules = $wire->modules;
 $originalStored = (array) $modules->getConfig('Mercato');
@@ -135,7 +135,7 @@ $normal = array_merge($normal, [
     'shipping_rate_table' => '[]', 'shipping_provider' => 'matrix_provider',
     'shipping_provider_failure_policy' => 'fail_closed', 'shipping_provider_service_map' => '{}',
     'shipping_provider_allowed_regions' => 'US:NY', 'shipping_provider_package_mode' => 'per_item',
-    'tax_display_mode' => 'excluded', 'tax_label' => 'Sales tax', 'tax_rounding_mode' => 'total',
+    'tax_display_mode' => 'excluded', 'tax_price_behavior' => 'excluded', 'tax_label' => 'Sales tax', 'tax_rounding_mode' => 'total',
     'tax_provider' => 'matrix_provider', 'tax_provider_failure_policy' => 'zero_tax',
     'tax_registrations' => '[]', 'tax_nexus_regions' => 'US-NY',
     'allowed_delivery_countries' => 'us, ca', 'delivery_regions' => 'ca:on=Ontario',
@@ -208,6 +208,7 @@ try {
         'shipping_provider_retries' => 99, 'shipping_provider_quote_ttl_seconds' => 0,
         'shipping_provider_handling_fixed' => INF, 'shipping_provider_handling_percent' => NAN,
         'shipping_provider_package_mode' => 'parcel', 'default_tax_rate' => NAN, 'tax_display_mode' => 'gross-ish',
+        'tax_price_behavior' => 'gross-ish',
         'tax_label' => '<b> Sales   tax </b>', 'tax_rounding_mode' => 'bankers', 'shipping_tax_rate' => INF,
         'tax_provider' => '', 'tax_provider_failure_policy' => 'continue', 'tax_provider_timeout_seconds' => 0,
         'tax_provider_retries' => 99, 'allowed_delivery_countries' => 'us, GB;de,usa',
@@ -251,7 +252,7 @@ try {
         'shipping_provider_timeout_seconds' => 1, 'shipping_provider_retries' => 3,
         'shipping_provider_quote_ttl_seconds' => 60, 'shipping_provider_handling_fixed' => 0.0,
         'shipping_provider_handling_percent' => 0.0, 'shipping_provider_package_mode' => 'combined',
-        'default_tax_rate' => 0.0, 'tax_display_mode' => 'included', 'tax_label' => 'Sales tax',
+        'default_tax_rate' => 0.0, 'tax_display_mode' => 'included', 'tax_price_behavior' => 'included', 'tax_label' => 'Sales tax',
         'tax_rounding_mode' => 'line', 'shipping_tax_rate' => 0.0, 'tax_provider' => 'manual',
         'tax_provider_failure_policy' => 'fail_closed', 'tax_provider_timeout_seconds' => 1, 'tax_provider_retries' => 3,
         'allowed_delivery_countries' => "DE\nGB\nUS", 'delivery_regions' => 'US:NY:New York',
@@ -333,4 +334,6 @@ foreach ($originalRuntime as $key => $value) $expect($commerce->get($key) === $v
 $expect(is_file($settingsLog) === $settingsLogExisted, 'Settings audit log existence was not restored.');
 if ($settingsLogExisted) $expect(file_get_contents($settingsLog) === $settingsLogContents, 'Settings audit log contents were not restored exactly.');
 
-echo "Mercato config/readiness integration matrix passed: $checks assertions, 181 defaults, 178 inputs, 171 safely mutated settings, exact config/log restore.\n";
+echo 'Mercato config/readiness integration matrix passed: ' . $checks . ' assertions, '
+    . count($defaults) . ' defaults, ' . count($names) . ' inputs, '
+    . count($safeFields) . " safely mutated settings, exact config/log restore.\n";

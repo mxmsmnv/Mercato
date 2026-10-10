@@ -81,6 +81,13 @@ Mercato supports one backward-compatible `default` market plus optional explicit
     "currency": "USD",
     "countries": ["US"],
     "language": "en",
+    "seller_entity": "us-company",
+    "tax_provider": "stripe_tax",
+    "price_tax_behavior": "excluded",
+    "tax_failure_policy": "fail_closed",
+    "tax_registrations": [{"country": "US", "region": "NY"}],
+    "tax_nexus_regions": ["US-NY"],
+    "ship_from": {"country": "US", "region": "CA", "postal_code": "90049"},
     "fulfilment_prices": {"carrier_delivery": 7.5}
   }
 ]
@@ -103,6 +110,29 @@ Each product uses `mrc_market_prices` for explicit non-default prices. Variant p
 Mercato never converts currencies or trusts a client-supplied currency code. Products without a complete price in the selected market are omitted, paid fulfilment requires an explicit market amount, and the market/currency snapshot is revalidated before the gateway receives the order. Non-default coupons are currently limited to percentage discounts without a fixed minimum; fixed amounts need a future per-market discount price list.
 
 Native catalog and collection resources also apply the selected market's `language` before serializing ProcessWire multilingual fields. Collection list/detail responses carry the same `commerce_context` as products, and native clients should keep localized collection caches separated by `market_id`. `Accept-Language` may express the device preference, but the configured market language remains authoritative for merchant content.
+
+## Stripe Tax And Quaderno Tax
+
+Mercato 1.6.0 bundles two optional, separately configurable ProcessWire modules:
+
+- **Mercato Stripe Tax** uses Stripe Tax Calculations and Tax Transactions. It is payment-gateway neutral: an order paid through Stripe, Mollie, PayPal, bank transfer, or another gateway can use the same tax provider.
+- **Mercato Quaderno Tax** uses Quaderno's stable `20241028` tax API and keeps sandbox/live credentials and hosts separate.
+
+Refresh ProcessWire modules, install the chosen add-on, configure only test/sandbox credentials first, then set the market's `tax_provider` to `stripe_tax` or `quaderno_tax`. Keep `tax_failure_policy` at `fail_closed` for registered markets until the complete sandbox lifecycle has passed. `price_tax_behavior` is `included` where catalog prices already contain tax and `excluded` where tax is added at checkout. The global `tax_display_mode=none` only hides the presentation row; it does not erase tax from the financial calculation.
+
+Both adapters keep credentials outside quotes, order snapshots, and tax logs. Stripe product codes must be explicit `txcd_########` values or configured through the adapter's JSON map. Quaderno product and tax types are mapped explicitly and unknown mappings fail closed. Quaderno partial refunds are deliberately blocked until a line-level refund allocation is supplied; full refunds are supported. Do not enable Quaderno's direct Stripe/PayPal connector alongside Mercato's Quaderno transaction recording, because that can create duplicate tax documents.
+
+The repository includes a deterministic end-to-end provider harness that exercises the real ProcessWire checkout and adapter HTTP transports without contacting Stripe or Quaderno. It creates isolated products and orders, runs both quote/commit/refund lifecycles in Chromium, verifies inventory and private status pages, then restores configuration and removes every run-owned record:
+
+```bash
+MERCATO_E2E_SITE=/absolute/path/to/processwire \
+MERCATO_E2E_BASE_URL=https://shop.test \
+npm run test:e2e:tax-providers
+```
+
+The transport override is deliberately hidden from module settings, accepts only an explicit loopback HTTP host with a port, and fails closed in production mode. It is test infrastructure, not a custom-provider URL feature.
+
+These integrations calculate and record tax but do not replace country-specific fiscalization, electronic invoicing, registration, filing, or legal advice. For Russia, keep consumer prices tax-inclusive and connect a separate fiscal-receipt/OFD adapter for the legally required receipt lifecycle.
 
 ## Installation
 
@@ -391,7 +421,7 @@ Public integration methods include `$commerce->submitQuoteRequest()`, `$commerce
 
 ## Address-based tax providers
 
-The default `manual` provider preserves Mercato's existing gross-price behavior and product tax rates. An external ProcessWire module can implement `MercatoTaxProviderInterface` and add its instance through the `taxProviders` hook; set its provider key in Mercato's tax settings. No Mercato core edit is required.
+The default `manual` provider uses Mercato's product tax rates with the configured catalog price behavior: `included` extracts tax from a tax-inclusive price, while `excluded` calculates tax to add to the payable total. Presentation is separate, so `tax_display_mode=none` hides the row without silently changing the financial result. An external ProcessWire module can implement `MercatoTaxProviderInterface` and add its instance through the `taxProviders` hook; set its provider key in Mercato's tax settings. No Mercato core edit is required.
 
 Provider estimates receive normalized cart lines and product tax codes, customer exemption data, the final delivery address, shipping, discount, currency, merchant registrations, nexus regions, a timeout, and a deterministic idempotency key. The returned jurisdiction, rates, taxable/exempt amounts, exemptions, reference, and input snapshot are stored on the order. Paid orders are committed once under an order lock; partial/full refunds and failed payments invoke provider refund and void operations with distinct idempotency keys.
 

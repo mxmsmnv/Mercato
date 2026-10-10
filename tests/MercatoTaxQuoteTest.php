@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../src/Pricing/MercatoCurrency.php';
 require_once __DIR__ . '/../src/Tax/MercatoTaxQuote.php';
 require_once __DIR__ . '/../src/Tax/MercatoTaxProviderInterface.php';
 use ProcessWire\MercatoTaxQuote;
@@ -42,6 +43,13 @@ $quote = MercatoTaxQuote::normalize([
     'jurisdictions' => [['country' => 'us', 'region' => 'ny', 'name' => 'New York', 'type' => 'state', 'rate' => 8.25, 'tax' => 8.25]],
 ], ['currency' => 'USD', 'display_mode' => 'excluded', 'idempotency_key' => 'fixture']);
 if ($quote['currency'] !== 'USD' || $quote['total_tax'] !== 8.25 || count($quote['lines']) !== 1) throw new RuntimeException('Tax quote normalization failed.');
+if ($quote['tax_behavior'] !== 'excluded' || !$quote['tax_added_to_total']) throw new RuntimeException('Explicit excluded tax behavior was not preserved.');
+$hidden = MercatoTaxQuote::normalize(['currency' => 'USD', 'display_mode' => 'none', 'total_tax' => 2], ['currency' => 'USD', 'tax_behavior' => 'included']);
+if ($hidden['display_mode'] !== 'none' || $hidden['tax_behavior'] !== 'included' || $hidden['tax_added_to_total']) throw new RuntimeException('Hidden presentation incorrectly changed inclusive tax economics.');
+$jpy = MercatoTaxQuote::normalize(['currency' => 'JPY', 'total_tax' => 8.6, 'taxable_amount' => 100.4], ['currency' => 'JPY']);
+if ($jpy['total_tax'] !== 9.0 || $jpy['taxable_amount'] !== 100.0) throw new RuntimeException('Zero-decimal tax quote rounding failed.');
+$kwd = MercatoTaxQuote::normalize(['currency' => 'KWD', 'total_tax' => 1.2346], ['currency' => 'KWD']);
+if ($kwd['total_tax'] !== 1.235) throw new RuntimeException('Three-decimal tax quote rounding failed.');
 $failed = false;
 try { MercatoTaxQuote::normalize(['currency' => 'USD', 'total_tax' => -1]); } catch (InvalidArgumentException) { $failed = true; }
 if (!$failed) throw new RuntimeException('Negative tax must be rejected.');
@@ -51,6 +59,9 @@ if (!$failed) throw new RuntimeException('Non-finite tax totals must be rejected
 $failed = false;
 try { MercatoTaxQuote::normalize(['currency' => 'USD', 'lines' => [['tax' => INF]]]); } catch (InvalidArgumentException) { $failed = true; }
 if (!$failed) throw new RuntimeException('Non-finite tax line values must be rejected.');
+$failed = false;
+try { MercatoTaxQuote::normalize(['currency' => 'USD', 'total_tax' => 5, 'lines' => [['tax' => 2]]]); } catch (InvalidArgumentException) { $failed = true; }
+if (!$failed) throw new RuntimeException('A mismatched aggregate tax total must be rejected.');
 
 $context = [
     'currency' => 'USD', 'display_mode' => 'excluded', 'idempotency_key' => 'estimate-ny',

@@ -1,5 +1,5 @@
 <?php
-$root = dirname(__DIR__); $required = ['Mercato.module.php', 'ProcessMercato.module.php', 'MercatoGatewayInterface.php', 'install/install.php', 'templates/mrc-checkout.php', 'vendor/autoload.php', 'vendor/composer/installed.php']; $missing = [];
+$root = dirname(__DIR__); $required = ['Mercato.module.php', 'ProcessMercato.module.php', 'MercatoStripeTax.module.php', 'MercatoQuadernoTax.module.php', 'MercatoGatewayInterface.php', 'src/Tax/Provider/MercatoStripeTaxProvider.php', 'src/Tax/Provider/MercatoQuadernoTaxProvider.php', 'install/install.php', 'templates/mrc-checkout.php', 'vendor/autoload.php', 'vendor/composer/installed.php']; $missing = [];
 foreach ($required as $file) if (!is_file($root . '/' . $file)) $missing[] = $file;
 if ($missing) { fwrite(STDERR, 'Missing release runtime files: ' . implode(', ', $missing) . PHP_EOL); exit(1); }
 require $root . '/vendor/autoload.php';

@@ -7,7 +7,24 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ---
 
-## [Unreleased]
+## [1.6.0] - 2026-10-10
+
+### Added
+
+- Optional bundled `MercatoStripeTax` and `MercatoQuadernoTax` provider modules with isolated configuration, deterministic transport contracts, inclusive/exclusive calculations, tax commit, reversal/refund, and void lifecycles.
+- A loopback-only provider emulator and real-browser checkout profile covering Stripe Tax and Quaderno quote, commit, refund, inventory restoration, private status presentation, accessibility, responsive behavior, idempotency keys, and exact cleanup without external side effects.
+- Per-market seller entity, tax provider, price tax behavior, failure policy, registrations, nexus regions, and ship-from settings in `markets_json`.
+- Versioned immutable tax and receipt snapshots with explicit market, seller, tax date, rule version, calculation behavior, and whether tax is added to the payable total.
+- Inquiry-only catalog products with hidden public prices and non-purchasable storefront/API behavior.
+
+### Fixed
+
+- Manual fallback from an external provider now preserves excluded-tax economics and adds tax to the payable total instead of deciding from the fallback provider name.
+- Product-targeted, collection-targeted, fixed, percentage, and free-shipping discounts now expose deterministic per-line and shipping allocations to tax providers.
+- Tax lifecycle refunds receive the committed provider transaction reference, and unsuccessful provider lifecycle responses no longer become local success.
+- Tax presentation mode `none` no longer changes the underlying included/excluded price calculation behavior.
+- Non-default-market receipts now snapshot the order currency and retain shipping tax breakdowns.
+- Loading already-saved production configuration no longer triggers the new-production activation confirmation guard.
 
 ## [1.5.5] - 2026-09-27
 

@@ -247,7 +247,7 @@ trait MercatoConfigInputfields {
         $f = $modules->get('InputfieldTextarea');
         $f->name = 'markets_json';
         $f->label = __('Additional storefront markets (JSON)');
-        $f->description = __('Each enabled market needs id, label, ISO currency, countries, and language. Product prices are explicit in mrc_market_prices; Mercato never converts currencies automatically.');
+        $f->description = __('Each enabled market needs id, label, ISO currency, countries, and language. Optional tax keys: seller_entity, tax_provider, price_tax_behavior, tax_failure_policy, tax_registrations, tax_nexus_regions, and ship_from. Product prices are explicit in mrc_market_prices; Mercato never converts currencies automatically.');
         $f->value = (string) ($data['markets_json'] ?? '');
         $f->rows = 6;
         $f->columnWidth = 100;
@@ -674,9 +674,18 @@ trait MercatoConfigInputfields {
         $fs->add($f);
 
         $f = $modules->get('InputfieldSelect');
+        $f->name = 'tax_price_behavior';
+        $f->label = __('Catalog price tax behavior');
+        $f->description = __('Included means catalog prices already contain tax. Excluded adds calculated tax to the payable total. Configure a market override with price_tax_behavior when markets differ.');
+        $f->addOptions(['included' => __('Tax included in prices'), 'excluded' => __('Tax added at checkout')]);
+        $f->value = $data['tax_price_behavior'];
+        $f->columnWidth = 33;
+        $fs->add($f);
+
+        $f = $modules->get('InputfieldSelect');
         $f->name = 'tax_display_mode';
         $f->label = __('Tax display mode');
-        $f->description = __('Controls tax breakdown display. Included keeps the current gross-price model; No tax hides tax rows without changing payable totals.');
+        $f->description = __('Controls only tax-breakdown presentation. No tax hides tax rows without changing payable totals or the catalog price tax behavior.');
         $displayOptions = [];
         foreach (self::getTaxDisplayModeOptions() as $value => $label) {
             $displayOptions[$value] = __($label);

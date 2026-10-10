@@ -25,7 +25,7 @@ require_once __DIR__ . '/src/Mcp/MercatoMcpProviderTrait.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.5.6 (module info version: 156)
+ * @version 1.6.0 (module info version: 160)
  * @license MIT
  */
 
@@ -56,7 +56,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const PAYMENT_STATUS_CANCELED = 'canceled';
 
     public const SUBSCRIPTION_STATUS_NONE = 'none';
-    public const MODULE_VERSION = 156;
+    public const MODULE_VERSION = 160;
     public const SCHEMA_VERSION = 13;
 
     private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';
@@ -220,6 +220,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             'shipping_provider_include_manual_rates' => false,
             'shipping_provider_webhook_secret' => '',
             'default_tax_rate'         => 20.0,
+            'tax_price_behavior'       => 'included',
             'tax_display_mode'         => 'included',
             'tax_label'                => 'VAT',
             'tax_rounding_mode'        => 'line',
@@ -449,6 +450,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoQuoteStatus::class => '/src/Quote/MercatoQuoteStatus.php',
             MercatoQuoteService::class => '/src/Quote/MercatoQuoteService.php',
             MercatoTaxProviderInterface::class => '/src/Tax/MercatoTaxProviderInterface.php',
+            MercatoTaxProviderException::class => '/src/Tax/MercatoTaxProviderException.php',
             MercatoTaxQuote::class => '/src/Tax/MercatoTaxQuote.php',
             MercatoManualTaxProvider::class => '/src/Tax/MercatoManualTaxProvider.php',
             MercatoTaxService::class => '/src/Tax/MercatoTaxService.php',

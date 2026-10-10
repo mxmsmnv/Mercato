@@ -26,6 +26,9 @@ $nonce = bin2hex(random_bytes(6)); $created = null; $cartResource = null;
 try {
     $commerce->set('markets_json', json_encode([[
         'id' => 'us', 'label' => 'United States', 'currency' => 'USD', 'countries' => ['US'], 'language' => 'en',
+        'seller_entity' => 'us-company', 'tax_provider' => 'manual', 'price_tax_behavior' => 'excluded', 'tax_failure_policy' => 'fail_closed',
+        'tax_registrations' => [['country' => 'US', 'region' => 'NY']], 'tax_nexus_regions' => ['US-NY'],
+        'ship_from' => ['country' => 'US', 'region' => 'CA', 'postal_code' => '90049'],
         'fulfilment_prices' => ['carrier_delivery' => 7.50],
     ]], JSON_UNESCAPED_SLASHES));
     $commerce->set('enabled_payment_methods', ['demo']);
@@ -34,6 +37,8 @@ try {
     $service = $commerce->headlessApiService();
     $store = $service->store();
     if (count($store['markets'] ?? []) !== 2 || ($store['markets'][1]['currency'] ?? '') !== 'USD') throw new \RuntimeException('Store market discovery failed.');
+    $taxMarket = $commerce->marketService()->resolve('us');
+    if (($taxMarket['seller_entity'] ?? '') !== 'us-company' || ($taxMarket['price_tax_behavior'] ?? '') !== 'excluded' || ($taxMarket['tax_nexus_regions'][0] ?? '') !== 'US-NY') throw new \RuntimeException('Market tax policy normalization failed.');
     $marketProduct = $service->product((int) $product->id, ['market_id' => 'us']);
     if ((float) $marketProduct['price'] !== $marketPrice || $marketProduct['currency'] !== 'USD' || $marketProduct['market_id'] !== 'us') throw new \RuntimeException('Catalog did not use the explicit market price.');
     $marketCollections = $service->collections(['market_id' => 'us', 'limit' => 5]);
@@ -52,7 +57,10 @@ try {
     $created = $service->createCheckout($body, 'market-checkout-' . $nonce);
     $order = $wire->pages->get('template=mrc-order,include=all,mrc_api_checkout_id=' . $wire->sanitizer->selectorValue((string) $created['id']));
     $snapshots = $order && $order->id ? json_decode((string) $order->mrc_items, true) : null;
+    $taxSnapshot = $order && $order->id ? json_decode((string) $order->mrc_tax_details, true) : null;
     if (!$order || !$order->id || (string) $order->mrc_currency !== 'USD' || (float) $order->mrc_subtotal_amount !== $marketPrice || (float) $order->mrc_shipping_amount !== 7.50 || ($snapshots[0]['market_id'] ?? '') !== 'us') throw new \RuntimeException('Checkout order lost its market price snapshot.');
+    $taxQuote = (array) ($taxSnapshot['quote'] ?? []);
+    if (($taxQuote['market_id'] ?? '') !== 'us' || ($taxQuote['seller_entity'] ?? '') !== 'us-company' || ($taxQuote['tax_behavior'] ?? '') !== 'excluded' || empty($taxQuote['tax_added_to_total'])) throw new \RuntimeException('Market tax policy did not reach persisted checkout economics.');
 } finally {
     $commerce->set('markets_json', $originalMarkets); $commerce->set('enabled_payment_methods', $originalMethods); $commerce->cart($originalCart);
     $product->of(false); $product->mrc_market_prices = $originalPrices; $wire->pages->save($product);

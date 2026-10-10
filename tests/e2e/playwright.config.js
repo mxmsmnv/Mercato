@@ -32,7 +32,7 @@ function firefoxLaunchOptions() {
   return { ...launchOptions, executablePath: path.join(__dirname, 'playwright-firefox-wrapper.sh') };
 }
 
-const dedicated = ['**/admin.spec.js', '**/admin-visual-breadth.spec.js', '**/customer-lifecycle.spec.js', '**/refund.spec.js', '**/ownership-boundaries.spec.js', '**/guest-checkout.spec.js', '**/presentation-states.spec.js', '**/authenticated-variant.spec.js', '**/fulfilment-matrix.spec.js', '**/cross-browser-checkout.spec.js', '**/public-visual-states.spec.js', '**/keyboard-a11y.spec.js', '**/assistive-visual-evidence.spec.js'];
+const dedicated = ['**/admin.spec.js', '**/admin-visual-breadth.spec.js', '**/customer-lifecycle.spec.js', '**/refund.spec.js', '**/ownership-boundaries.spec.js', '**/guest-checkout.spec.js', '**/presentation-states.spec.js', '**/authenticated-variant.spec.js', '**/fulfilment-matrix.spec.js', '**/cross-browser-checkout.spec.js', '**/public-visual-states.spec.js', '**/keyboard-a11y.spec.js', '**/assistive-visual-evidence.spec.js', '**/tax-provider.spec.js'];
 const projects = profile === 'core' ? [
   { name: 'chromium-desktop', testIgnore: dedicated, use: { ...devices['Desktop Chrome'] } },
   { name: 'chromium-mobile', testIgnore: ['**/a11y-interactions.spec.js', '**/recovery.spec.js', ...dedicated], use: { ...devices['Pixel 7'] } },
@@ -46,7 +46,7 @@ const projects = profile === 'core' ? [
 
 module.exports = defineConfig({
   testDir: __dirname,
-  testMatch: profile === 'admin' ? '**/admin.spec.js' : (profile === 'admin-visual-breadth' ? '**/admin-visual-breadth.spec.js' : (profile === 'customer-lifecycle' ? '**/customer-lifecycle.spec.js' : (profile === 'refund' ? '**/refund.spec.js' : (profile === 'ownership-boundaries' ? '**/ownership-boundaries.spec.js' : (profile === 'guest-checkout' ? '**/guest-checkout.spec.js' : (profile === 'presentation-states' ? '**/presentation-states.spec.js' : (profile === 'authenticated-variant' ? '**/authenticated-variant.spec.js' : (profile === 'fulfilment-matrix' ? '**/fulfilment-matrix.spec.js' : (profile === 'cross-browser-checkout' ? '**/cross-browser-checkout.spec.js' : (profile === 'public-visual-states' ? '**/public-visual-states.spec.js' : (profile === 'keyboard-a11y' ? '**/keyboard-a11y.spec.js' : (profile === 'assistive-visual' ? '**/assistive-visual-evidence.spec.js' : '**/*.spec.js')))))))))))),
+  testMatch: profile === 'admin' ? '**/admin.spec.js' : (profile === 'admin-visual-breadth' ? '**/admin-visual-breadth.spec.js' : (profile === 'customer-lifecycle' ? '**/customer-lifecycle.spec.js' : (profile === 'refund' ? '**/refund.spec.js' : (profile === 'ownership-boundaries' ? '**/ownership-boundaries.spec.js' : (profile === 'guest-checkout' ? '**/guest-checkout.spec.js' : (profile === 'presentation-states' ? '**/presentation-states.spec.js' : (profile === 'authenticated-variant' ? '**/authenticated-variant.spec.js' : (profile === 'fulfilment-matrix' ? '**/fulfilment-matrix.spec.js' : (profile === 'cross-browser-checkout' ? '**/cross-browser-checkout.spec.js' : (profile === 'public-visual-states' ? '**/public-visual-states.spec.js' : (profile === 'keyboard-a11y' ? '**/keyboard-a11y.spec.js' : (profile === 'assistive-visual' ? '**/assistive-visual-evidence.spec.js' : (profile === 'tax-provider' ? '**/tax-provider.spec.js' : '**/*.spec.js'))))))))))))),
   grepInvert: /@live/,
   fullyParallel: false,
   workers: 1,

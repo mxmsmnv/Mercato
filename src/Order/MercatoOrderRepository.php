@@ -195,6 +195,7 @@ class MercatoOrderRepository extends Wire {
     }
 
     public function pageToPendingData(Page $order): array {
+        $precision = MercatoCurrency::decimalPlaces((string) ($order->mrc_currency ?: $this->commerce->currency));
         return [
             'mrc_order_page_id' => $order->id,
             'mrc_invoice_number' => (string) $order->mrc_invoice_number,
@@ -218,13 +219,13 @@ class MercatoOrderRepository extends Wire {
             'payment_details' => (string) $order->mrc_payment_details,
             'mrc_items' => (string) $order->mrc_items,
             'mrc_currency' => (string) ($order->mrc_currency ?: $this->commerce->currency),
-            'mrc_subtotal_amount' => $order->hasField('mrc_subtotal_amount') ? round((float) $order->mrc_subtotal_amount, 2) : 0.0,
-            'mrc_shipping_amount' => $order->hasField('mrc_shipping_amount') ? round((float) $order->mrc_shipping_amount, 2) : 0.0,
+            'mrc_subtotal_amount' => $order->hasField('mrc_subtotal_amount') ? round((float) $order->mrc_subtotal_amount, $precision) : 0.0,
+            'mrc_shipping_amount' => $order->hasField('mrc_shipping_amount') ? round((float) $order->mrc_shipping_amount, $precision) : 0.0,
             'mrc_discount_code' => $order->hasField('mrc_discount_code') ? (string) $order->mrc_discount_code : '',
-            'mrc_discount_total' => $order->hasField('mrc_discount_total') ? round((float) $order->mrc_discount_total, 2) : 0.0,
+            'mrc_discount_total' => $order->hasField('mrc_discount_total') ? round((float) $order->mrc_discount_total, $precision) : 0.0,
             'mrc_discount_details' => $order->hasField('mrc_discount_details') ? (string) $order->mrc_discount_details : '',
             'mrc_total_amount' => $this->getTotalAmount($order),
-            'mrc_tax_amount' => $order->hasField('mrc_tax_amount') ? round((float) $order->mrc_tax_amount, 2) : 0.0,
+            'mrc_tax_amount' => $order->hasField('mrc_tax_amount') ? round((float) $order->mrc_tax_amount, $precision) : 0.0,
             'mrc_tax_details' => $order->hasField('mrc_tax_details') ? (string) $order->mrc_tax_details : '',
             'mrc_tax_provider_reference' => $order->hasField('mrc_tax_provider_reference') ? (string) $order->mrc_tax_provider_reference : '',
             'mrc_tax_committed' => $order->hasField('mrc_tax_committed') ? (int) $order->mrc_tax_committed : 0,
@@ -237,9 +238,10 @@ class MercatoOrderRepository extends Wire {
     }
 
     public function getTotalAmount(Page $order): float {
+        $precision = MercatoCurrency::decimalPlaces((string) ($order->mrc_currency ?: $this->commerce->currency));
         $hasSnapshot = $order->hasField('mrc_fulfilment_method') && trim((string) $order->mrc_fulfilment_method) !== '';
         if ($order->hasField('mrc_total_amount') && ((float) $order->mrc_total_amount > 0 || $hasSnapshot)) {
-            return round((float) $order->mrc_total_amount, 2);
+            return round((float) $order->mrc_total_amount, $precision);
         }
 
         $items = json_decode((string) $order->mrc_items, true);

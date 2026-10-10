@@ -94,16 +94,16 @@ class MercatoPaymentService extends Wire {
         );
         $fulfilment = $this->commerce->marketService()->applyToFulfilmentMethods([$fulfilment], $market, true)[0];
         $addresses = $this->commerce->buildAddressSnapshots($data, $fulfilment);
-        $subtotal = $cart->getSubtotal();
-        $shipping = (float) $fulfilment['amount'];
+        $precision = MercatoCurrency::decimalPlaces((string) $market['currency']);
+        $subtotal = round($cart->getSubtotal(), $precision);
+        $shipping = round((float) $fulfilment['amount'], $precision);
         $discount = $this->commerce->discountService()->applyFinalShippingAmount($discount, $shipping);
-        $discountAmount = round((float) ($discount['amount'] ?? 0), 2);
+        $discountAmount = round((float) ($discount['amount'] ?? 0), $precision);
         $taxQuote = $this->commerce->taxService()->estimate($cart, $data, $fulfilment, $discount, $market['currency']);
-        $taxAmount = round(max(0, (float) ($taxQuote['total_tax'] ?? 0)), 2);
-        $taxAddedToTotal = (string) ($taxQuote['provider'] ?? 'manual') !== 'manual'
-            && (string) ($taxQuote['display_mode'] ?? 'included') === 'excluded';
+        $taxAmount = round(max(0, (float) ($taxQuote['total_tax'] ?? 0)), $precision);
+        $taxAddedToTotal = !empty($taxQuote['tax_added_to_total']);
         $taxQuote['tax_added_to_total'] = $taxAddedToTotal;
-        $total = round(max(0, $subtotal + $shipping - $discountAmount + ($taxAddedToTotal ? $taxAmount : 0)), 2);
+        $total = round(max(0, $subtotal + $shipping - $discountAmount + ($taxAddedToTotal ? $taxAmount : 0)), $precision);
 
         $data['mrc_items'] = json_encode($cart->toArray());
         $data['mrc_currency'] = $market['currency'];
@@ -118,12 +118,17 @@ class MercatoPaymentService extends Wire {
         $data['mrc_fulfilment_details'] = json_encode($fulfilment, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $data['mrc_billing_address'] = json_encode($addresses['billing'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $data['mrc_shipping_address'] = json_encode($addresses['shipping'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $receiptDetails = $this->commerce->buildReceiptDetailsSnapshot($cart, $shipping);
+        $receiptDetails = $this->commerce->buildReceiptDetailsSnapshot($cart, $shipping, $market['currency']);
         $receiptDetails['tax_provider'] = (string) ($taxQuote['provider'] ?? 'manual');
         $receiptDetails['tax_amount'] = $taxAmount;
         $receiptDetails['tax_breakdown'] = array_map(static fn(array $line): array => [
             'tax_rate' => (float) ($line['rate'] ?? 0), 'sum' => (float) ($line['tax'] ?? 0), 'jurisdiction' => (string) ($line['jurisdiction'] ?? ''),
         ], (array) ($taxQuote['lines'] ?? []));
+        $shippingTax = (array) ($taxQuote['shipping'] ?? []);
+        if ((float) ($shippingTax['tax'] ?? 0) > 0) $receiptDetails['tax_breakdown'][] = [
+            'tax_rate' => (float) ($shippingTax['rate'] ?? 0), 'sum' => (float) $shippingTax['tax'],
+            'jurisdiction' => (string) ($shippingTax['jurisdiction'] ?? 'shipping'), 'type' => 'shipping',
+        ];
         $data['mrc_receipt_details'] = json_encode($receiptDetails, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $data = $this->applyDiscountSnapshot($data, $discount, $discountAmount);
         $data['mrc_total_amount'] = $total;

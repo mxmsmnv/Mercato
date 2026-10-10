@@ -28,6 +28,15 @@ trait MercatoStoreServices {
         if ($data['markets_json'] !== '') {
             $markets = json_decode($data['markets_json'], true);
             if (!is_array($markets) || !array_is_list($markets)) throw new WireException($this->_('Markets must be a valid JSON array.'));
+            foreach ($markets as $market) {
+                if (!is_array($market)) throw new WireException($this->_('Each market must be a JSON object.'));
+                if (array_key_exists('tax_provider', $market) && !preg_match('/^[a-z0-9_-]{1,120}$/', strtolower(trim((string) $market['tax_provider'])))) throw new WireException($this->_('Market tax_provider is invalid.'));
+                if (array_key_exists('price_tax_behavior', $market) && !in_array((string) $market['price_tax_behavior'], ['included', 'excluded'], true)) throw new WireException($this->_('Market price_tax_behavior must be included or excluded.'));
+                if (array_key_exists('tax_failure_policy', $market) && !in_array((string) $market['tax_failure_policy'], ['fail_closed', 'manual_fallback', 'zero_tax'], true)) throw new WireException($this->_('Market tax_failure_policy is invalid.'));
+                if (array_key_exists('tax_registrations', $market) && !is_array($market['tax_registrations'])) throw new WireException($this->_('Market tax_registrations must be a JSON array.'));
+                if (array_key_exists('tax_nexus_regions', $market) && !is_array($market['tax_nexus_regions']) && !is_string($market['tax_nexus_regions'])) throw new WireException($this->_('Market tax_nexus_regions must be an array or string.'));
+                if (array_key_exists('ship_from', $market) && !is_array($market['ship_from'])) throw new WireException($this->_('Market ship_from must be a JSON object.'));
+            }
         }
         $data['invoice_prefix'] = self::normalizeInvoicePrefix($data['invoice_prefix'] ?? '');
         $data['orders_parent'] = self::normalizePagePathConfig($data['orders_parent'] ?? 'orders', 'orders');
@@ -128,6 +137,7 @@ trait MercatoStoreServices {
         $data['shipping_provider_include_manual_rates'] = !empty($data['shipping_provider_include_manual_rates']);
         $data['shipping_provider_webhook_secret'] = trim((string) ($data['shipping_provider_webhook_secret'] ?? ''));
         $data['default_tax_rate'] = self::normalizeTaxRate($data['default_tax_rate'] ?? 20);
+        $data['tax_price_behavior'] = (string) ($data['tax_price_behavior'] ?? 'included') === 'excluded' ? 'excluded' : 'included';
         $data['tax_display_mode'] = self::normalizeTaxDisplayMode($data['tax_display_mode'] ?? 'included');
         $data['tax_label'] = self::normalizeTaxLabel($data['tax_label'] ?? 'VAT');
         $data['tax_rounding_mode'] = self::normalizeTaxRoundingMode($data['tax_rounding_mode'] ?? 'line');
@@ -510,15 +520,15 @@ trait MercatoStoreServices {
             $selected = $methods[0] ?? ['type' => '', 'label' => '', 'amount' => 0.0, 'available' => false];
         }
 
-        $subtotal = round((float) $cart->getSubtotal(), 2);
-        $shipping = round(max(0.0, (float) ($selected['amount'] ?? 0)), 2);
+        $precision = MercatoCurrency::decimalPlaces((string) $market['currency']);
+        $subtotal = round((float) $cart->getSubtotal(), $precision);
+        $shipping = round(max(0.0, (float) ($selected['amount'] ?? 0)), $precision);
         $discount = $this->discountService()->applyFinalShippingAmount($discount, $shipping);
-        $discountAmount = round(max(0.0, (float) ($discount['amount'] ?? 0)), 2);
+        $discountAmount = round(max(0.0, (float) ($discount['amount'] ?? 0)), $precision);
         $taxQuote = $this->taxService()->estimate($cart, $customerData, $selected, $discount, $market['currency']);
-        $taxAmount = round(max(0.0, (float) ($taxQuote['total_tax'] ?? 0)), 2);
-        $taxAddedToTotal = (string) ($taxQuote['provider'] ?? 'manual') !== 'manual'
-            && (string) ($taxQuote['display_mode'] ?? 'included') === 'excluded';
-        $total = round(max(0.0, $subtotal + $shipping - $discountAmount + ($taxAddedToTotal ? $taxAmount : 0.0)), 2);
+        $taxAmount = round(max(0.0, (float) ($taxQuote['total_tax'] ?? 0)), $precision);
+        $taxAddedToTotal = !empty($taxQuote['tax_added_to_total']);
+        $total = round(max(0.0, $subtotal + $shipping - $discountAmount + ($taxAddedToTotal ? $taxAmount : 0.0)), $precision);
 
         $quote = [
             'items' => $cart->toArray(),
@@ -672,12 +682,17 @@ trait MercatoStoreServices {
         return self::normalizeTaxDisplayMode($this->tax_display_mode ?? 'included');
     }
 
-    public function buildReceiptDetailsSnapshot(?MercatoProductList $cart = null, float $shippingAmount = 0.0): array {
+    public function getTaxPriceBehavior(): string {
+        return (string) ($this->tax_price_behavior ?? 'included') === 'excluded' ? 'excluded' : 'included';
+    }
+
+    public function buildReceiptDetailsSnapshot(?MercatoProductList $cart = null, float $shippingAmount = 0.0, string $currency = ''): array {
         $snapshot = [
+            'snapshot_version' => 2,
             'merchant_legal_details' => $this->getMerchantLegalDetailsText(),
             'tax_label' => $this->getTaxLabel(),
             'captured_at' => date('c'),
-            'currency' => (string) ($this->currency ?? ''),
+            'currency' => MercatoCurrency::normalizeCode($currency !== '' ? $currency : (string) ($this->currency ?? '')),
         ];
         if ($cart !== null) {
             $snapshot['tax_breakdown'] = $this->getTaxRatesForOrder($cart, $shippingAmount);
@@ -823,13 +838,13 @@ trait MercatoStoreServices {
 
         $this->recordEvent('mercato-tax', [
             'event' => 'business_tax_number_validated',
-            'tax_number' => (string) ($result['tax_number'] ?? $normalized),
+            'tax_number_hash' => hash('sha256', (string) ($result['tax_number'] ?? $normalized)),
             'valid' => (bool) ($result['valid'] ?? false),
             'validated' => (bool) ($result['validated'] ?? false),
             'status' => (string) ($result['status'] ?? ''),
             'country' => (string) ($result['country'] ?? $country),
             'country_prefix' => (string) ($result['country_prefix'] ?? $prefix),
-            'company' => (string) ($result['company'] ?? ''),
+            'company_present' => trim((string) ($result['company'] ?? '')) !== '',
             'reverse_charge' => (bool) ($result['reverse_charge'] ?? false),
             'source' => (string) ($result['source'] ?? 'format'),
         ], 'business_tax_number_validated');

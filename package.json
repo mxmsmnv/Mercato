@@ -1,10 +1,11 @@
 {
   "name": "mercato-acceptance",
   "private": true,
-  "version": "1.5.5",
+  "version": "1.6.0",
   "scripts": {
     "test:e2e": "playwright test",
-    "test:e2e:live": "playwright test --grep @live"
+    "test:e2e:live": "playwright test --grep @live",
+    "test:e2e:tax-providers": "bash scripts/run-tax-provider-e2e.sh"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

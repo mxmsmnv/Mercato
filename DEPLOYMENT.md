@@ -7,7 +7,7 @@
 - MySQL 8.0+ or MariaDB 10.6+ using a transactional InnoDB database and `utf8mb4`.
 - Composer 2.7+ for source installs and release assembly. Tagged release ZIPs include production dependencies and do not require Composer on the web host.
 
-`composer.json` is the declared graph and `composer.lock` is the exact graph used for CI and release assembly. `require` contains production runtime packages; `require-dev` contains test tooling only. Stripe's PHP SDK is required because Stripe methods are enabled by default. Mollie and PayPal use ProcessWire `WireHttp` and add no PHP package. Third-party tax, shipping, mail, or gateway modules own and document their own dependencies.
+`composer.json` is the declared graph and `composer.lock` is the exact graph used for CI and release assembly. `require` contains production runtime packages; `require-dev` contains test tooling only. Stripe's PHP SDK is required because Stripe methods are enabled by default. Mollie and PayPal use ProcessWire `WireHttp` and add no PHP package. The bundled Stripe Tax and Quaderno Tax modules use isolated cURL transports with real socket timeouts; enable them only after test/sandbox contract validation. Other third-party tax, shipping, mail, or gateway modules own and document their own dependencies.
 
 ## Fresh install
 

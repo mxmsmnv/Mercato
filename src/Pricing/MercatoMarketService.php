@@ -19,6 +19,13 @@ final class MercatoMarketService extends Wire {
             'countries' => $this->commerce->getAllowedDeliveryCountries(),
             'language' => MercatoEmailTemplateRenderer::normalizeLocale((string) ($this->commerce->notification_locale ?? 'en')),
             'is_default' => true,
+            'seller_entity' => '',
+            'tax_provider' => trim((string) ($this->commerce->tax_provider ?? 'manual')) ?: 'manual',
+            'price_tax_behavior' => $this->normalizeTaxBehavior((string) ($this->commerce->tax_price_behavior ?? 'included')),
+            'tax_failure_policy' => $this->normalizeTaxFailurePolicy((string) ($this->commerce->tax_provider_failure_policy ?? 'fail_closed')),
+            'tax_registrations' => $this->decodeObjectList((string) ($this->commerce->tax_registrations ?? '')),
+            'tax_nexus_regions' => $this->normalizeRegionList((string) ($this->commerce->tax_nexus_regions ?? '')),
+            'ship_from' => [],
         ];
         $markets = ['default' => $default];
         $decoded = json_decode(trim((string) ($this->commerce->markets_json ?? '')), true);
@@ -39,6 +46,13 @@ final class MercatoMarketService extends Wire {
                 'countries' => array_keys($countries),
                 'language' => MercatoEmailTemplateRenderer::normalizeLocale((string) ($candidate['language'] ?? $default['language'])),
                 'fulfilment_prices' => $this->moneyMap((array) ($candidate['fulfilment_prices'] ?? [])),
+                'seller_entity' => substr(trim((string) ($candidate['seller_entity'] ?? '')), 0, 120),
+                'tax_provider' => $this->normalizeProviderKey((string) ($candidate['tax_provider'] ?? $default['tax_provider'])),
+                'price_tax_behavior' => $this->normalizeTaxBehavior((string) ($candidate['price_tax_behavior'] ?? $candidate['tax_display_mode'] ?? $default['price_tax_behavior'])),
+                'tax_failure_policy' => $this->normalizeTaxFailurePolicy((string) ($candidate['tax_failure_policy'] ?? $default['tax_failure_policy'])),
+                'tax_registrations' => is_array($candidate['tax_registrations'] ?? null) ? array_values($candidate['tax_registrations']) : $default['tax_registrations'],
+                'tax_nexus_regions' => $this->normalizeRegionList($candidate['tax_nexus_regions'] ?? $default['tax_nexus_regions']),
+                'ship_from' => $this->normalizeAddress((array) ($candidate['ship_from'] ?? [])),
                 'is_default' => false,
             ];
         }
@@ -155,6 +169,46 @@ final class MercatoMarketService extends Wire {
             $key = self::normalizeId((string) $key);
             if ($key !== '' && is_numeric($value) && (float) $value >= 0) $out[$key] = round((float) $value, 3);
         }
+        return $out;
+    }
+
+    private function normalizeProviderKey(string $value): string {
+        $value = strtolower(trim($value));
+        return preg_match('/^[a-z0-9_-]{1,120}$/', $value) ? $value : 'manual';
+    }
+
+    private function normalizeTaxBehavior(string $value): string {
+        $value = strtolower(trim($value));
+        return $value === 'excluded' ? 'excluded' : 'included';
+    }
+
+    private function normalizeTaxFailurePolicy(string $value): string {
+        return in_array($value, ['fail_closed', 'manual_fallback', 'zero_tax'], true) ? $value : 'fail_closed';
+    }
+
+    private function decodeObjectList(string $json): array {
+        $decoded = json_decode(trim($json), true);
+        return is_array($decoded) ? array_values($decoded) : [];
+    }
+
+    private function normalizeRegionList(string|array $regions): array {
+        $values = is_array($regions) ? $regions : (preg_split('/[\s,]+/', strtoupper($regions), -1, PREG_SPLIT_NO_EMPTY) ?: []);
+        $out = [];
+        foreach ($values as $value) {
+            $value = strtoupper(substr(trim((string) $value), 0, 80));
+            if ($value !== '') $out[$value] = true;
+        }
+        return array_keys($out);
+    }
+
+    private function normalizeAddress(array $address): array {
+        $out = [];
+        foreach (['line1', 'line2', 'city', 'postal_code', 'region'] as $key) {
+            $value = substr(trim((string) ($address[$key] ?? '')), 0, 160);
+            if ($value !== '') $out[$key] = $value;
+        }
+        $country = strtoupper(substr(trim((string) ($address['country'] ?? '')), 0, 2));
+        if (preg_match('/^[A-Z]{2}$/', $country)) $out['country'] = $country;
         return $out;
     }
 }
