@@ -109,7 +109,7 @@ class ProcessMercato extends Process implements Module {
         return [
             'title' => 'Mercato Dashboard',
             'summary' => 'Admin dashboard for Mercato orders, products, and revenue.',
-            'version' => 161,
+            'version' => 170,
             'author' => 'Maxim Semenov',
             'href'     => 'https://smnv.org',
             'singular' => true,

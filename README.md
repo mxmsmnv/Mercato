@@ -458,6 +458,8 @@ Production operations also expose a PII-free `/api/mercato/health` liveness chec
 
 Consent-aware commerce analytics is optional and disabled by default. The versioned event schema, exact-once purchase/refund delivery, identifier minimization, consent API, dataLayer behavior, adapter interface, and diagnostics are documented in [ANALYTICS.md](ANALYTICS.md).
 
+Native clients can use the versioned headless API for quote requests and signed quote status, account-owned quote history, guest-order claim requests, portable customer exports, and consent-aware minimized analytics events. These resources preserve the same ownership, idempotency, privacy, and server-authoritative pricing rules as the storefront; see [HEADLESS_API.md](HEADLESS_API.md).
+
 ### Payment launch and incident runbook
 
 Production activation is a guarded transition. The merchant must explicitly confirm the checklist, Demo Payment must be disabled, the site and webhook URLs must use HTTPS, enabled gateways must have mode-correct live credentials, and live/test credentials cannot match. Gateway readiness cards show credentials, webhook verification mechanism, required events, capabilities, and current verification state without displaying secrets.

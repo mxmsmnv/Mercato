@@ -25,7 +25,7 @@ require_once __DIR__ . '/src/Mcp/MercatoMcpProviderTrait.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.6.1 (module info version: 161)
+ * @version 1.7.0 (module info version: 170)
  * @license MIT
  */
 
@@ -56,7 +56,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const PAYMENT_STATUS_CANCELED = 'canceled';
 
     public const SUBSCRIPTION_STATUS_NONE = 'none';
-    public const MODULE_VERSION = 161;
+    public const MODULE_VERSION = 170;
     public const SCHEMA_VERSION = 13;
 
     private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';

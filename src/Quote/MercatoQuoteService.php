@@ -41,6 +41,7 @@ final class MercatoQuoteService extends Wire {
         $options = [
             'discount_code' => (string) ($data['discount_code'] ?? ''),
             'fulfilment_method' => (string) ($data['fulfilment_method'] ?? ''),
+            'market_id' => (string) ($data['market_id'] ?? 'default'),
         ];
         $quote = $this->commerce->getHeadlessCheckoutQuote($safeItems, $customerData, $options);
         if (empty($quote['fulfilment_methods'])) {

@@ -44,11 +44,18 @@ final class MercatoHeadlessApiService extends Wire {
         if($method==='POST'&&$resource==='account'&&$id==='favorites') return ['resource'=>'account_favorites','data'=>$this->updateAccountFavorites($this->token($headers),$body,$this->requireIdempotency($headers))];
         if($method==='POST'&&$resource==='account'&&$id==='logout') return ['resource'=>'account_session','data'=>$this->logoutAccount($this->token($headers))];
         if($method==='GET'&&$resource==='account'&&$id==='orders') return ['resource'=>'account_orders']+$this->accountOrders($this->token($headers),$query);
+        if($method==='GET'&&$resource==='account'&&$id==='quotes') return ['resource'=>'account_quotes']+$this->accountQuotes($this->token($headers),$query);
+        if($method==='POST'&&$resource==='account'&&$id==='claim-order') return ['status'=>202,'resource'=>'account_order_claim','data'=>$this->requestAccountOrderClaim($this->token($headers),$body,$this->requireIdempotency($headers))];
+        if($method==='GET'&&$resource==='account'&&$id==='export') return ['resource'=>'account_export','data'=>$this->accountExport($this->token($headers))];
         if($method==='GET'&&$resource==='account'&&$id==='deletion-review') return ['resource'=>'account_deletion','data'=>$this->accountDeletionReview($this->token($headers))];
         if($method==='POST'&&$resource==='account'&&$id==='delete') return ['resource'=>'account_deletion','data'=>$this->deleteAccount($this->token($headers),$body,$this->requireIdempotency($headers))];
         if($method==='POST'&&$resource==='devices'&&$id==='') return ['status'=>201,'resource'=>'push_device','data'=>$this->registerPushDevice($this->token($headers),$body,$this->requireIdempotency($headers))];
         if($method==='POST'&&$resource==='devices'&&$id!==''&&$action==='revoke') return ['resource'=>'push_device','data'=>$this->revokePushDevice($id,$this->token($headers),$body,$this->requireIdempotency($headers))];
         if($method==='POST'&&$resource==='quotes'&&$id==='') return ['status'=>200,'resource'=>'quote','data'=>$this->quote($body)];
+        if($method==='POST'&&$resource==='quote-requests'&&$id==='') return ['status'=>201,'resource'=>'quote_request','data'=>$this->createQuoteRequest($body,$this->requireIdempotency($headers),$this->token($headers))];
+        if($method==='GET'&&$resource==='quote-requests'&&$id!=='') return ['resource'=>'quote_request','data'=>$this->quoteRequest($id,$this->token($headers))];
+        if($method==='POST'&&$resource==='analytics'&&$id==='consent') return ['resource'=>'analytics_consent','data'=>$this->analyticsConsent($body)];
+        if($method==='POST'&&$resource==='analytics'&&$id==='events') return ['status'=>202,'resource'=>'analytics_event','data'=>$this->analyticsEvent($body,$this->requireIdempotency($headers))];
         if($method==='POST'&&$resource==='checkouts'&&$id==='') return ['status'=>201,'resource'=>'checkout','data'=>$this->createCheckout($body,$this->requireIdempotency($headers),$this->token($headers))];
         if($method==='GET'&&$resource==='checkouts'&&$id!=='') return ['resource'=>'checkout','data'=>$this->checkout($id,$this->token($headers))];
         if($method==='POST'&&$resource==='checkouts'&&$id!==''&&$action==='complete') return ['resource'=>'checkout','data'=>$this->complete($id,$this->token($headers),$body,$this->requireIdempotency($headers))];
@@ -76,6 +83,10 @@ final class MercatoHeadlessApiService extends Wire {
                 'quotes'=>true,
                 'checkout'=>true,
                 'customer_accounts'=>['mode'=>$accountMode],
+                'quote_requests'=>!empty($this->commerce->quote_requests_enabled),
+                'guest_order_claim'=>!empty($this->commerce->account_claim_guest_orders),
+                'privacy_export'=>$accountMode!=='disabled',
+                'analytics'=>['enabled'=>!empty($this->commerce->analytics_enabled),'default_consent'=>(string)($this->commerce->analytics_default_consent??'denied')],
                 'order_status'=>true,
                 'returns'=>true,
                 'cancellations'=>true,
@@ -88,6 +99,8 @@ final class MercatoHeadlessApiService extends Wire {
                 'collections'=>$base.'/collections',
                 'carts'=>$base.'/carts',
                 'quotes'=>$base.'/quotes',
+                'quote_requests'=>$base.'/quote-requests',
+                'analytics'=>$base.'/analytics',
                 'checkouts'=>$base.'/checkouts',
                 'devices'=>$base.'/devices',
                 'account'=>$base.'/account',
@@ -101,10 +114,10 @@ final class MercatoHeadlessApiService extends Wire {
         $payments=[]; foreach((array)($this->commerce->enabled_payment_methods??[]) as $method){ try{$gateway=$this->commerce->getGateway((string)$method);$status=$gateway->getSetupStatus();$payments[]=['id'=>(string)$method,'gateway'=>$gateway->getName(),'label'=>$gateway->getPaymentMethods()[$method]??$gateway->getLabel(),'ready'=>$status->ready,'capabilities'=>$gateway->getCapabilities()->toArray()];}catch(\Throwable){} }
         $countries=$this->commerce->getAllowedDeliveryCountries();$regions=[];foreach($this->commerce->getDeliveryRegionsByCountry()as$country=>$items){$regions[$country]=[];foreach($items as$code=>$label)$regions[$country][]=['code'=>(string)$code,'label'=>(string)$label];}
         $currency=MercatoCurrency::normalizeCode((string)$this->commerce->currency);$markets=$this->commerce->marketService()->all();$contact=$this->wire('pages')->get('/contact-us/');$contactUrl=$contact&&$contact->id&&(int)$contact->status<Page::statusHidden?(string)$contact->httpUrl():rtrim($this->commerce->getHttpRoot(),'/').'/contact-us/';$contactUrl=$this->publicUrl($contactUrl);$supportEmail=(string)$this->wire('sanitizer')->email((string)($this->commerce->notification_reply_to??''));$support=['url'=>$contactUrl,'email'=>$supportEmail,'transactional_email_available'=>(string)$this->wire('sanitizer')->email((string)($this->commerce->notification_sender_email??''))!=='','transactional_push_available'=>$this->commerce->pushNotificationService()->isReady()];
-        $accountMode=MercatoAccountPolicy::normalizeMode((string)($this->commerce->customer_accounts_mode??'disabled'));$links=['products'=>'/api/mercato/v1/products','collections'=>'/api/mercato/v1/collections','carts'=>'/api/mercato/v1/carts','quotes'=>'/api/mercato/v1/quotes','checkouts'=>'/api/mercato/v1/checkouts','devices'=>'/api/mercato/v1/devices'];if($accountMode!=='disabled')$links['account']='/api/mercato/v1/account';
+        $accountMode=MercatoAccountPolicy::normalizeMode((string)($this->commerce->customer_accounts_mode??'disabled'));$links=['products'=>'/api/mercato/v1/products','collections'=>'/api/mercato/v1/collections','carts'=>'/api/mercato/v1/carts','quotes'=>'/api/mercato/v1/quotes','quote_requests'=>'/api/mercato/v1/quote-requests','checkouts'=>'/api/mercato/v1/checkouts','devices'=>'/api/mercato/v1/devices','analytics'=>'/api/mercato/v1/analytics'];if($accountMode!=='disabled')$links['account']='/api/mercato/v1/account';
         $description=MercatoSeoRules::safeText((string)($this->commerce->seo_default_description??''),300);
         $discovery=$this->discovery();
-        return $this->extend(['name'=>(string)($this->commerce->seo_site_name?:'Mercato Store'),'description'=>$description,'currency'=>$currency,'api_version'=>'v1','identity'=>array_intersect_key($discovery,array_flip(['platform','store_id','module_version','schema_version'])),'api'=>$discovery['api'],'checkout_available'=>$this->commerce->operationalService()->isCheckoutAvailable(),'account_mode'=>$accountMode,'markets'=>$markets,'commerce_context'=>$this->commerce->marketService()->context(),'delivery'=>['countries_restricted'=>$countries!==[],'countries'=>$countries,'regions'=>(object)$regions],'payments'=>$payments,'policies'=>$policies,'support'=>$support,'links'=>$links], 'store');
+        return $this->extend(['name'=>(string)($this->commerce->seo_site_name?:'Mercato Store'),'description'=>$description,'currency'=>$currency,'api_version'=>'v1','identity'=>array_intersect_key($discovery,array_flip(['platform','store_id','module_version','schema_version'])),'api'=>$discovery['api'],'checkout_available'=>$this->commerce->operationalService()->isCheckoutAvailable(),'account_mode'=>$accountMode,'quote_requests_enabled'=>!empty($this->commerce->quote_requests_enabled),'analytics'=>['enabled'=>!empty($this->commerce->analytics_enabled),'default_consent'=>(string)($this->commerce->analytics_default_consent??'denied')],'markets'=>$markets,'commerce_context'=>$this->commerce->marketService()->context(),'delivery'=>['countries_restricted'=>$countries!==[],'countries'=>$countries,'regions'=>(object)$regions],'payments'=>$payments,'policies'=>$policies,'support'=>$support,'links'=>$links], 'store');
     }
     public function products(array $query): array {
         $marketId=$this->marketId($query);$this->activateMarketLanguage($marketId);$page=max(1,(int)($query['page']??1));$limit=max(1,min(50,(int)($query['limit']??20)));$start=($page-1)*$limit;$template=$this->safe((string)($this->commerce->product_template?:'mrc-product'));
@@ -164,6 +177,59 @@ final class MercatoHeadlessApiService extends Wire {
 
     public function createCancellation(string $id,string $token,array $body,string $idempotency):array{
         $order=str_starts_with($token,'acct_')?$this->authorizedAccountOrder($this->authorizedAccount($token),$id):$this->authorizedOrder('mrc_api_order_id',$id,$token,'order:read');$reason=trim((string)($body['reason']??''));$length=function_exists('mb_strlen')?mb_strlen($reason):strlen($reason);if($length<3||$length>1000)throw new MercatoHeadlessApiException('validation_failed','Cancellation request is invalid.',422,['reason'=>'Enter a reason from 3 to 1000 characters.']);$requestHash=hash('sha256',$this->canonical(['order'=>(int)$order->id,'reason'=>$reason]));$cacheKey=$this->idemKey('cancellation|'.(int)$order->id,$idempotency);$cached=$this->mutationCached($cacheKey,$requestHash);if($cached!==null)return$cached;$lock=$this->idempotencyLock($cacheKey);try{$cached=$this->mutationCached($cacheKey,$requestHash);if($cached!==null)return$cached;$eligibility=$this->commerce->getOrderCancellationEligibility($order);if(empty($eligibility['can_request']))throw new MercatoHeadlessApiException('cancellation_unavailable',(string)$eligibility['message'],409);try{$created=$this->commerce->createCancellationRequest($order,['reason'=>$reason,'source'=>'headless_api']);}catch(WireException $error){if((int)$error->getCode()===409)throw new MercatoHeadlessApiException('cancellation_unavailable',$error->getMessage(),409);throw$error;}$public=array_intersect_key($created,array_flip(['request_id','status','reason','created_at']));$this->storeMutationCached($cacheKey,$requestHash,$public,86400);return$public;}finally{$this->releaseIdempotencyLock($lock);}
+    }
+
+    public function createQuoteRequest(array $body,string $idempotency,string $accountToken=''):array{
+        $requestHash=hash('sha256',$this->canonical($body));$cacheKey=$this->idemKey('quote-request',$idempotency);$cached=$this->mutationCached($cacheKey,$requestHash);if($cached!==null){$quote=$this->findQuote((string)($cached['id']??''));if($quote){$cached['token']=$this->commerce->quoteService()->getToken($quote);$cached['status_url']=$this->publicUrl($this->commerce->quoteService()->getPublicUrl($quote));}return$cached;}
+        $items=$this->normalizeCartItems($body['items']??null);$customer=is_array($body['customer']??null)?$body['customer']:[];$options=is_array($body['options']??null)?$body['options']:[];
+        $data=$customer+[
+            'discount_code'=>(string)($options['discount_code']??''),
+            'fulfilment_method'=>(string)($options['fulfilment_method']??''),
+            'market_id'=>$this->marketId($options),
+            'notes'=>(string)($options['notes']??''),
+            'mrc_policy_accepted'=>!empty($options['policy_accepted'])?1:0,
+        ];
+        $lock=$this->idempotencyLock($cacheKey);try{
+            $cached=$this->mutationCached($cacheKey,$requestHash);if($cached!==null){$quote=$this->findQuote((string)($cached['id']??''));if($quote){$cached['token']=$this->commerce->quoteService()->getToken($quote);$cached['status_url']=$this->publicUrl($this->commerce->quoteService()->getPublicUrl($quote));}return$cached;}
+            $wire=$this->wire();$savedUser=$wire->user;
+            if($accountToken!=='')$wire->users->setCurrentUser($this->authorizedAccount($accountToken));
+            try{$quote=$this->commerce->submitQuoteRequest($data,$items);}catch(WireException$error){$status=in_array((int)$error->getCode(),[403,409,422,503],true)?(int)$error->getCode():422;throw new MercatoHeadlessApiException('quote_request_failed',$error->getMessage(),$status);}finally{$wire->users->setCurrentUser($savedUser);}
+            $public=$this->commerce->quoteService()->serializePublic($quote)+['id'=>(string)$quote->mrc_quote_number,'token'=>$this->commerce->quoteService()->getToken($quote),'status_url'=>$this->publicUrl($this->commerce->quoteService()->getPublicUrl($quote))];
+            $cachedPublic=$public;unset($cachedPublic['token'],$cachedPublic['status_url']);$this->storeMutationCached($cacheKey,$requestHash,$cachedPublic,max(86400,max(1,(int)$this->commerce->quote_expiry_days)*86400));return$public;
+        }finally{$this->releaseIdempotencyLock($lock);}
+    }
+
+    public function quoteRequest(string $id,string $token):array{
+        $quote=$this->findQuote($id);if(!$quote)throw new MercatoHeadlessApiException('not_found','Quote request not found.',404);
+        if(str_starts_with($token,'acct_')){$user=$this->authorizedAccount($token);if(!$this->commerce->customerAccountService()->ownsQuote($user,$quote))throw new MercatoHeadlessApiException('not_found','Quote request not found.',404);}
+        elseif(!$this->commerce->quoteService()->verifyToken($quote,$token))throw new MercatoHeadlessApiException('not_found','Quote request not found.',404);
+        return $this->commerce->quoteService()->serializePublic($quote)+['id'=>(string)$quote->mrc_quote_number,'status_url'=>$this->publicUrl($this->commerce->quoteService()->getPublicUrl($quote))];
+    }
+
+    public function accountQuotes(string $token,array $query=[]):array{
+        $user=$this->authorizedAccount($token);$page=max(1,(int)($query['page']??1));$limit=max(1,min(50,(int)($query['limit']??20)));$all=$this->commerce->quoteService()->findForCustomer($user,500);$total=count($all);$items=[];foreach(array_slice(iterator_to_array($all),($page-1)*$limit,$limit)as$quote)$items[]=$this->commerce->quoteService()->serializePublic($quote)+['id'=>(string)$quote->mrc_quote_number,'status_url'=>$this->publicUrl($this->commerce->quoteService()->getPublicUrl($quote))];return['data'=>$items,'meta'=>$this->pagination($page,$limit,$total)];
+    }
+
+    public function requestAccountOrderClaim(string $token,array $body,string $idempotency):array{
+        $user=$this->authorizedAccount($token);$reference=substr(trim((string)($body['order_reference']??'')),0,160);$requestHash=hash('sha256',$this->canonical(['reference'=>$reference,'account'=>(int)$user->id]));$cacheKey=$this->idemKey('account-order-claim|'.$this->accountTokenHash($token),$idempotency);$cached=$this->mutationCached($cacheKey,$requestHash);if($cached!==null)return$cached;
+        $result=['ok'=>true,'message'=>MercatoAccountPolicy::GENERIC_AUTH_MESSAGE];
+        if($reference!==''){$template=$this->safe((string)$this->commerce->order_template);$order=$this->wire('pages')->get("template=$template, include=all, mrc_invoice_number=".$this->safe($reference));if($order&&$order->id){$wire=$this->wire();$saved=$wire->user;$wire->users->setCurrentUser($user);try{$candidate=$this->commerce->customerAccountService()->requestGuestOrderClaim($user,$order);if(is_array($candidate)&&isset($candidate['message']))$result['message']=(string)$candidate['message'];}finally{$wire->users->setCurrentUser($saved);}}}
+        $this->storeMutationCached($cacheKey,$requestHash,$result,3600);return$result;
+    }
+
+    public function accountExport(string $token):array{
+        $user=$this->authorizedAccount($token);$wire=$this->wire();$saved=$wire->user;$wire->users->setCurrentUser($user);try{return$this->commerce->privacyService()->exportCustomer((string)$user->email);}finally{$wire->users->setCurrentUser($saved);}
+    }
+
+    public function analyticsConsent(array $body):array{
+        return $this->commerce->setAnalyticsConsent(['analytics'=>!empty($body['analytics']),'marketing'=>!empty($body['marketing'])]);
+    }
+
+    public function analyticsEvent(array $body,string $idempotency):array{
+        $consent=$this->commerce->analyticsService()->consent();if(empty($consent['analytics']))return['status'=>'consent_denied'];
+        $name=trim((string)($body['name']??''));$payload=is_array($body['payload']??null)?$body['payload']:[];$payload['event_id']=$idempotency;
+        try{$result=$this->commerce->analyticsService()->track($name,$payload,null,$idempotency);}catch(\InvalidArgumentException$error){throw new MercatoHeadlessApiException('validation_failed',$error->getMessage(),422,['name'=>'Use a supported analytics event name.']);}
+        return['status'=>(string)($result['status']??'processed')];
     }
 
     public function registerAccount(array $body):array{
@@ -255,6 +321,8 @@ final class MercatoHeadlessApiService extends Wire {
     private function accountTokenCacheKey(string $token):string{return'Mercato.api.account.'.$this->accountTokenHash($token);}
     private function accountOrderId(User $user,Page $order):string{return'aord_'.rtrim(strtr(base64_encode(hash_hmac('sha256',(int)$user->id.'|'.(int)$order->id,$this->secret(),true)),'+/','-_'),'=');}
     private function authorizedAccountOrder(User $user,string $id):Page{if($id===''||!str_starts_with($id,'aord_'))throw new MercatoHeadlessApiException('not_found','Resource not found.',404);$template=$this->safe((string)$this->commerce->order_template);foreach($this->wire('pages')->find("template=$template, include=all, mrc_customer_user_id=".(int)$user->id.', limit=10000')as$order)if(hash_equals($this->accountOrderId($user,$order),$id))return$order;throw new MercatoHeadlessApiException('not_found','Resource not found.',404);}
+
+    private function findQuote(string $id):?Page{$id=trim($id);if($id==='')return null;$template=$this->safe((string)$this->commerce->quote_template);$quote=$this->wire('pages')->get("template=$template, include=all, mrc_quote_number=".$this->safe($id));return$quote&&$quote->id?$quote:null;}
 
     private function serializeProduct(Page $p,string $marketId='default'):array{
         $market=$this->commerce->marketService()->resolve($marketId);$purchase=$this->commerce->getProductPurchasability($p);$images=[];if($p->hasField('mrc_images'))foreach($p->mrc_images as$image)$images[]=['url'=>$this->publicUrl((string)$image->httpUrl()),'width'=>(int)$image->width,'height'=>(int)$image->height,'alt'=>(string)($image->description?:$p->title)];$collections=[];if($p->hasField('mrc_collections'))foreach($p->mrc_collections as$c)$collections[]=['id'=>(int)$c->id,'name'=>(string)$c->name,'title'=>(string)$c->title];

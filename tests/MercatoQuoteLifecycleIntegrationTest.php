@@ -213,6 +213,37 @@ try {
     $expect((int) $reservedPolicyQuote->mrc_quote_customer_user_id === (int) $owner->id && (int) $nonePolicyQuote->mrc_quote_customer_user_id === (int) $other->id, 'Quote ownership was not persisted exactly.');
     $expect(count($service->findForCustomer($owner)) === 1 && count($service->findForCustomer($other)) === 1, 'Customer quote history did not isolate owners.');
 
+    $api = $commerce->headlessApiService();
+    $nativeSession = $api->loginAccount(['email' => (string) $owner->email, 'password' => 'Quote-fixture-42!']);
+    $nativeToken = (string) ($nativeSession['token'] ?? '');
+    $expect(str_starts_with($nativeToken, 'acct_'), 'Native quote profile login did not issue an account token.');
+    $nativeBody = [
+        'items' => [['product_id' => (int) $product->id, 'quantity' => 1]],
+        'customer' => $dataFor($owner, 'native'),
+        'options' => ['fulfilment_method' => 'carrier_delivery', 'market_id' => 'default', 'policy_accepted' => true, 'notes' => $runId . '-native'],
+    ];
+    $nativeIdempotency = 'quote-native-' . bin2hex(random_bytes(8));
+    $nativeQuote = $api->createQuoteRequest($nativeBody, $nativeIdempotency, $nativeToken);
+    $nativeStored = $wire->pages->get('template=' . $wire->sanitizer->selectorValue((string) $commerce->quote_template) . ', mrc_quote_number=' . $wire->sanitizer->selectorValue((string) ($nativeQuote['id'] ?? '')) . ', include=all');
+    $expect($nativeStored && $nativeStored->id, 'Native quote request was not persisted.');
+    $createdQuoteIds[] = (int) $nativeStored->id;
+    $expect((int) $nativeStored->mrc_quote_customer_user_id === (int) $owner->id && !empty($nativeQuote['token']), 'Native quote request lost ownership or its one-time access token.');
+    $nativeReplay = $api->createQuoteRequest($nativeBody, $nativeIdempotency, $nativeToken);
+    $expect(($nativeReplay['id'] ?? '') === ($nativeQuote['id'] ?? '') && ($nativeReplay['token'] ?? '') === ($nativeQuote['token'] ?? ''), 'Native quote idempotency replay changed identity or access token.');
+    $apiReflection = new \ReflectionClass($api);
+    $idemKey = $apiReflection->getMethod('idemKey')->invoke($api, 'quote-request', $nativeIdempotency);
+    $cachedMutation = (string) $wire->cache->get($idemKey);
+    $expect($cachedMutation !== '' && !str_contains($cachedMutation, (string) $nativeQuote['token']), 'Native quote idempotency cache retained a plaintext access token.');
+    $nativeRead = $api->quoteRequest((string) $nativeQuote['id'], (string) $nativeQuote['token']);
+    $nativeAccountQuotes = $api->accountQuotes($nativeToken, ['page' => 1, 'limit' => 50]);
+    $nativeExport = $api->accountExport($nativeToken);
+    $expect(($nativeRead['number'] ?? '') === ($nativeQuote['number'] ?? '') && count($nativeAccountQuotes['data'] ?? []) === 2, 'Native quote read or account quote history failed.');
+    $expect(($nativeExport['format'] ?? '') === 'mercato-privacy-export-v1' && count($nativeExport['categories']['quotes'] ?? []) === 2, 'Authenticated native privacy export omitted owned quote requests.');
+    $invalidNativeQuoteToken = false;
+    try { $api->quoteRequest((string) $nativeQuote['id'], 'invalid-native-token'); } catch (MercatoHeadlessApiException $error) { $invalidNativeQuoteToken = $error->httpStatus === 404; }
+    $expect($invalidNativeQuoteToken, 'Native quote endpoint exposed a quote to an invalid token.');
+    $api->logoutAccount($nativeToken);
+
     $token = $service->getToken($reservedPolicyQuote);
     $public = $service->serializePublic($reservedPolicyQuote);
     $expect($service->verifyToken($reservedPolicyQuote, $token), 'Fresh signed quote token was rejected.');

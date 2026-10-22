@@ -10,6 +10,7 @@ Base URL: `https://shop.example/api/mercato/v1`. Responses are JSON and include 
 - `GET /collections?page=1&limit=20` and `GET /collections/{id-or-name}`.
 - `POST /carts`, `GET /carts/{opaque-id}`, and `POST /carts/{opaque-id}` — expiring bearer carts with authoritative snapshots, optimistic `expected_version`, validation issues, and idempotent mutations.
 - `POST /quotes` — authoritative fulfilment choices, discount, tax, and totals.
+- `POST /quote-requests` and `GET /quote-requests/{quote-number}` — idempotent non-payment quote submission and signed status retrieval. The plaintext status token and token-bearing status URL are reconstructed from the stored quote for an exact idempotent replay; neither is written to the idempotency cache.
 - `POST /checkouts` — guest validation, draft order, reservation, and payment initialization. Requires `Idempotency-Key`.
 - `GET /checkouts/{opaque-id}` — reservation/payment state with bearer token.
 - `POST /checkouts/{opaque-id}/complete` — completion/reconciliation with bearer token and `Idempotency-Key`.
@@ -20,7 +21,11 @@ Base URL: `https://shop.example/api/mercato/v1`. Responses are JSON and include 
 - `GET /account`, `POST /account/profile`, and `POST /account/logout` — bearer-authenticated profile, optimistic updates, and token revocation.
 - `GET /account/favorites` and `POST /account/favorites` — an account-scoped product library with optimistic `expected_revision`, idempotent replacement, and public product snapshots.
 - `GET /account/orders` — paginated owned order history using account-scoped opaque identifiers.
+- `GET /account/quotes` — paginated quote-request history owned by the authenticated customer.
+- `POST /account/claim-order` — enumeration-safe guest-order claim request using the order reference and the verified account email.
+- `GET /account/export` — portable customer export for the authenticated account, including profile, addresses, orders, quotes, and privacy review state.
 - `GET /account/deletion-review` and `POST /account/delete` — reauthenticated, exact-confirmation account deletion/anonymization with legal/payment/fulfilment holds preserved.
+- `POST /analytics/consent` and `POST /analytics/events` — session-scoped native consent and idempotent, allow-listed, PII-minimized event ingestion. Events are suppressed when consent is denied.
 - `POST /devices` and `POST /devices/{registration}/revoke` — idempotent, owner-scoped APNs registration and revocation for an account token or exact guest-order token. See [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
 
 Pagination contains `page`, `limit`, `total`, `pages`, and `has_next`. Product-list metadata additionally includes server-derived `facets` for product types, collections, availability, price range, and variant options. Filters are applied before totals and pagination. Product sorting is `title`, `price`, `-price`, or `-created`. Products include public images, descriptions, collections, variants, and live purchasability—never filesystem paths or admin URLs.
@@ -34,18 +39,22 @@ A generic client accepts an HTTPS shop origin, removes any path/query/fragment, 
   "schema_version": 1,
   "platform": "mercato",
   "store_id": "mrc_opaqueInstallationIdentity",
-  "module_version": "1.6.1",
+  "module_version": "1.7.0",
   "origin": "https://shop.example",
   "api": {"version": "v1", "base_url": "https://shop.example/api/mercato/v1"},
   "capabilities": {
     "catalog": true,
     "server_carts": true,
     "quotes": true,
+    "quote_requests": true,
     "checkout": true,
     "customer_accounts": {"mode": "optional"},
     "order_status": true,
     "returns": true,
     "cancellations": true,
+    "guest_order_claim": true,
+    "customer_data_export": true,
+    "analytics": {"enabled": false, "consent": true},
     "push_notifications": {"registration": true, "delivery_ready": false}
   },
   "links": {"store": "https://shop.example/api/mercato/v1/store"}

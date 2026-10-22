@@ -7,6 +7,19 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ---
 
+## [1.7.0] - 2026-10-22
+
+### Added
+
+- Native quote-request creation and signed status retrieval, including account-owned quote history and idempotent submission without caching plaintext access tokens or token-bearing URLs.
+- Native guest-order claim requests and a portable authenticated customer data export covering the account profile, addresses, orders, quotes, and privacy review state.
+- Consent-aware native analytics endpoints for minimized allow-listed commerce events, plus discovery and store capability metadata for generic clients.
+- Integration and contract coverage for quote ownership, token isolation, replay, account export, enumeration-safe claims, consent denial, event validation, PII minimization, and cleanup.
+
+### Changed
+
+- Quote calculation now preserves the selected authoritative market across native request and submission flows.
+
 ## [1.6.1] - 2026-10-22
 
 ### Added

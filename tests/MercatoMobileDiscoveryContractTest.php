@@ -69,5 +69,11 @@ $expect(str_contains($service, "resource==='discovery'"), 'Versioned API discove
 $expect(str_contains($service, "'store_id'=>"), 'Discovery payload omits store identity.');
 $expect(str_contains($service, "'identity'=>"), 'Store payload omits additive identity metadata.');
 $expect(str_contains($service, '$this->publicUrl((string)$page->httpUrl())'), 'Policy URLs do not use the public-origin resolver.');
+$expect(str_contains($service, "resource==='quote-requests'"), 'Native quote-request routes are missing.');
+$expect(str_contains($service, "id==='claim-order'"), 'Native guest-order claim route is missing.');
+$expect(str_contains($service, "id==='export'"), 'Native privacy-export route is missing.');
+$expect(str_contains($service, "resource==='analytics'"), 'Native consent-aware analytics routes are missing.');
+$expect(str_contains($service, "'quote_requests'=>"), 'Discovery omits quote-request capability metadata.');
+$expect(str_contains($service, "'privacy_export'=>"), 'Discovery omits privacy-export capability metadata.');
 
 echo "Mercato mobile discovery contract tests passed: {$checks} assertions.\n";

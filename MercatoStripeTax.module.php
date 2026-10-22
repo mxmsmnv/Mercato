@@ -10,7 +10,7 @@ require_once __DIR__ . '/src/Tax/Provider/MercatoStripeTaxProvider.php';
 final class MercatoStripeTax extends WireData implements Module, ConfigurableModule {
     private const API_VERSION = '2026-02-25.clover';
     public static function getModuleInfo(): array {
-        return ['title' => 'Mercato Stripe Tax', 'summary' => 'Stripe Tax calculations and transaction lifecycle for Mercato.', 'version' => 161, 'author' => 'Maxim Semenov', 'singular' => true, 'autoload' => true, 'requires' => ['Mercato']];
+        return ['title' => 'Mercato Stripe Tax', 'summary' => 'Stripe Tax calculations and transaction lifecycle for Mercato.', 'version' => 170, 'author' => 'Maxim Semenov', 'singular' => true, 'autoload' => true, 'requires' => ['Mercato']];
     }
 
     public static function getDefaultConfig(): array { return ['enabled' => false, 'secret_key' => '', 'tax_code_map_json' => '{}', 'shipping_tax_code' => 'txcd_92010001', 'test_api_base_url' => '']; }
