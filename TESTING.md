@@ -1,5 +1,13 @@
 # Mercato testing plan
 
+## 1.7.0 native commerce API release evidence (2026-10-22)
+
+- Release commit `579395e` adds native quote requests/status/history, guest-order claims, authenticated privacy exports, consent-aware analytics events, and authoritative market propagation for quote calculations.
+- `composer test:unit` passed with release metadata aligned at `1.7.0`/`170`; the complete configured-site PHP suite then passed against `/Users/mas/Sites/mercato.dev`, including checkout economics, all 172 mutable settings, accounts, privacy, order-to-cash, payment lifecycle, quotes, tax, shipping, notifications, roles, idempotency, failure paths, large data and exact fixture cleanup. Explicit fresh-install, destructive install-lifecycle and separately confirmed HTTP-boundary profiles remain governed by their existing gates.
+- The first full run exposed a plaintext quote credential inside a cached signed status URL. The cache now excludes both the token and token-bearing URL, reconstructs them only from the protected quote record, and the targeted quote lifecycle plus complete suite passed after redeployment.
+- `dist/mercato-1.7.0.zip` was built from the committed release, SHA-256 `f5756bb25839180a2551808e70f0e3d877ef900e6c72e700d1df781f7cd107c4`, passed the runtime manifest check, and was deployed byte-for-byte to the isolated dev site after a recoverable backup. ProcessWire refreshed module version `170`, schema `13`; public Yerd discovery reported `1.7.0` and the new capabilities.
+- A real Simulator-to-Yerd quote journey connected to `https://mercato.smnv.org`, selected a live product, received authoritative GBP totals and created quote `Q-010735` for £46.95. Transactional sender configuration was temporarily disabled and restored, so no real email was sent; the submitted quote was then deleted by exact reference/email/state guard and zero fixture rows remained.
+
 ## 1.6.1 mobile discovery regression evidence (2026-10-22)
 
 - `tests/MercatoMobileDiscoveryContractTest.php` covers deterministic opaque store IDs, trusted Yerd/reverse-proxy origin rewriting, relative-to-absolute discovery links, preservation of external provider URLs, rejection of unlisted forwarded hosts (including the empty-allow-list fallback), registered well-known routes, additive store metadata, and policy URL normalization (18 assertions).
