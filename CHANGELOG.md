@@ -7,6 +7,18 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ---
 
+## [1.6.1] - 2026-10-22
+
+### Added
+
+- Additive native-client discovery at `/.well-known/mercato`, `/.well-known/mercato.json`, and `/api/mercato/v1/discovery`, with an opaque stable store identity, public API base URL, absolute resource links, release metadata, and coarse capability flags.
+- Store responses now include the same identity and API metadata so generic iOS and Android clients can isolate credentials, carts, caches, and pending checkout state per origin and store.
+
+### Fixed
+
+- Policy and support URLs now resolve through the validated public request origin, preventing local `.test` hostnames from leaking through a configured Yerd or reverse-proxy tunnel.
+- Public URL rewriting now rejects forwarded hosts outside ProcessWire's `httpHosts` allow-list.
+
 ## [1.6.0] - 2026-10-10
 
 ### Added

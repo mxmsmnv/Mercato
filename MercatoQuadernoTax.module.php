@@ -10,7 +10,7 @@ require_once __DIR__ . '/src/Tax/Provider/MercatoQuadernoTaxProvider.php';
 final class MercatoQuadernoTax extends WireData implements Module, ConfigurableModule {
     private const API_VERSION = '20241028';
     public static function getModuleInfo(): array {
-        return ['title' => 'Mercato Quaderno Tax', 'summary' => 'Global Quaderno tax calculations and document lifecycle for Mercato.', 'version' => 160, 'author' => 'Maxim Semenov', 'singular' => true, 'autoload' => true, 'requires' => ['Mercato']];
+        return ['title' => 'Mercato Quaderno Tax', 'summary' => 'Global Quaderno tax calculations and document lifecycle for Mercato.', 'version' => 161, 'author' => 'Maxim Semenov', 'singular' => true, 'autoload' => true, 'requires' => ['Mercato']];
     }
     public static function getDefaultConfig(): array { return ['enabled' => false, 'environment' => 'sandbox', 'account_slug' => '', 'sandbox_api_key' => '', 'live_api_key' => '', 'tax_code_map_json' => '{"general":"standard"}', 'product_type_map_json' => '{"physical":"good","digital":"service","service":"service","recurring":"service"}', 'shipping_tax_code' => 'standard', 'test_api_base_url' => '']; }
     public function setConfigData(array $data): void {

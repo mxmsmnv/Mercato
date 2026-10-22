@@ -25,7 +25,7 @@ require_once __DIR__ . '/src/Mcp/MercatoMcpProviderTrait.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.6.0 (module info version: 160)
+ * @version 1.6.1 (module info version: 161)
  * @license MIT
  */
 
@@ -56,7 +56,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const PAYMENT_STATUS_CANCELED = 'canceled';
 
     public const SUBSCRIPTION_STATUS_NONE = 'none';
-    public const MODULE_VERSION = 160;
+    public const MODULE_VERSION = 161;
     public const SCHEMA_VERSION = 13;
 
     private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';
@@ -354,6 +354,8 @@ class Mercato extends WireData implements Module, ConfigurableModule {
         }
         $this->addHook('/api/mercato/health', $this, 'handleHealthCheck');
         $this->addHook('/api/mercato/analytics-consent', $this, 'handleAnalyticsConsent');
+        $this->addHook('/.well-known/mercato/?', $this, 'handleMercatoDiscovery');
+        $this->addHook('/.well-known/mercato.json/?', $this, 'handleMercatoDiscovery');
         $this->addHook('/api/mercato/v1/?', $this, 'handleHeadlessApi');
         $this->addHook('/api/mercato/v1/{resource}/?', $this, 'handleHeadlessApi');
         $this->addHook('/api/mercato/v1/{resource}/{id}/?', $this, 'handleHeadlessApi');
@@ -434,6 +436,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoAnalyticsSchema::class => '/src/Analytics/MercatoAnalyticsSchema.php',
             MercatoAnalyticsService::class => '/src/Analytics/MercatoAnalyticsService.php',
             MercatoHeadlessApiService::class => '/src/Api/MercatoHeadlessApiService.php',
+            MercatoPublicUrlResolver::class => '/src/Api/MercatoPublicUrlResolver.php',
             MercatoOrderConfirmationService::class => '/src/Notification/MercatoOrderConfirmationService.php',
             MercatoPaymentLinkService::class => '/src/Notification/MercatoPaymentLinkService.php',
             MercatoRecoveryService::class => '/src/Recovery/MercatoRecoveryService.php',

@@ -189,7 +189,7 @@ php scripts/run-acceptance.php
 
 The release threshold is zero failed scenarios, zero serious/critical axe violations, successful fixture cleanup, and retained JSON/Markdown and Playwright diagnostics. See [ACCEPTANCE.md](ACCEPTANCE.md) for setup, browser versions, coverage, report paths, and the separately gated live-provider smoke policy.
 
-Native clients use `/api/mercato/v1`; see [HEADLESS_API.md](HEADLESS_API.md) for resources, SDK/redirect flows, opaque credentials, errors, deep links, and compatibility.
+Native clients use `/api/mercato/v1`. Generic clients can validate a merchant origin through `/.well-known/mercato`, receive a stable opaque store identity plus absolute API links, and then load the authoritative `/store` resource. See [HEADLESS_API.md](HEADLESS_API.md) for discovery, resources, SDK/redirect flows, credential isolation, errors, deep links, and compatibility.
 
 Native transactional push uses owner-scoped device credentials and the same order lifecycle as email; see [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md) for the APNs setup, privacy contract, registration API, and transport extension point.
 

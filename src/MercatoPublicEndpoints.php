@@ -3,6 +3,40 @@ namespace ProcessWire;
 
 trait MercatoPublicEndpoints {
 
+    public function handleMercatoDiscovery(HookEvent $event): void {
+        $requestId = preg_match('/^[A-Za-z0-9._-]{8,80}$/', (string) ($_SERVER['HTTP_X_REQUEST_ID'] ?? ''))
+            ? (string) $_SERVER['HTTP_X_REQUEST_ID'] : 'req_' . bin2hex(random_bytes(10));
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        header('X-Request-ID: ' . $requestId);
+        $service = $this->headlessApiService();
+        $origin = trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ''));
+        if ($origin !== '' && $service->isAllowedOrigin($origin)) {
+            header('Access-Control-Allow-Origin: ' . $origin);
+            header('Vary: Origin');
+            header('Access-Control-Allow-Headers: Content-Type, X-Request-ID');
+            header('Access-Control-Allow-Methods: GET, OPTIONS');
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
+            http_response_code($origin === '' || $service->isAllowedOrigin($origin) ? 204 : 403);
+            exit;
+        }
+        try {
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') throw new MercatoHeadlessApiException('method_not_allowed', 'Discovery requires GET.', 405);
+            if (empty($this->headless_api_enabled)) throw new MercatoHeadlessApiException('api_disabled', 'Headless API is disabled.', 503);
+            $service->assertRequestAllowed('discovery');
+            echo json_encode(['ok'=>true,'api_version'=>'v1','request_id'=>$requestId,'resource'=>'discovery','data'=>$service->discovery()], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+        } catch (MercatoHeadlessApiException $e) {
+            http_response_code($e->httpStatus);
+            echo json_encode(['ok'=>false,'api_version'=>'v1','request_id'=>$requestId,'error'=>['code'=>$e->apiCode,'message'=>$e->getMessage(),'fields'=>$e->fields]], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            $this->wire('log')->error('Mercato discovery ' . $requestId . ': ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['ok'=>false,'api_version'=>'v1','request_id'=>$requestId,'error'=>['code'=>'internal_error','message'=>'The request could not be completed.','fields'=>[]]]);
+        }
+        exit;
+    }
+
     public function handleHeadlessApi(HookEvent $event): void {
         $requestId = preg_match('/^[A-Za-z0-9._-]{8,80}$/', (string) ($_SERVER['HTTP_X_REQUEST_ID'] ?? ''))
             ? (string) $_SERVER['HTTP_X_REQUEST_ID'] : 'req_' . bin2hex(random_bytes(10));

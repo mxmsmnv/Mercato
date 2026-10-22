@@ -4,7 +4,8 @@ Base URL: `https://shop.example/api/mercato/v1`. Responses are JSON and include 
 
 ## Resources
 
-- `GET /store` — authoritative single-market currency, account mode, delivery countries/regions, checkout state, payment capabilities, policies, public support contact, and links.
+- `GET /discovery` — stable opaque store identity, current public origin, API base URL, module/contract versions, coarse client capabilities, and absolute resource links. The same document is available at `GET /.well-known/mercato` and `GET /.well-known/mercato.json` before a client has selected an API base path.
+- `GET /store` — authoritative single-market currency, account mode, delivery countries/regions, checkout state, payment capabilities, policies, public support contact, links, and the same additive store identity/API metadata.
 - `GET /products?page=1&limit=20&q=&type=&collection=&availability=&min_price=&max_price=&sort=title` and `GET /products/{id-or-name}`. Variant filters use `option_{option-id}={value-id}`.
 - `GET /collections?page=1&limit=20` and `GET /collections/{id-or-name}`.
 - `POST /carts`, `GET /carts/{opaque-id}`, and `POST /carts/{opaque-id}` — expiring bearer carts with authoritative snapshots, optimistic `expected_version`, validation issues, and idempotent mutations.
@@ -23,6 +24,39 @@ Base URL: `https://shop.example/api/mercato/v1`. Responses are JSON and include 
 - `POST /devices` and `POST /devices/{registration}/revoke` — idempotent, owner-scoped APNs registration and revocation for an account token or exact guest-order token. See [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md).
 
 Pagination contains `page`, `limit`, `total`, `pages`, and `has_next`. Product-list metadata additionally includes server-derived `facets` for product types, collections, availability, price range, and variant options. Filters are applied before totals and pagination. Product sorting is `title`, `price`, `-price`, or `-created`. Products include public images, descriptions, collections, variants, and live purchasability—never filesystem paths or admin URLs.
+
+## Store discovery
+
+A generic client accepts an HTTPS shop origin, removes any path/query/fragment, and requests `/.well-known/mercato`. It must require `platform: "mercato"`, supported `schema_version` and `api.version`, then use the returned absolute links instead of constructing further routes. `/api/mercato/v1/discovery` returns the same `data` contract after the API base is known.
+
+```json
+{
+  "schema_version": 1,
+  "platform": "mercato",
+  "store_id": "mrc_opaqueInstallationIdentity",
+  "module_version": "1.6.1",
+  "origin": "https://shop.example",
+  "api": {"version": "v1", "base_url": "https://shop.example/api/mercato/v1"},
+  "capabilities": {
+    "catalog": true,
+    "server_carts": true,
+    "quotes": true,
+    "checkout": true,
+    "customer_accounts": {"mode": "optional"},
+    "order_status": true,
+    "returns": true,
+    "cancellations": true,
+    "push_notifications": {"registration": true, "delivery_ready": false}
+  },
+  "links": {"store": "https://shop.example/api/mercato/v1/store"}
+}
+```
+
+`store_id` is an opaque, deterministic installation identity derived one-way from the ProcessWire site secret. It contains no hostname, database identifier, filesystem path, or credential. Clients must namespace accounts, bearer tokens, carts, cached responses, pending checkouts, and push registrations by both normalized HTTPS origin and `store_id`. Rotating the ProcessWire authentication salt intentionally presents a new store identity; copied environments that retain the same site secret must still remain isolated by origin.
+
+The `origin` and absolute links reflect the validated current public request host, including a trusted reverse-proxy/tunnel host listed in ProcessWire `httpHosts`. Unlisted forwarded hosts are ignored and cannot rewrite links. This allows the same non-production installation to be reached through a local Yerd hostname and a public test tunnel without leaking `.test` policy or support URLs.
+
+Discovery does not make arbitrary domains eligible for Universal Links or share credentials between merchants. Associated Domains, APNs bundle identifiers, payment SDK configuration, signing, App Store policy, and merchant branding remain per-application deployment concerns.
 
 ## Checkout example
 
@@ -56,6 +90,7 @@ The API uses 400 malformed/idempotency input, 404 non-enumerating invalid resour
 - Bearer calls do not rely on cookies or CSRF state. The compatibility session is snapshot/restored inside one request. Future cookie-authenticated resources must add ProcessWire CSRF validation.
 - Requests are rate/body limited, responses are `no-store`, and production requires HTTPS.
 - Browser CORS is denied by default. Configure exact HTTPS origins one per line; wildcard origins are rejected. Native apps do not require CORS.
+- Public-host URL generation accepts only the current ProcessWire `httpHosts` allow-list; an arbitrary forwarded host cannot poison discovery, product, policy, support, receipt, or status links.
 - Extend safe resources with `Mercato::headlessApiResource(array $resource, string $type, array $context)`.
 
 For redirect gateways, configure HTTPS universal/app links and resume by polling the opaque checkout; query parameters are not payment truth and webhooks still complete orders while the app is closed. Keep a web fallback.

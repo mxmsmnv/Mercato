@@ -26,6 +26,7 @@ final class MercatoHeadlessApiService extends Wire {
 
     public function dispatch(string $method,string $resource='',string $id='',string $action='',array $body=[],array $query=[],array $headers=[]): array {
         $resource=strtolower(trim($resource?:'store')); $action=strtolower(trim($action));
+        if($method==='GET'&&$resource==='discovery') return ['resource'=>'discovery','data'=>$this->discovery()];
         if($method==='GET'&&$resource==='store') return ['resource'=>'store','data'=>$this->store()];
         if($method==='GET'&&$resource==='products'&&$id==='') return ['resource'=>'products']+$this->products($query);
         if($method==='GET'&&$resource==='products') return ['resource'=>'product','data'=>$this->product($id,$query)];
@@ -57,15 +58,53 @@ final class MercatoHeadlessApiService extends Wire {
         throw new MercatoHeadlessApiException('route_not_found','API route not found.',404);
     }
 
+    public function discovery(): array {
+        $origin=$this->publicOrigin();
+        $base=$origin!==''?$origin.'/api/mercato/v1':'/api/mercato/v1';
+        $accountMode=MercatoAccountPolicy::normalizeMode((string)($this->commerce->customer_accounts_mode??'disabled'));
+        $moduleVersion=(string)$this->wire('modules')->formatVersion(Mercato::MODULE_VERSION);
+        return [
+            'schema_version'=>1,
+            'platform'=>'mercato',
+            'store_id'=>MercatoPublicUrlResolver::storeId((string)($this->wire('config')->userAuthSalt??'')),
+            'module_version'=>$moduleVersion,
+            'origin'=>$origin,
+            'api'=>['version'=>'v1','base_url'=>$base],
+            'capabilities'=>[
+                'catalog'=>true,
+                'server_carts'=>true,
+                'quotes'=>true,
+                'checkout'=>true,
+                'customer_accounts'=>['mode'=>$accountMode],
+                'order_status'=>true,
+                'returns'=>true,
+                'cancellations'=>true,
+                'push_notifications'=>['registration'=>true,'delivery_ready'=>$this->commerce->pushNotificationService()->isReady()],
+            ],
+            'links'=>[
+                'self'=>$origin!==''?$origin.'/.well-known/mercato':'/.well-known/mercato',
+                'store'=>$base.'/store',
+                'products'=>$base.'/products',
+                'collections'=>$base.'/collections',
+                'carts'=>$base.'/carts',
+                'quotes'=>$base.'/quotes',
+                'checkouts'=>$base.'/checkouts',
+                'devices'=>$base.'/devices',
+                'account'=>$base.'/account',
+            ],
+        ];
+    }
+
     public function store(): array {
         $this->activateMarketLanguage('default');
-        $policies=[]; foreach($this->commerce->getPolicyPages() as $page) $policies[]=['title'=>(string)($page->title?:$page->name),'url'=>(string)$page->httpUrl()];
+        $policies=[]; foreach($this->commerce->getPolicyPages() as $page) $policies[]=['title'=>(string)($page->title?:$page->name),'url'=>$this->publicUrl((string)$page->httpUrl())];
         $payments=[]; foreach((array)($this->commerce->enabled_payment_methods??[]) as $method){ try{$gateway=$this->commerce->getGateway((string)$method);$status=$gateway->getSetupStatus();$payments[]=['id'=>(string)$method,'gateway'=>$gateway->getName(),'label'=>$gateway->getPaymentMethods()[$method]??$gateway->getLabel(),'ready'=>$status->ready,'capabilities'=>$gateway->getCapabilities()->toArray()];}catch(\Throwable){} }
         $countries=$this->commerce->getAllowedDeliveryCountries();$regions=[];foreach($this->commerce->getDeliveryRegionsByCountry()as$country=>$items){$regions[$country]=[];foreach($items as$code=>$label)$regions[$country][]=['code'=>(string)$code,'label'=>(string)$label];}
-        $currency=MercatoCurrency::normalizeCode((string)$this->commerce->currency);$markets=$this->commerce->marketService()->all();$contact=$this->wire('pages')->get('/contact-us/');$contactUrl=$contact&&$contact->id&&(int)$contact->status<Page::statusHidden?(string)$contact->httpUrl():rtrim($this->commerce->getHttpRoot(),'/').'/contact-us/';$supportEmail=(string)$this->wire('sanitizer')->email((string)($this->commerce->notification_reply_to??''));$support=['url'=>$contactUrl,'email'=>$supportEmail,'transactional_email_available'=>(string)$this->wire('sanitizer')->email((string)($this->commerce->notification_sender_email??''))!=='','transactional_push_available'=>$this->commerce->pushNotificationService()->isReady()];
+        $currency=MercatoCurrency::normalizeCode((string)$this->commerce->currency);$markets=$this->commerce->marketService()->all();$contact=$this->wire('pages')->get('/contact-us/');$contactUrl=$contact&&$contact->id&&(int)$contact->status<Page::statusHidden?(string)$contact->httpUrl():rtrim($this->commerce->getHttpRoot(),'/').'/contact-us/';$contactUrl=$this->publicUrl($contactUrl);$supportEmail=(string)$this->wire('sanitizer')->email((string)($this->commerce->notification_reply_to??''));$support=['url'=>$contactUrl,'email'=>$supportEmail,'transactional_email_available'=>(string)$this->wire('sanitizer')->email((string)($this->commerce->notification_sender_email??''))!=='','transactional_push_available'=>$this->commerce->pushNotificationService()->isReady()];
         $accountMode=MercatoAccountPolicy::normalizeMode((string)($this->commerce->customer_accounts_mode??'disabled'));$links=['products'=>'/api/mercato/v1/products','collections'=>'/api/mercato/v1/collections','carts'=>'/api/mercato/v1/carts','quotes'=>'/api/mercato/v1/quotes','checkouts'=>'/api/mercato/v1/checkouts','devices'=>'/api/mercato/v1/devices'];if($accountMode!=='disabled')$links['account']='/api/mercato/v1/account';
         $description=MercatoSeoRules::safeText((string)($this->commerce->seo_default_description??''),300);
-        return $this->extend(['name'=>(string)($this->commerce->seo_site_name?:'Mercato Store'),'description'=>$description,'currency'=>$currency,'api_version'=>'v1','checkout_available'=>$this->commerce->operationalService()->isCheckoutAvailable(),'account_mode'=>$accountMode,'markets'=>$markets,'commerce_context'=>$this->commerce->marketService()->context(),'delivery'=>['countries_restricted'=>$countries!==[],'countries'=>$countries,'regions'=>(object)$regions],'payments'=>$payments,'policies'=>$policies,'support'=>$support,'links'=>$links], 'store');
+        $discovery=$this->discovery();
+        return $this->extend(['name'=>(string)($this->commerce->seo_site_name?:'Mercato Store'),'description'=>$description,'currency'=>$currency,'api_version'=>'v1','identity'=>array_intersect_key($discovery,array_flip(['platform','store_id','module_version','schema_version'])),'api'=>$discovery['api'],'checkout_available'=>$this->commerce->operationalService()->isCheckoutAvailable(),'account_mode'=>$accountMode,'markets'=>$markets,'commerce_context'=>$this->commerce->marketService()->context(),'delivery'=>['countries_restricted'=>$countries!==[],'countries'=>$countries,'regions'=>(object)$regions],'payments'=>$payments,'policies'=>$policies,'support'=>$support,'links'=>$links], 'store');
     }
     public function products(array $query): array {
         $marketId=$this->marketId($query);$this->activateMarketLanguage($marketId);$page=max(1,(int)($query['page']??1));$limit=max(1,min(50,(int)($query['limit']??20)));$start=($page-1)*$limit;$template=$this->safe((string)($this->commerce->product_template?:'mrc-product'));
@@ -315,16 +354,8 @@ final class MercatoHeadlessApiService extends Wire {
     private function decryptContext(string $encoded):array{if($encoded==='')return[];$raw=base64_decode(strtr($encoded,'-_','+/'),true);if($raw===false||strlen($raw)<29)throw new MercatoHeadlessApiException('invalid_checkout_state','Checkout payment context is unavailable.',409);$iv=substr($raw,0,12);$tag=substr($raw,12,16);$plain=openssl_decrypt(substr($raw,28),'aes-256-gcm',hash('sha256',$this->secret(),true),OPENSSL_RAW_DATA,$iv,$tag);$data=$plain!==false?json_decode($plain,true):null;if(!is_array($data))throw new MercatoHeadlessApiException('invalid_checkout_state','Checkout payment context is unavailable.',409);return$data;}
     private function canonical(array $v):string{$sort=function(&$x)use(&$sort){if(!is_array($x))return;foreach($x as&$y)$sort($y);if(!array_is_list($x))ksort($x);};$sort($v);return(string)json_encode($v,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);}
     private function details(Page $o):array{$d=json_decode((string)$o->mrc_api_details,true);return is_array($d)?$d:[];}private function safe(string $v):string{return(string)$this->wire('sanitizer')->selectorValue($v);}
-    private function publicUrl(string $url):string{
-        if($url==='')return'';$parts=parse_url($url);if(!is_array($parts))return$url;
-        $configured=parse_url((string)$this->commerce->getHttpRoot(),PHP_URL_HOST);$source=strtolower((string)($parts['host']??''));
-        if($source!==''&&$configured!==null&&!hash_equals(strtolower((string)$configured),$source)&&!str_ends_with($source,'.test'))return$url;
-        $forwardedHost=trim(explode(',',(string)($_SERVER['HTTP_X_FORWARDED_HOST']??''))[0]);$host=$forwardedHost!==''?$forwardedHost:(string)($_SERVER['HTTP_HOST']??'');
-        if(!preg_match('/^[A-Za-z0-9.-]+(?::\d+)?$/',$host))return$url;
-        $forwardedProto=strtolower(trim(explode(',',(string)($_SERVER['HTTP_X_FORWARDED_PROTO']??''))[0]));$scheme=in_array($forwardedProto,['http','https'],true)?$forwardedProto:(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off'?'https':'http');
-        $path=(string)($parts['path']??'/');$query=isset($parts['query'])?'?'.$parts['query']:'';$fragment=isset($parts['fragment'])?'#'.$parts['fragment']:'';
-        return $scheme.'://'.$host.$path.$query.$fragment;
-    }
+    private function publicOrigin():string{return MercatoPublicUrlResolver::origin((string)$this->commerce->getHttpRoot(),$_SERVER,(array)($this->wire('config')->httpHosts??[]));}
+    private function publicUrl(string $url):string{return MercatoPublicUrlResolver::resolve($url,(string)$this->commerce->getHttpRoot(),$_SERVER,(array)($this->wire('config')->httpHosts??[]));}
     private function findProduct(string|int $id):?Page{$p=$this->findPage((string)($this->commerce->product_template?:'mrc-product'),$id);return$p&&(!$p->hasField('mrc_product_status')||(string)$p->mrc_product_status==='active')?$p:null;}private function findPage(string $template,string|int $id):?Page{$selector='template='.$this->safe($template).', status<'.Page::statusHidden.', ';$selector.=ctype_digit((string)$id)?'id='.(int)$id:'name='.$this->safe((string)$id);$p=$this->wire('pages')->get($selector);return$p&&$p->id?$p:null;}
     private function pagination(int $p,int $l,int $t):array{return['page'=>$p,'limit'=>$l,'total'=>$t,'pages'=>(int)ceil($t/$l),'has_next'=>$p*$l<$t];}
     private function extend(array $resource,string $type,array $context=[]):array{$hooked=$this->commerce->headlessApiResource($resource,$type,$context);return is_array($hooked)?$hooked:$resource;}

@@ -1,5 +1,11 @@
 # Mercato testing plan
 
+## 1.6.1 mobile discovery regression evidence (2026-10-22)
+
+- `tests/MercatoMobileDiscoveryContractTest.php` covers deterministic opaque store IDs, trusted Yerd/reverse-proxy origin rewriting, relative-to-absolute discovery links, preservation of external provider URLs, rejection of unlisted forwarded hosts (including the empty-allow-list fallback), registered well-known routes, additive store metadata, and policy URL normalization (18 assertions).
+- `tests/MercatoHeadlessApiIntegrationTest.php` now requires discovery/store identity parity, versioned absolute API bases, and absolute public policy URLs when the ProcessWire profile runs.
+- `composer test:unit`, repository-wide shipped/test PHP syntax, release metadata alignment for `1.6.1`/`161`, and `git diff --check` passed locally. No consuming site, payment provider, email transport, webhook, or production data was changed for this source-only checkpoint.
+
 ## Scope
 
 - Project: Mercato
