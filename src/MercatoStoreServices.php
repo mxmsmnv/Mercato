@@ -473,6 +473,15 @@ trait MercatoStoreServices {
         return $service;
     }
 
+    public function catalogService(): MercatoCatalogService {
+        $this->requireArchitectureClasses();
+        if (!$this->catalogService) {
+            $this->catalogService = new MercatoCatalogService($this);
+            $this->catalogService->setWire($this->wire());
+        }
+        return $this->catalogService;
+    }
+
     public function marketService(): MercatoMarketService {
         $this->requireArchitectureClasses();
         if (!$this->marketService) { $this->marketService = new MercatoMarketService($this); $this->marketService->setWire($this->wire()); }

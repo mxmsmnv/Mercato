@@ -1,5 +1,17 @@
 # Mercato testing plan
 
+## 1.8.0 governed catalog automation and installer repair (2026-10-27)
+
+- Fixed the module-config repair action's repository-relative installer path and made the repair pass normalized configuration into `mercato_install()` explicitly.
+- Added `MercatoInstallerRepairContractTest.php` to pin the executable path, authoritative configuration handoff, FieldtypeDimensions feature detection, field creation, and product-template attachment contract.
+- Added shared catalog validation/service boundaries, external source identities, optimistic stock conflicts, source-scoped sync previews, nine closed-schema MCP tools, durable mutation replay, and hardened CSV/image ingestion contracts.
+- `composer test:unit`, repository-wide PHP lint, runtime verification, approved-license validation and locked dependency audit passed on PHP 8.5.8; no dependency advisories were reported.
+- The complete configured-site PHP profile passed against the isolated `/Users/mas/Sites/mercato.dev` site after schema 12 → 14 repair. Catalog evidence covers product and exact-variant create/update/read, global and in-batch SKU conflicts, stale version/stock/preview rejection, append-only image ingestion and checksum dedupe, idempotent replay/conflict, supplier preview/apply, supplier-scoped missing-product archival and exact fixture/ledger/log cleanup. Existing checkout, payment, order-to-cash, tax, shipping, accounts, privacy, notification, role/configuration and failure-path suites remained green.
+- The real Streamable HTTP boundary passed with 35 assertions. The separate McpServer registry discovered Mercato 1.8.0 as `ready` with 20 provider tools (11 order/fulfilment plus 9 catalog), enforced read/publish/admin scopes, accepted a product with variant options, resolved it by external identity, performed exact-variant optimistic stock, rejected unsafe non-HTTPS image input before transport, preserved mutation replay/conflict semantics, archived without deletion, redacted gateway audit and restored the disabled endpoint with zero clients/products/orders/users/audit rows left behind.
+- The guarded fresh ProcessWire 3.0.265 empty-database lifecycle passed with module `180`, schema `14`, 8 demo products, 4 collections and 3 discounts; installer repair, uninstall preservation, reinstall and deletion of the disposable database/site were verified.
+- Before upgrading the dev site, a recoverable database/product-assets/module backup was created under `/Users/mas/Sites/mercato.dev/.backups/mercato-pre-1.8.0-20261027T0450Z`; gzip/tar integrity and SHA-256 checksums were verified. No production endpoint, credential, payment, email, webhook or shipping-label side effect was used.
+- FieldtypeDimensions is not installed on the isolated dev site, so the dependency-present runtime branch could not be exercised there. Its corrected path, normalized same-request configuration, feature detection, warning, field creation and template-attachment behavior are pinned by 13 deterministic contract assertions; the installer now fails visibly rather than silently when the optional dependency is absent.
+
 ## 1.7.0 native commerce API release evidence (2026-10-22)
 
 - Release commit `579395e` adds native quote requests/status/history, guest-order claims, authenticated privacy exports, consent-aware analytics events, and authoritative market propagation for quote calculations.

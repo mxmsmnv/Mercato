@@ -3,9 +3,9 @@
 Mercato is discoverable by the ProcessWire `McpServer` module as a governed
 commerce provider. McpServer owns Streamable HTTP transport, bearer client
 credentials, installation namespaces, hierarchical scopes, request limits,
-schema validation, and gateway audit. Mercato owns order lookup, payment,
-inventory, shipping, fulfilment, email validation, mutation idempotency, and a
-second domain audit trail.
+schema validation, and gateway audit. Mercato owns catalog validation, order
+lookup, payment, inventory, shipping, fulfilment, email validation, mutation
+idempotency, and a second domain audit trail.
 
 This integration is not a generic ProcessWire editor. It exposes no page,
 field, template, PHP, SQL, shell, filesystem, credential, refund, or payment
@@ -33,6 +33,15 @@ workflow exports.
 | `mercato_get_fulfilment_state` | `read` | No | One order; private label URL redacted |
 | `mercato_get_inventory` | `read` | No | Exact products and variants in one order |
 | `mercato_get_operational_health` | `read` | No | PII-free health categories |
+| `mercato_list_products` | `read` | No | Bounded PII-free catalog page |
+| `mercato_get_product` | `read` | No | One product and exact variant definition |
+| `mercato_preview_product_upsert` | `read` | No | Validation and identity resolution without mutation |
+| `mercato_upsert_product` | `publish` | Local catalog write | Stable SKU or external identity; optimistic version check |
+| `mercato_set_inventory` | `publish` | Local inventory write | Base product or exact variant; required current-value check |
+| `mercato_add_product_images` | `publish` | Remote HTTPS read and local image append | Public DNS/IP pinning, strict limits and checksum dedupe |
+| `mercato_archive_product` | `admin` | Product becomes non-purchasable | Archive only; no deletion or history removal |
+| `mercato_preview_catalog_sync` | `read` | No | Validate 1–100 supplier records and source-scoped archives |
+| `mercato_apply_catalog_sync` | `admin` | Bounded catalog batch write | Exact reviewed digest; archive limited to one supplier |
 | `mercato_verify_payment` | `publish` | Provider read and stored verification snapshot | Stops on unsettled or mismatched state |
 | `mercato_create_shipment` | `publish` | Local shipment record | Paid order items only |
 | `mercato_purchase_shipping_label` | `admin` | Yes; may create carrier cost | Separate exact cost confirmation |
@@ -44,8 +53,10 @@ McpServer 1.x scopes are hierarchical: `admin` includes `publish`, and
 `publish` includes `read`. Use a read-only client for inspection. Use a
 dedicated publish client for a reviewed fulfilment workflow. Give `admin` only
 to a separate runtime that is explicitly allowed to purchase labels. Refunds
-and reconciliation repairs are intentionally absent, so neither client can
-perform them through this provider.
+and reconciliation repairs are intentionally absent. Catalog tools do not
+accept customer data, credentials, arbitrary ProcessWire fields, or raw file
+paths. The dedicated image tool is the only remote-file boundary and accepts
+only validated public HTTPS images; it never removes existing media.
 
 Every mutation requires:
 
@@ -113,6 +124,36 @@ autonomous fulfilment loop. A reviewed workflow can perform these calls:
 Configure n8n error branches to stop the order immediately, retain the JSON
 error, and create a human-review task. Do not connect an error branch back to a
 mutation node with a new idempotency key.
+
+## Example supplier catalog workflow
+
+Use a dedicated supplier identifier that never changes after rollout:
+
+1. Normalize the feed in n8n to the discovered closed product schema. Preserve
+   the supplier's stable `external_id`; do not generate it from mutable titles.
+2. Call `shop_mercato_preview_catalog_sync` in batches of at most 100 with the
+   same `supplier`. Start with `archive_missing: false`.
+3. Stop on SKU/external-identity conflicts or validation errors. Review creates,
+   updates and proposed archives. Store the returned `preview_digest`.
+4. Call `shop_mercato_apply_catalog_sync` with the byte-for-byte same product
+   batch, supplier, archive flag and digest, a unique idempotency key, an audit
+   reason, and confirmation `APPLY_REVIEWED_CATALOG_SYNC`.
+5. Replay the same key only after a transport interruption. Mercato returns the
+   stored result; it does not apply the batch twice. Changed input with the same
+   key fails closed.
+6. Use `shop_mercato_set_inventory` for stock-only changes. Always pass the last
+   observed `expected_current`; concurrent changes return a conflict instead of
+   silently overwriting stock.
+7. Enable `archive_missing` only for a complete-feed run. It affects only
+   products already carrying that exact `external_source`; it never deletes
+   products or archives another supplier's catalog.
+
+For supplier images, call `shop_mercato_add_product_images` after the product
+upsert with confirmation `ADD_VALIDATED_PRODUCT_IMAGES`. The tool appends only,
+pins each validated public DNS result for the HTTPS request, revalidates every
+redirect, limits redirects/bytes/aggregate bytes/pixels/MIME, and skips existing
+content by SHA-256 checksum. It never accepts local paths, private/reserved IPs,
+credentials in URLs, non-HTTPS origins, or a request to delete existing media.
 
 ## Validation and rollout
 

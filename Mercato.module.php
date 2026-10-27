@@ -16,6 +16,7 @@ require_once __DIR__ . '/src/MercatoConfigInputfields.php';
 require_once __DIR__ . '/src/MercatoConfigReadiness.php';
 require_once __DIR__ . '/src/MercatoBusinessHealthSummaries.php';
 require_once __DIR__ . '/src/Mcp/MercatoMcpProviderTrait.php';
+require_once __DIR__ . '/src/Mcp/MercatoMcpCatalogProviderTrait.php';
 
 /**
  * Mercato
@@ -25,7 +26,7 @@ require_once __DIR__ . '/src/Mcp/MercatoMcpProviderTrait.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.7.0 (module info version: 170)
+ * @version 1.8.0 (module info version: 180)
  * @license MIT
  */
 
@@ -46,6 +47,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     use MercatoConfigReadiness;
     use MercatoBusinessHealthSummaries;
     use MercatoMcpProviderTrait;
+    use MercatoMcpCatalogProviderTrait;
 
     public const PAYMENT_STATUS_PENDING = 'pending';
     public const PAYMENT_STATUS_REQUIRES_CONFIRMATION = 'requires_confirmation';
@@ -56,8 +58,8 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const PAYMENT_STATUS_CANCELED = 'canceled';
 
     public const SUBSCRIPTION_STATUS_NONE = 'none';
-    public const MODULE_VERSION = 170;
-    public const SCHEMA_VERSION = 13;
+    public const MODULE_VERSION = 180;
+    public const SCHEMA_VERSION = 14;
 
     private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';
     private const MCP_OPERATION_TABLE = 'mercato_mcp_operations';
@@ -311,6 +313,8 @@ class Mercato extends WireData implements Module, ConfigurableModule {
 
     protected ?MercatoMarketService $marketService = null;
 
+    protected ?MercatoCatalogService $catalogService = null;
+
     /** @var array<string,array<string,mixed>> Product snapshots captured before admin page saves. */
     protected array $productSaveSnapshots = [];
 
@@ -450,6 +454,11 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoPurchasabilityService::class => '/src/Product/MercatoPurchasabilityService.php',
             MercatoVariantDefinition::class => '/src/Product/MercatoVariantDefinition.php',
             MercatoVariantService::class => '/src/Product/MercatoVariantService.php',
+            MercatoCatalogRules::class => '/src/Product/MercatoCatalogRules.php',
+            MercatoCatalogService::class => '/src/Product/MercatoCatalogService.php',
+            MercatoCatalogCsvParser::class => '/src/Catalog/MercatoCatalogCsvParser.php',
+            MercatoCatalogSourceReference::class => '/src/Catalog/MercatoCatalogSourceReference.php',
+            MercatoCatalogImageIngestor::class => '/src/Catalog/MercatoCatalogImageIngestor.php',
             MercatoQuoteStatus::class => '/src/Quote/MercatoQuoteStatus.php',
             MercatoQuoteService::class => '/src/Quote/MercatoQuoteService.php',
             MercatoTaxProviderInterface::class => '/src/Tax/MercatoTaxProviderInterface.php',

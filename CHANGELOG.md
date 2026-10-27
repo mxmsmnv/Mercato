@@ -7,6 +7,19 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ---
 
+## [1.8.0] - 2026-10-27
+
+### Added
+
+- A public server-authoritative catalog service for product lookup, preview, upsert, lifecycle management, exact variant definitions, optimistic inventory updates, and source-scoped supplier synchronization.
+- Nine governed McpServer tools for bounded catalog reads, reviewed product upserts, conflict-safe inventory changes, policy-enforced image ingestion, non-destructive archival, and preview-bound supplier batch synchronization for n8n and agent workflows.
+- Stable external supplier identities, bounded multiline CSV parsing, and policy-enforced append-only remote image ingestion shared by MCP and available to future admin, CLI, and scheduled-feed adapters.
+
+### Fixed
+
+- The module configuration repair action now resolves the repository installer correctly instead of looking for a nonexistent `src/install/install.php` path.
+- Installer repair now receives ProcessWire's authoritative normalized configuration explicitly, so enabling FieldtypeDimensions and selecting a custom dimensions field creates and attaches that field even when the loaded module instance still contains stale settings.
+
 ## [1.7.0] - 2026-10-22
 
 ### Added

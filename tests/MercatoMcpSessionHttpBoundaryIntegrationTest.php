@@ -132,9 +132,11 @@ $order = null;
 $user = null;
 $cookieFiles = [tempnam(sys_get_temp_dir(), 'mrc-http-a-'), tempnam(sys_get_temp_dir(), 'mrc-http-b-')];
 $operationKeys = [];
+$catalogOperationHashes = [];
+$catalogProductIds = [];
 $cleanupDone = false;
 
-$cleanup = static function () use (&$cleanupDone, $wire, $mcp, $originalEnabled, &$issuedIds, &$order, &$user, &$operationKeys, &$cookieFiles, $runId, $super): void {
+$cleanup = static function () use (&$cleanupDone, $wire, $mcp, $originalEnabled, &$issuedIds, &$order, &$user, &$operationKeys, &$catalogOperationHashes, &$catalogProductIds, &$cookieFiles, $runId, $super): void {
     if ($cleanupDone) return;
     $cleanupDone = true;
     try {
@@ -146,6 +148,7 @@ $cleanup = static function () use (&$cleanupDone, $wire, $mcp, $originalEnabled,
         $mcp->set('enabled', $originalEnabled ? 1 : 0);
         $deleteOperation = $wire->database->prepare('DELETE FROM mercato_mcp_operations WHERE operation_key_hash=:key');
         foreach ($operationKeys as [$action, $key]) $deleteOperation->execute([':key' => hash('sha256', $action . ':' . $key)]);
+        foreach ($catalogOperationHashes as $hash) $deleteOperation->execute([':key' => $hash]);
         $deleteAudit = $wire->database->prepare('DELETE FROM mcp_server_audit WHERE request_id LIKE :prefix');
         $deleteAudit->execute([':prefix' => $runId . '%']);
         if ($issuedIds) {
@@ -155,6 +158,12 @@ $cleanup = static function () use (&$cleanupDone, $wire, $mcp, $originalEnabled,
         if ($order instanceof Page && $order->id) {
             $freshOrder = $wire->pages->get((int) $order->id);
             if ($freshOrder->id) $wire->pages->delete($freshOrder, true);
+        }
+        foreach (array_reverse(array_unique($catalogProductIds)) as $productId) {
+            $product = $wire->pages->get((int) $productId);
+            if (!$product || !$product->id) continue;
+            if (!str_starts_with((string) $product->name, 'e2e-' . $runId . '-')) throw new WireException("Refusing to delete unexpected catalog fixture {$product->id}.");
+            $wire->pages->delete($product, true);
         }
         if ($user instanceof User && $user->id) {
             $freshUser = $wire->users->get((int) $user->id);
@@ -242,7 +251,8 @@ try {
     $mcp->set('enabled', 1);
     $read = $mcp->issueClient($runId . ' read', ['read']);
     $publish = $mcp->issueClient($runId . ' publish', ['publish']);
-    $issuedIds = [(string) $read['id'], (string) $publish['id']];
+    $admin = $mcp->issueClient($runId . ' admin', ['admin']);
+    $issuedIds = [(string) $read['id'], (string) $publish['id'], (string) $admin['id']];
     $tools = [];
     foreach ($mcp->tools() as $tool) $tools[(string) $tool['name']] = $tool;
     $provider = array_values(array_filter($mcp->providers(), static fn(array $item): bool => ($item['module'] ?? '') === 'Mercato'))[0] ?? [];
@@ -252,7 +262,82 @@ try {
     $readName = $prefix . 'mercato_get_order';
     $advanceName = $prefix . 'mercato_advance_fulfilment';
     $labelName = $prefix . 'mercato_purchase_shipping_label';
-    $check(isset($tools[$readName], $tools[$advanceName], $tools[$labelName]), 'McpServer discovers namespaced Mercato read/publish/admin tools');
+    $catalogPreviewName = $prefix . 'mercato_preview_product_upsert';
+    $catalogGetName = $prefix . 'mercato_get_product';
+    $catalogUpsertName = $prefix . 'mercato_upsert_product';
+    $catalogInventoryName = $prefix . 'mercato_set_inventory';
+    $catalogImagesName = $prefix . 'mercato_add_product_images';
+    $catalogArchiveName = $prefix . 'mercato_archive_product';
+    $check(isset($tools[$readName], $tools[$advanceName], $tools[$labelName], $tools[$catalogPreviewName], $tools[$catalogGetName], $tools[$catalogUpsertName], $tools[$catalogInventoryName], $tools[$catalogImagesName], $tools[$catalogArchiveName]), 'McpServer discovers namespaced Mercato read/publish/admin tools');
+
+    $catalogSku = 'HTTP-' . strtoupper(substr(hash('sha256', $runId), 0, 12));
+    $catalogProduct = [
+        'name' => 'e2e-' . $runId . '-catalog', 'title' => 'HTTP catalog fixture ' . $runId,
+        'sku' => $catalogSku, 'external_source' => 'http_boundary', 'external_id' => $runId,
+        'price' => 25.5, 'stock' => 6, 'product_type' => 'physical',
+        'variant_options' => [[
+            'id' => 'finish', 'label' => 'Finish',
+            'values' => [['id' => 'black', 'label' => 'Black']],
+        ]],
+        'variants' => [[
+            'id' => 'black', 'sku' => $catalogSku . '-BLACK',
+            'options' => ['finish' => 'black'], 'price' => 27.5, 'stock' => 2,
+            'stock_policy' => 'deny', 'status' => 'active',
+        ]],
+    ];
+    $catalogPreview = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-preview', $catalogPreviewName, ['product' => $catalogProduct]), (string) $read['token'], null, $mcpHeaders($catalogPreviewName));
+    $catalogPreviewPayload = $toolPayload($catalogPreview);
+    $check($catalogPreview['status'] === 200 && ($catalogPreviewPayload['action'] ?? '') === 'create' && !empty($catalogPreviewPayload['preview_digest']), 'read client previews a catalog upsert through Streamable HTTP without mutation');
+
+    $catalogKey = 'catalog-' . $runId;
+    $catalogArgs = [
+        'product' => $catalogProduct, 'idempotency_key' => $catalogKey,
+        'reason' => 'Create isolated HTTP catalog fixture', 'confirmation' => 'UPSERT_VALIDATED_PRODUCT',
+    ];
+    $catalogOperationHashes[] = hash('sha256', 'catalog:upsert_product:' . $catalogKey);
+    $catalogDenied = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-denied', $catalogUpsertName, $catalogArgs), (string) $read['token'], null, $mcpHeaders($catalogUpsertName));
+    $check($catalogDenied['status'] === 403, 'read client is denied before a catalog publish mutation reaches Mercato');
+    $catalogCreated = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-create', $catalogUpsertName, $catalogArgs), (string) $publish['token'], null, $mcpHeaders($catalogUpsertName));
+    $catalogCreatedPayload = $toolPayload($catalogCreated);
+    $catalogProductId = (int) ($catalogCreatedPayload['product']['id'] ?? 0);
+    if ($catalogProductId > 0) $catalogProductIds[] = $catalogProductId;
+    $check($catalogCreated['status'] === 200 && empty($catalogCreated['json']['result']['isError']) && $catalogProductId > 0 && ($catalogCreatedPayload['product']['variants'][0]['options']['finish'] ?? '') === 'black', 'publish client creates a validated catalog product with variant options through Streamable HTTP');
+    $catalogGet = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-get-external', $catalogGetName, ['external_source' => 'http_boundary', 'external_id' => $runId]), (string) $read['token'], null, $mcpHeaders($catalogGetName));
+    $catalogGetPayload = $toolPayload($catalogGet);
+    $check($catalogGet['status'] === 200 && (int) ($catalogGetPayload['id'] ?? 0) === $catalogProductId && ($catalogGetPayload['external_id'] ?? '') === $runId, 'read client resolves the catalog product by explicit external identity');
+    $catalogReplay = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-replay', $catalogUpsertName, $catalogArgs), (string) $publish['token'], null, $mcpHeaders($catalogUpsertName));
+    $catalogReplayPayload = $toolPayload($catalogReplay);
+    $check(!empty($catalogReplayPayload['idempotent_replay']) && (int) ($catalogReplayPayload['product']['id'] ?? 0) === $catalogProductId, 'HTTP catalog upsert replay returns the durable stored result');
+    $invalidImage = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-image-invalid', $catalogImagesName, [
+        'product_reference' => $catalogSku, 'image_urls' => ['http://127.0.0.1/private.png'],
+        'idempotency_key' => 'image-' . $runId, 'reason' => 'Reject unsafe HTTP catalog image',
+        'confirmation' => 'ADD_VALIDATED_PRODUCT_IMAGES',
+    ]), (string) $publish['token'], null, $mcpHeaders($catalogImagesName));
+    $invalidImageRejected = $invalidImage['status'] >= 400 || isset($invalidImage['json']['error']) || !empty($invalidImage['json']['result']['isError']);
+    $check($invalidImageRejected, 'closed MCP schema rejects a non-HTTPS catalog image before transport');
+
+    $inventoryKey = 'inventory-' . $runId;
+    $catalogOperationHashes[] = hash('sha256', 'catalog:set_inventory:' . $inventoryKey);
+    $inventoryArgs = [
+        'product_reference' => $catalogSku, 'variant_id' => 'black', 'mode' => 'set', 'quantity' => 5,
+        'expected_current' => 2, 'idempotency_key' => $inventoryKey,
+        'reason' => 'Set isolated HTTP catalog stock', 'confirmation' => 'SET_VALIDATED_INVENTORY',
+    ];
+    $inventoryResponse = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-stock', $catalogInventoryName, $inventoryArgs), (string) $publish['token'], null, $mcpHeaders($catalogInventoryName));
+    $inventoryPayload = $toolPayload($inventoryResponse);
+    $check($inventoryResponse['status'] === 200 && ($inventoryPayload['before'] ?? null) === 2 && ($inventoryPayload['after'] ?? null) === 5 && ($inventoryPayload['variant_id'] ?? '') === 'black', 'publish client performs optimistic exact-variant inventory update through Streamable HTTP');
+
+    $archiveKey = 'archive-' . $runId;
+    $catalogOperationHashes[] = hash('sha256', 'catalog:archive_product:' . $archiveKey);
+    $archiveArgs = [
+        'product_reference' => $catalogSku, 'idempotency_key' => $archiveKey,
+        'reason' => 'Archive isolated HTTP catalog fixture', 'confirmation' => 'ARCHIVE_PRODUCT_WITH_HISTORY',
+    ];
+    $archiveDenied = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-admin-denied', $catalogArchiveName, $archiveArgs), (string) $publish['token'], null, $mcpHeaders($catalogArchiveName));
+    $check($archiveDenied['status'] === 403, 'publish client is denied the admin-only catalog archive');
+    $archiveResponse = $http($endpoint, 'POST', $mcpBody($runId . '-catalog-archive', $catalogArchiveName, $archiveArgs), (string) $admin['token'], null, $mcpHeaders($catalogArchiveName));
+    $archivePayload = $toolPayload($archiveResponse);
+    $check($archiveResponse['status'] === 200 && ($archivePayload['product_status'] ?? '') === 'archived', 'admin client archives a catalog product without deleting history');
 
     $readResponse = $http($endpoint, 'POST', $mcpBody($runId . '-read', $readName, ['order_reference' => $reference]), (string) $read['token'], null, $mcpHeaders($readName));
     $readPayload = $toolPayload($readResponse);
@@ -309,6 +394,7 @@ $residualOrders = $wire->pages->count('template=' . $wire->sanitizer->selectorVa
 $residualUsers = $wire->users->count('include=all, email=' . $wire->sanitizer->selectorValue($runId . '@example.test'));
 $residualAudit = (int) $wire->database->query("SELECT COUNT(*) FROM mcp_server_audit WHERE request_id LIKE " . $wire->database->quote($runId . '%'))->fetchColumn();
 $residualClients = (int) $wire->database->query("SELECT COUNT(*) FROM mcp_server_clients WHERE label LIKE " . $wire->database->quote($runId . '%'))->fetchColumn();
-$check($residualOrders === 0 && $residualUsers === 0 && $residualAudit === 0 && $residualClients === 0, 'exact run-owned HTTP fixtures, audit rows, and client credentials are cleaned');
+$residualProducts = $wire->pages->count('template=mrc-product, include=all, name^=' . $wire->sanitizer->selectorValue('e2e-' . $runId . '-'));
+$check($residualOrders === 0 && $residualUsers === 0 && $residualProducts === 0 && $residualAudit === 0 && $residualClients === 0, 'exact run-owned HTTP fixtures, audit rows, and client credentials are cleaned');
 $check((bool) $wire->modules->get('McpServer')->enabled === $originalEnabled, 'McpServer enabled state is restored exactly');
 echo "Mercato MCP/session HTTP boundary integration passed with {$passes} assertions; run {$runId}.\n";

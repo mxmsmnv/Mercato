@@ -24,7 +24,7 @@ trait MercatoMcpProviderTrait {
         $idempotency = ['type' => 'string', 'minLength' => 8, 'maxLength' => 191, 'pattern' => '^[A-Za-z0-9._:-]+$'];
         $reason = ['type' => 'string', 'minLength' => 8, 'maxLength' => 500];
 
-        return [
+        return array_merge([
             $this->mcpCommerceTool(
                 'mercato_get_order',
                 'Get Mercato order',
@@ -179,7 +179,7 @@ trait MercatoMcpProviderTrait {
                 ['order_reference', 'event', 'idempotency_key', 'reason', 'confirmation'],
                 true
             ),
-        ];
+        ], $this->mcpCatalogTools());
     }
 
     /** @return array<string,mixed> */

@@ -42,7 +42,11 @@ final class MercatoMcpEmailFixtureTransport extends Wire implements MercatoEmail
 $commerce = $wire->modules->get('Mercato');
 $commerce->ensureMcpOperationsSchema();
 $tools = $commerce->mcpTools();
-$expect(count($tools) === 11, 'McpServer did not discover the expected Mercato tool inventory.');
+$expect(count($tools) === 20, 'McpServer did not discover the expected Mercato tool inventory.');
+$toolNames = array_column($tools, 'name');
+foreach (['mercato_list_products', 'mercato_get_product', 'mercato_preview_product_upsert', 'mercato_upsert_product', 'mercato_set_inventory', 'mercato_add_product_images', 'mercato_archive_product', 'mercato_preview_catalog_sync', 'mercato_apply_catalog_sync'] as $catalogTool) {
+    $expect(in_array($catalogTool, $toolNames, true), 'McpServer did not discover catalog tool ' . $catalogTool . '.');
+}
 foreach ($tools as $tool) {
     $expect(($tool['input_schema']['additionalProperties'] ?? null) === false, 'MCP tool schema is not closed: ' . ($tool['name'] ?? 'unknown'));
 }

@@ -194,10 +194,12 @@ Native clients use `/api/mercato/v1`. Generic clients can validate a merchant or
 Native transactional push uses owner-scoped device credentials and the same order lifecycle as email; see [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md) for the APNs setup, privacy contract, registration API, and transport extension point.
 
 MCP-compatible agents and automation systems use the optional ProcessWire
-McpServer provider. It exposes bounded PII-minimized order and inventory reads,
-validated payment/fulfilment/email operations, stronger confirmation for label
-costs, durable idempotency, and structured stop-for-review failures. It does
-not expose generic ProcessWire editing, refunds, or reconciliation repairs. See
+McpServer provider. It exposes bounded PII-minimized order and catalog reads,
+validated product/variant upserts, optimistic inventory updates, policy-enforced
+image appends, reviewed supplier synchronization, fulfilment/email operations, stronger confirmation
+for label costs, durable idempotency, and structured stop-for-review failures.
+It does not expose generic ProcessWire editing, refunds, reconciliation repairs,
+customer PII, or unrestricted remote-file ingestion. See
 [MCP.md](MCP.md) for tool schemas, scopes, rollout, and an n8n workflow example.
 
 ## Demo Storefront

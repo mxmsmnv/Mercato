@@ -21,7 +21,7 @@ function mercato_wire() {
     return function_exists('wire') ? wire() : \ProcessWire\wire();
 }
 
-function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false): void {
+function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false, array $options = []): void {
     $wire = mercato_wire();
 
     $runtime = $module->getRuntimeCompatibilityReport();
@@ -50,11 +50,33 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
     // -----------------------------------------------------------------------
     // BUG-20: FieldtypeEmail is optional; fall back to FieldtypeText if absent
     $emailType = $wire->modules->isInstalled('FieldtypeEmail') ? 'FieldtypeEmail' : 'FieldtypeText';
-    $dimensionsEnabled = !empty($module->shipping_dimensions_enabled) || !empty($wire->input->post('shipping_dimensions_enabled'));
+    $storedConfig = (array) $wire->modules->getConfig('Mercato');
+    $effectiveConfig = array_merge($storedConfig, $options);
+    $repairRequest = !empty($wire->input->post('mrc_run_installer'));
+    $dimensionsEnabled = $repairRequest
+        ? !empty($wire->input->post('shipping_dimensions_enabled'))
+        : (array_key_exists('shipping_dimensions_enabled', $effectiveConfig)
+            ? !empty($effectiveConfig['shipping_dimensions_enabled'])
+            : !empty($module->shipping_dimensions_enabled));
     $dimensionsFieldName = strtolower(trim((string) (
-        $wire->input->post('shipping_dimensions_field') ?: ($module->shipping_dimensions_field ?? 'mrc_dimensions')
+        ($repairRequest ? $wire->input->post('shipping_dimensions_field') : '')
+        ?: ($effectiveConfig['shipping_dimensions_field'] ?? '')
+        ?: ($module->shipping_dimensions_field ?? 'mrc_dimensions')
     )));
     $dimensionsFieldName = trim(preg_replace('/[^a-z0-9_]+/', '_', $dimensionsFieldName) ?: '', '_') ?: 'mrc_dimensions';
+    $dimensionsFieldtype = null;
+    if ($dimensionsEnabled) {
+        $candidate = $wire->modules->isInstalled('FieldtypeDimensions')
+            ? $wire->modules->get('FieldtypeDimensions')
+            : null;
+        if ($candidate instanceof \ProcessWire\Fieldtype) {
+            $dimensionsFieldtype = $candidate;
+        } else {
+            $message = 'Mercato: weight and dimensions are enabled, but FieldtypeDimensions is not installed or could not be loaded.';
+            $wire->log->save('mercato', $message);
+            if ($wire->session) $wire->session->warning($message);
+        }
+    }
 
     $fieldDefs = [
         // Order fields
@@ -157,6 +179,8 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         ['name' => 'mrc_shipping_note', 'type' => 'FieldtypeText',   'label' => 'Shipping Note'],
         ['name' => 'mrc_images',      'type' => 'FieldtypeImage',   'label' => 'Product Images',    'extra' => ['extensions' => 'jpg jpeg png gif webp', 'maxFiles' => 0]],
         ['name' => 'mrc_sku',         'type' => 'FieldtypeText',    'label' => 'SKU'],
+        ['name' => 'mrc_external_source', 'type' => 'FieldtypeText', 'label' => 'External catalog source'],
+        ['name' => 'mrc_external_id', 'type' => 'FieldtypeText', 'label' => 'External catalog ID'],
         ['name' => 'mrc_product_type', 'type' => 'FieldtypeText',    'label' => 'Product Type'],
         ['name' => 'mrc_inquiry_only', 'type' => 'FieldtypeCheckbox', 'label' => 'Inquiry only (hide price and disable online purchase)'],
         ['name' => 'mrc_product_status', 'type' => 'FieldtypeText', 'label' => 'Product Status'],
@@ -208,9 +232,9 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
 
         $wire->fields->save($f);
     }
-    if ($dimensionsEnabled && $wire->modules->isInstalled('FieldtypeDimensions') && !$wire->fields->get($dimensionsFieldName)) {
+    if ($dimensionsFieldtype && !$wire->fields->get($dimensionsFieldName)) {
         $f = new \ProcessWire\Field();
-        $f->type = $wire->modules->get('FieldtypeDimensions');
+        $f->type = $dimensionsFieldtype;
         $f->name = $dimensionsFieldName;
         $f->label = 'Shipping dimensions';
         $wire->fields->save($f);
@@ -366,7 +390,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         $fg->name = 'mrc-product';
         foreach ([
             'title', 'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
-            'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_inquiry_only', 'mrc_product_status', 'mrc_stripe_price_id',
+            'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_external_source', 'mrc_external_id', 'mrc_product_type', 'mrc_inquiry_only', 'mrc_product_status', 'mrc_stripe_price_id',
             'mrc_variant_options', 'mrc_variants',
             'mrc_market_prices',
             'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
@@ -589,7 +613,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false):
         $added = false;
         foreach ([
             'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
-            'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_product_type', 'mrc_inquiry_only', 'mrc_product_status', 'mrc_stripe_price_id',
+            'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_external_source', 'mrc_external_id', 'mrc_product_type', 'mrc_inquiry_only', 'mrc_product_status', 'mrc_stripe_price_id',
             'mrc_variant_options', 'mrc_variants',
             'mrc_market_prices',
             'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_collections', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',

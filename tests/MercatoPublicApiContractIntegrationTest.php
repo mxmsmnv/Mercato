@@ -26,7 +26,7 @@ $expect = static function (bool $condition, string $message): void {
 // Every Mercato method explicitly documented under "Public Calls Agents May Use".
 $documentedMethods = [
     'cart', 'productList', 'formatPrice', 'completePayment', 'clearPendingCheckoutSession',
-    'orderRepository', 'fulfilmentService', 'getProductPurchasability', 'variantService',
+    'orderRepository', 'fulfilmentService', 'getProductPurchasability', 'variantService', 'catalogService',
     'getOrderAnalyticsEvent', 'getFrontendFramework', 'renderFrontendFrameworkAssets',
     'getFrontendUiClasses', 'getStorefrontTemplateOverridePath', 'privacyService',
     'areOrderSignedLinksExpired', 'customerAccountService', 'getRuntimeCompatibilityReport',
@@ -45,12 +45,13 @@ foreach ($documentedMethods as $methodName) {
     $expect($reflection->hasMethod($methodName), "Documented Mercato method $methodName does not exist.");
     $expect($reflection->getMethod($methodName)->isPublic(), "Documented Mercato method $methodName is not public.");
 }
-$expect(count($documentedMethods) === 47, 'Documented public API inventory changed; update the explicit contract ledger.');
+$expect(count($documentedMethods) === 48, 'Documented public API inventory changed; update the explicit contract ledger.');
 
 $serviceContracts = [
     'orderRepository' => MercatoOrderRepository::class,
     'fulfilmentService' => MercatoFulfilmentService::class,
     'variantService' => MercatoVariantService::class,
+    'catalogService' => MercatoCatalogService::class,
     'privacyService' => MercatoPrivacyService::class,
     'customerAccountService' => MercatoCustomerAccountService::class,
     'operationalService' => MercatoOperationalService::class,
@@ -101,4 +102,4 @@ try {
 }
 $expect($unknownTemplateRejected, 'Unknown notification template did not fail closed.');
 
-echo 'Mercato public API contract integration tests passed: 47 module methods, 15 service accessors, 2 Stripe methods.' . "\n";
+echo 'Mercato public API contract integration tests passed: 48 module methods, 16 service accessors, 2 Stripe methods.' . "\n";

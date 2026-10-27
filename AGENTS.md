@@ -39,6 +39,7 @@ Use these module methods instead of inventing APIs:
 - `$commerce->fulfilmentService()`: access fulfilment methods and checkout delivery logic.
 - `$commerce->getProductPurchasability(Page $product, int $requestedQuantity = 1, float $cartQuantity = 0.0, int $excludeOrderId = 0, string|array|null $variantReference = null)`: check product or exact-variant stock, preorder, backorder, and availability rules.
 - `$commerce->variantService()`: validate option/variant definitions, resolve selections, create canonical cart snapshots, and update exact-variant inventory.
+- `$commerce->catalogService()`: search/read products and perform validated SKU/external-ID upserts, optimistic inventory updates, policy-enforced append-only image ingestion, lifecycle archival, and reviewed supplier-batch synchronization.
 - `$commerce->getOrderAnalyticsEvent(Page $order, string $event = 'purchase')`: build storefront analytics payloads.
 - `$commerce->getFrontendFramework()`: read the selected frontend framework.
 - `$commerce->renderFrontendFrameworkAssets()`: output configured frontend framework assets.
@@ -77,7 +78,7 @@ Custom live-carrier modules implement `MercatoShippingProviderInterface` and reg
 
 Never bypass `MercatoProductionGuard` or enable production merely because credential fields are non-empty. Use mode-correct keys, HTTPS, required webhook events, the non-production verification scenarios, remote reconciliation checks, and an explicit rollback plan. Repair payment mismatches only after provider verification and preserve all audit records.
 
-McpServer owns client credentials, site namespaces, transport scopes, rate limits, and gateway audit. Mercato MCP handlers own commerce validation, PII minimization, exact confirmations, durable idempotency, and domain audit. Do not expose generic ProcessWire editing, refunds, reconciliation repairs, secrets, private label URLs, or customer contact/address data through MCP. Label purchases require `admin` scope and the exact cost confirmation. Stop on every structured error; never turn `human_review_required` into an automatic repair.
+McpServer owns client credentials, site namespaces, transport scopes, rate limits, and gateway audit. Mercato MCP handlers own commerce validation, PII minimization, exact confirmations, durable idempotency, and domain audit. Catalog automation must use stable SKU or `external_source` + `external_id` identities, preview supplier batches before applying them, scope `archive_missing` to the exact supplier, and use optimistic stock/version checks. Do not expose generic ProcessWire editing, refunds, reconciliation repairs, secrets, private label URLs, customer contact/address data, or unbounded remote image fetching through MCP. Label purchases require `admin` scope and the exact cost confirmation. Stop on every structured error; never turn `human_review_required` into an automatic repair.
 
 Shared storefront helper functions are defined in `templates/mrc-storefront.php` and are safe to use from Mercato storefront templates after requiring that file:
 

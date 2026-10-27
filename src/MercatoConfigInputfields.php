@@ -127,9 +127,9 @@ trait MercatoConfigInputfields {
 
         if (wire('input')->post('mrc_run_installer')) {
             try {
-                require_once __DIR__ . '/install/install.php';
+                require_once dirname(__DIR__) . '/install/install.php';
                 $overwrite = (bool) wire('input')->post('mrc_overwrite_template_files');
-                mercato_install($module, $overwrite);
+                mercato_install($module, $overwrite, $data);
                 if (!wire('modules')->isInstalled('ProcessMercato')) {
                     wire('modules')->install('ProcessMercato');
                 }
