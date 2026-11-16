@@ -1,0 +1,24 @@
+.mrc-variant-editor{--mrc-border:#d9dde3;--mrc-muted:#667085;--mrc-bg:#f7f8fa;display:grid;gap:1.25rem;max-width:100%;min-width:0;width:100%}
+.mrc-variant-editor>*{min-width:0}.mrc-variant-intro>div,.mrc-variant-heading>div{min-width:0}.mrc-variant-intro p,.mrc-variant-heading p{overflow-wrap:anywhere}
+.mrc-variant-intro,.mrc-variant-heading,.mrc-option-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.mrc-variant-intro p,.mrc-variant-heading p{color:var(--mrc-muted);margin:.25rem 0 0;max-width:70ch}
+.mrc-variant-summary{background:var(--mrc-bg);border:1px solid var(--mrc-border);border-radius:3px;color:#344054;font-size:.875rem;padding:.5rem .75rem;white-space:nowrap}
+.mrc-variant-section{border-top:1px solid var(--mrc-border);padding-top:1.25rem}
+.mrc-variant-heading{margin-bottom:1rem}.mrc-variant-heading h3{margin:0}.mrc-variant-actions{display:flex;flex-wrap:wrap;gap:.5rem}
+.mrc-option-list{display:grid;gap:.75rem;margin-bottom:.75rem}.mrc-option-card{background:#fff;border:1px solid var(--mrc-border);border-radius:3px;padding:1rem}
+.mrc-option-card-head{border-bottom:1px solid #eceef1;margin-bottom:.75rem;padding-bottom:.65rem}.mrc-option-card-head>div{display:flex;gap:.25rem}
+.mrc-option-fields,.mrc-option-value,.mrc-advanced-grid{display:grid;gap:.75rem}.mrc-option-fields{grid-template-columns:minmax(12rem,2fr) minmax(10rem,1fr)}
+.mrc-option-value{align-items:end;background:var(--mrc-bg);border-left:3px solid #c7ccd4;grid-template-columns:minmax(12rem,2fr) minmax(10rem,1fr) auto;margin:.5rem 0;padding:.65rem}
+.mrc-option-card label,.mrc-advanced-grid label{display:grid;gap:.3rem}.mrc-option-card label>span,.mrc-advanced-grid label>span{color:#344054;font-size:.78rem;font-weight:600}
+.mrc-code-input{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+.mrc-icon-button{align-items:center;background:transparent;border:1px solid transparent;border-radius:2px;color:#475467;display:inline-flex;justify-content:center;min-height:2.25rem;min-width:2.25rem;padding:.35rem;cursor:pointer}
+.mrc-icon-button:hover,.mrc-icon-button:focus-visible{background:#eef1f5;border-color:#c9cfd8;color:#111827}.mrc-icon-button:disabled{cursor:not-allowed;opacity:.35}
+.mrc-variant-table-wrap{border:1px solid var(--mrc-border);max-width:100%;min-width:0;overflow:auto;width:100%}.mrc-variant-table{margin:0;min-width:900px;width:100%}
+.mrc-variant-table th{white-space:nowrap}.mrc-variant-table td{vertical-align:middle}.mrc-variant-table input,.mrc-variant-table select{min-width:7.5rem}
+.mrc-variant-advanced td{background:var(--mrc-bg);padding:1rem!important}.mrc-advanced-grid{grid-template-columns:repeat(4,minmax(9rem,1fr))}.mrc-wide-field{grid-column:1/-1}.mrc-wide-field small{color:var(--mrc-muted)}
+.mrc-empty-state{color:var(--mrc-muted);padding:1.5rem;text-align:center}.mrc-empty-state strong{color:#344054;display:block;margin-bottom:.25rem}.mrc-empty-state p{margin:0}
+.mrc-variant-errors{background:#fff3f2;border:1px solid #fecdca;border-left:4px solid #d92d20;border-radius:2px;color:#912018;padding:.85rem 1rem}.mrc-variant-errors ul{margin:.5rem 0 0 1.2rem}
+.mrc-visually-hidden{clip:rect(0 0 0 0);clip-path:inset(50%);height:1px;overflow:hidden;position:absolute;white-space:nowrap;width:1px}
+@media(max-width:900px){.mrc-variant-intro,.mrc-variant-heading{align-items:stretch;flex-direction:column}.mrc-variant-summary{white-space:normal}.mrc-option-fields,.mrc-option-value{grid-template-columns:1fr}.mrc-option-value .mrc-remove-value{justify-self:start}.mrc-advanced-grid{grid-template-columns:repeat(2,minmax(9rem,1fr))}}
+@media(max-width:520px){.mrc-advanced-grid{grid-template-columns:1fr}.mrc-variant-actions{display:grid;width:100%}.mrc-variant-actions .ui-button,.mrc-add-option{width:100%}}
+@media(prefers-color-scheme:dark){.AdminThemeDefault .mrc-variant-editor{--mrc-border:#49515c;--mrc-muted:#aeb6c2;--mrc-bg:#22272e}.AdminThemeDefault .mrc-option-card{background:#171a1f}.AdminThemeDefault .mrc-variant-summary,.AdminThemeDefault .mrc-option-card label>span,.AdminThemeDefault .mrc-advanced-grid label>span,.AdminThemeDefault .mrc-empty-state strong{color:#e7eaf0}.AdminThemeDefault .mrc-icon-button{color:#c7ced8}.AdminThemeDefault .mrc-icon-button:hover,.AdminThemeDefault .mrc-icon-button:focus-visible{background:#2b323b;color:#fff}}

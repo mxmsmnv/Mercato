@@ -55,6 +55,8 @@ $expect((int) ($moduleInfo['version'] ?? 0) > 0, 'Mercato runtime was not discov
 $expect((bool) $modules->install('Mercato'), 'Mercato installation returned false.');
 $expect($modules->isInstalled('Mercato'), 'Mercato installation state was not persisted.');
 $expect($modules->isInstalled('ProcessMercato'), 'Mercato did not install its ProcessMercato companion.');
+$expect($modules->isInstalled('InputfieldMercatoVariants'), 'Fresh install did not install the structured variant inputfield.');
+$expect($modules->isInstalled('FieldtypeMercatoVariants'), 'Fresh install did not install the atomic variant fieldtype.');
 
 /** @var Mercato $commerce */
 $commerce = $modules->get('Mercato');
@@ -78,9 +80,18 @@ foreach (['mrc-product', 'mrc-order', 'mrc-discount', 'mrc-collection'] as $name
     $schemaIds['template:' . $name] = (int) $wire->templates->get($name)->id;
     $expect($schemaIds['template:' . $name] > 0, "Fresh install is missing template: $name");
 }
-foreach (['mrc_price', 'mrc_payment_status', 'mrc_items', 'mrc_stock'] as $name) {
+foreach (['mrc_price', 'mrc_payment_status', 'mrc_items', 'mrc_stock', 'mrc_variant_definition'] as $name) {
     $schemaIds['field:' . $name] = (int) $wire->fields->get($name)->id;
     $expect($schemaIds['field:' . $name] > 0, "Fresh install is missing field: $name");
+}
+$variantField = $wire->fields->get('mrc_variant_definition');
+$productTemplate = $wire->templates->get('mrc-product');
+$expect($variantField->type instanceof FieldtypeMercatoVariants, 'Fresh atomic variant field uses the wrong fieldtype.');
+$expect($productTemplate->fieldgroup->hasField('mrc_variant_definition'), 'Fresh product template is missing the atomic variant field.');
+$expect(!$productTemplate->fieldgroup->hasField('mrc_variant_options') && !$productTemplate->fieldgroup->hasField('mrc_variants'), 'Fresh product template still exposes legacy variant JSON fields.');
+foreach (['mrc_variant_options', 'mrc_variants'] as $legacyName) {
+    $legacyField = $wire->fields->get($legacyName);
+    $expect(!$legacyField || !(int) $legacyField->id, "Fresh install unnecessarily created legacy field: {$legacyName}");
 }
 
 $permissionIds = [];
@@ -140,6 +151,7 @@ $firstProduct = $wire->pages->get('template=mrc-product, include=all, sort=id');
 $expect((bool) ($firstProduct && $firstProduct->id), 'Fresh demo product lookup failed.');
 $expect(trim((string) $firstProduct->title) !== '', 'Fresh demo product has no title.');
 $expect((float) $firstProduct->mrc_price > 0, 'Fresh demo product has no positive price.');
+$expect($firstProduct->mrc_variant_definition instanceof MercatoVariantsValue, 'Fresh demo product variant definition did not wake into its typed value.');
 
 $templateHashes = [];
 foreach (['mrc-storefront.php', 'mrc-products.php', 'mrc-product.php', 'mrc-checkout.php', 'mrc-success.php'] as $name) {

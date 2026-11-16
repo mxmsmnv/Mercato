@@ -311,16 +311,24 @@ trait ProcessMercatoProductPanels {
 
     protected function renderProductVariantManager(Page $product, Mercato $commerce): string {
         $definition = $commerce->variantService()->getDefinition($product);
-        $optionsJson = json_encode($definition['options'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]';
-        $variantsJson = json_encode($definition['variants'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]';
         $out = '<section class="pw-wrap mrc-admin-panel"><div class="mrc-admin-panel-head"><div>';
         $out .= '<div class="ds-section-label">' . $this->e($this->_('Variants')) . '</div><h2 class="uk-h3">' . $this->e($this->_('Product options and combinations')) . '</h2>';
         $out .= '<p class="uk-text-muted">' . $this->e($this->_('Define option groups, then list only valid purchasable combinations. Variant SKU, price, stock, policy, measurements, images, and status override the base product.')) . '</p></div></div>';
         $out .= '<form method="post" action="' . $this->e($this->productDetailUrl($product)) . '" class="uk-form-stacked">' . $this->renderCsrfInput();
         $out .= '<input type="hidden" name="mrc_save_variants" value="1"><input type="hidden" name="product_id" value="' . (int) $product->id . '">';
-        $out .= '<div class="uk-grid-small uk-child-width-1-2@m" uk-grid><label><span class="uk-form-label">' . $this->e($this->_('Option groups JSON')) . '</span><textarea class="uk-textarea" rows="18" name="variant_options_json" spellcheck="false">' . $this->e($optionsJson) . '</textarea></label>';
-        $out .= '<label><span class="uk-form-label">' . $this->e($this->_('Valid variants JSON')) . '</span><textarea class="uk-textarea" rows="18" name="variants_json" spellcheck="false">' . $this->e($variantsJson) . '</textarea></label></div>';
-        $out .= '<p class="uk-text-meta">' . $this->e($this->_('Option ids and value ids are stable API keys. Existing products remain single-SKU when both arrays are empty.')) . '</p>';
+        $input = $this->wire('modules')->get('InputfieldMercatoVariants');
+        if ($input instanceof InputfieldMercatoVariants) {
+            $field = $this->wire('fields')->get('mrc_variant_definition');
+            if ($field instanceof Field) $input->setField($field);
+            $input->setPage($product);
+            $input->attr('name', 'variant_definition_json');
+            $input->attr('id', 'mrc-product-variant-manager-' . (int) $product->id);
+            $input->value = new MercatoVariantsValue($definition);
+            $out .= $input->render();
+        } else {
+            $out .= '<div class="uk-alert-danger" uk-alert>' . $this->e($this->_('The structured variant editor is unavailable. Run the Mercato installer repair.')) . '</div>';
+        }
+        $out .= '<p class="uk-text-meta">' . $this->e($this->_('Option and value identifiers are stable API keys. Existing products remain single-SKU when no variants are configured.')) . '</p>';
         $out .= '<button class="uk-button uk-button-primary" type="submit"><i class="fa fa-save uk-margin-small-right"></i>' . $this->e($this->_('Validate and save variants')) . '</button></form></section>';
         return $out;
     }

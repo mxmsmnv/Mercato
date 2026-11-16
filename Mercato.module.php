@@ -26,7 +26,7 @@ require_once __DIR__ . '/src/Mcp/MercatoMcpCatalogProviderTrait.php';
  * of the box. Extensible gateway interface for custom providers.
  *
  * @author Maxim Semenov <maxim@smnv.org> (smnv.org)
- * @version 1.8.0 (module info version: 180)
+ * @version 1.9.0 (module info version: 190)
  * @license MIT
  */
 
@@ -58,8 +58,8 @@ class Mercato extends WireData implements Module, ConfigurableModule {
     public const PAYMENT_STATUS_CANCELED = 'canceled';
 
     public const SUBSCRIPTION_STATUS_NONE = 'none';
-    public const MODULE_VERSION = 180;
-    public const SCHEMA_VERSION = 14;
+    public const MODULE_VERSION = 190;
+    public const SCHEMA_VERSION = 15;
 
     private const MCP_IDEMPOTENCY_PATTERN = '/^[A-Za-z0-9._:-]{8,191}$/';
     private const MCP_OPERATION_TABLE = 'mercato_mcp_operations';
@@ -453,6 +453,7 @@ class Mercato extends WireData implements Module, ConfigurableModule {
             MercatoDiscountService::class => '/src/Discount/MercatoDiscountService.php',
             MercatoPurchasabilityService::class => '/src/Product/MercatoPurchasabilityService.php',
             MercatoVariantDefinition::class => '/src/Product/MercatoVariantDefinition.php',
+            MercatoVariantsValue::class => '/src/Product/MercatoVariantsValue.php',
             MercatoVariantService::class => '/src/Product/MercatoVariantService.php',
             MercatoCatalogRules::class => '/src/Product/MercatoCatalogRules.php',
             MercatoCatalogService::class => '/src/Product/MercatoCatalogService.php',

@@ -8,6 +8,16 @@ final class MercatoVariantService extends Wire {
     }
 
     public function getDefinition(Page $product): array {
+        if ($product->hasField('mrc_variant_definition')) {
+            $value = $product->get('mrc_variant_definition');
+            if ($value instanceof MercatoVariantsValue && !$value->isEmpty()) {
+                $definition = $value->toArray();
+                return MercatoVariantDefinition::normalize($definition['options'], $definition['variants']);
+            }
+            if (is_array($value) && (!empty($value['options']) || !empty($value['variants']))) {
+                return MercatoVariantDefinition::normalize((array) ($value['options'] ?? []), (array) ($value['variants'] ?? []));
+            }
+        }
         $options = $product->hasField('mrc_variant_options') ? json_decode((string) $product->mrc_variant_options, true) : [];
         $variants = $product->hasField('mrc_variants') ? json_decode((string) $product->mrc_variants, true) : [];
         return MercatoVariantDefinition::normalize(is_array($options) ? $options : [], is_array($variants) ? $variants : []);
@@ -58,14 +68,27 @@ final class MercatoVariantService extends Wire {
     }
 
     public function saveDefinition(Page $product, array $options, array $variants): array {
-        if (!$product->hasField('mrc_variant_options') || !$product->hasField('mrc_variants')) {
+        if (!$product->hasField('mrc_variant_definition')
+            && (!$product->hasField('mrc_variant_options') || !$product->hasField('mrc_variants'))) {
             throw new WireException('Variant fields are not installed. Run the Mercato installer.');
         }
         $result = $this->validateDefinition($product, $options, $variants);
         if (!$result['valid']) throw new WireException(implode(' ', $result['errors']));
         $product->of(false);
-        $product->mrc_variant_options = json_encode($result['options'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $product->mrc_variants = json_encode($result['variants'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($product->hasField('mrc_variant_definition')) {
+            $product->mrc_variant_definition = new MercatoVariantsValue([
+                'options' => $result['options'],
+                'variants' => $result['variants'],
+            ]);
+        }
+        // Keep attached legacy fields synchronized during the compatibility
+        // window. Upgraded templates may detach them without deleting data.
+        if ($product->hasField('mrc_variant_options')) {
+            $product->mrc_variant_options = json_encode($result['options'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+        if ($product->hasField('mrc_variants')) {
+            $product->mrc_variants = json_encode($result['variants'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
         $this->wire('pages')->save($product);
         return $result;
     }

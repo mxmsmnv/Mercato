@@ -363,8 +363,11 @@ after checkout.
 ## Product Variants
 
 Products remain single-SKU by default. To add variants, open **Setup → Mercato
-→ Products → Detail** and use the variant manager. `mrc_variant_options` defines
-stable option/value ids and `mrc_variants` lists only valid combinations. A
+→ Products → Detail** and use the structured variant manager. The same editor is
+available on the standard ProcessWire product edit screen through the bundled
+`FieldtypeMercatoVariants` / `InputfieldMercatoVariants` pair. The atomic
+`mrc_variant_definition` field owns stable option/value ids and lists only valid
+combinations, so editors never need to write JSON. A
 variant can override SKU, absolute price (or use `price_adjustment`), stock,
 low-stock threshold, stock policy, shipping price, weight, dimensions, images,
 and lifecycle status.
@@ -393,6 +396,11 @@ export/import round-trips `variant_options_json` and `variants_json`; JSON cells
 must be CSV-quoted when they contain commas. Stock-pressure exports emit one row
 per variant. Existing integrations that omit variant data continue to work for
 products whose variant arrays are empty.
+
+Upgrades validate and migrate the former `mrc_variant_options` and
+`mrc_variants` textarea values before detaching those fields from the product
+editor. Their database tables remain untouched for rollback, and runtime reads
+retain a legacy fallback until all supported installations have upgraded.
 
 ## Inventory
 

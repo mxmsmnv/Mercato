@@ -75,7 +75,7 @@ final class MercatoVariantDefinition {
 
     public static function validate(array $options, array $variants): array {
         $data = self::normalize($options, $variants);
-        $errors = [];
+        $errors = self::numericInputErrors($variants);
         $optionMap = [];
         foreach ($data['options'] as $option) {
             $id = $option['id'];
@@ -146,5 +146,32 @@ final class MercatoVariantDefinition {
 
     private static function nullableNumber(mixed $value): ?float {
         return $value === null || $value === '' ? null : round((float) $value, 6);
+    }
+
+    private static function numericInputErrors(array $variants): array {
+        $errors = [];
+        $nullable = ['price', 'shipping_price', 'weight_kg', 'length_cm', 'width_cm', 'height_cm'];
+        foreach ($variants as $index => $variant) {
+            if (!is_array($variant)) continue;
+            $label = trim((string) ($variant['id'] ?? '')) ?: (string) ($index + 1);
+            foreach ($nullable as $field) {
+                $value = $variant[$field] ?? null;
+                if ($value === null || $value === '') continue;
+                if (!is_numeric($value) || !is_finite((float) $value)) {
+                    $errors[] = sprintf('Variant "%s" %s must be numeric and finite.', $label, $field);
+                }
+            }
+            $adjustment = $variant['price_adjustment'] ?? 0;
+            if (!is_numeric($adjustment) || !is_finite((float) $adjustment)) {
+                $errors[] = sprintf('Variant "%s" price_adjustment must be numeric and finite.', $label);
+            }
+            foreach (['stock', 'low_stock_threshold'] as $field) {
+                $value = $variant[$field] ?? 0;
+                if (!is_numeric($value) || !is_finite((float) $value) || floor((float) $value) !== (float) $value) {
+                    $errors[] = sprintf('Variant "%s" %s must be a whole number.', $label, $field);
+                }
+            }
+        }
+        return $errors;
     }
 }

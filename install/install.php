@@ -35,9 +35,9 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false, 
 
     $module->ensureMcpOperationsSchema();
     $module->pushNotificationService()->ensureSchema();
-    mercato_store_schema_version($module);
     mercato_ensure_permissions();
     mercato_ensure_roles();
+    mercato_ensure_variant_modules();
 
     // -----------------------------------------------------------------------
     // Copy template files to /site/templates/
@@ -194,8 +194,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false, 
         ['name' => 'mrc_stock',       'type' => 'FieldtypeInteger', 'label' => 'Stock'],
         ['name' => 'mrc_low_stock_threshold', 'type' => 'FieldtypeInteger', 'label' => 'Low Stock Threshold'],
         ['name' => 'mrc_stock_policy', 'type' => 'FieldtypeText', 'label' => 'Stock Policy'],
-        ['name' => 'mrc_variant_options', 'type' => 'FieldtypeTextarea', 'label' => 'Variant Options (JSON)'],
-        ['name' => 'mrc_variants', 'type' => 'FieldtypeTextarea', 'label' => 'Variants (JSON)'],
+        ['name' => 'mrc_variant_definition', 'type' => 'FieldtypeMercatoVariants', 'label' => 'Product Options and Variants'],
         ['name' => 'mrc_collections', 'type' => 'FieldtypePage',    'label' => 'Collections'],
         ['name' => 'mrc_description', 'type' => 'FieldtypeTextarea','label' => 'Product Description'],
         // Discount fields
@@ -391,7 +390,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false, 
         foreach ([
             'title', 'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
             'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_external_source', 'mrc_external_id', 'mrc_product_type', 'mrc_inquiry_only', 'mrc_product_status', 'mrc_stripe_price_id',
-            'mrc_variant_options', 'mrc_variants',
+            'mrc_variant_definition',
             'mrc_market_prices',
             'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
         ] as $fn) {
@@ -614,7 +613,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false, 
         foreach ([
             'mrc_images', 'mrc_price', 'mrc_tax_rate', 'mrc_tax_code', 'mrc_shipping_price',
             'mrc_stock', 'mrc_low_stock_threshold', 'mrc_stock_policy', 'mrc_sku', 'mrc_external_source', 'mrc_external_id', 'mrc_product_type', 'mrc_inquiry_only', 'mrc_product_status', 'mrc_stripe_price_id',
-            'mrc_variant_options', 'mrc_variants',
+            'mrc_variant_definition',
             'mrc_market_prices',
             'mrc_digital_files', 'mrc_download_limit', 'mrc_download_expiry_days', 'mrc_collections', 'mrc_shipping_note', 'mrc_description', 'mrc_seo_title', 'mrc_seo_description', 'mrc_seo_robots',
         ] as $fieldName) {
@@ -628,6 +627,7 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false, 
         if ($added) {
             $wire->fieldgroups->save($productTemplate->fieldgroup);
         }
+        mercato_migrate_variant_definitions($module, $productTemplate);
         if ($dimensionsEnabled && ($dimensionsField = $wire->fields->get($dimensionsFieldName)) && !$productTemplate->fieldgroup->hasField($dimensionsFieldName)) {
             $productTemplate->fieldgroup->add($dimensionsField);
             $wire->fieldgroups->save($productTemplate->fieldgroup);
@@ -709,6 +709,9 @@ function mercato_install(Mercato $module, bool $overwriteTemplateFiles = false, 
     mercato_ensure_demo_products();
     mercado_retire_legacy_demo_products();
     mercado_ensure_demo_discounts();
+    // Record the schema only after every migration and repair step succeeds.
+    // A failed variant migration must remain visibly retryable.
+    mercato_store_schema_version($module);
 }
 
 function mercato_permission_definitions(): array {
@@ -1000,6 +1003,71 @@ function mercato_store_schema_version(Mercato $module): void {
     }
 }
 
+function mercato_ensure_variant_modules(): void {
+    $wire = mercato_wire();
+    $wire->modules->refresh();
+    foreach (['InputfieldMercatoVariants', 'FieldtypeMercatoVariants'] as $class) {
+        if ($wire->modules->isInstalled($class)) continue;
+        $installed = $wire->modules->install($class);
+        if (!$installed || !$wire->modules->isInstalled($class)) {
+            throw new \ProcessWire\WireException("Mercato could not install required module {$class}.");
+        }
+    }
+}
+
+/**
+ * Move the legacy pair of JSON textareas into the atomic variant field.
+ *
+ * Legacy fields are detached only after every existing definition has been
+ * validated and saved successfully. Their database tables are deliberately
+ * preserved for rollback and older release recovery.
+ */
+function mercato_migrate_variant_definitions(Mercato $module, \ProcessWire\Template $productTemplate): void {
+    $wire = mercato_wire();
+    $field = $wire->fields->get('mrc_variant_definition');
+    if (!$field || !$productTemplate->fieldgroup->hasField($field)) return;
+
+    if (!class_exists(\ProcessWire\MercatoVariantDefinition::class, false)) {
+        require_once dirname(__DIR__) . '/src/Product/MercatoVariantDefinition.php';
+    }
+    if (!class_exists(\ProcessWire\MercatoVariantsValue::class, false)) {
+        require_once dirname(__DIR__) . '/src/Product/MercatoVariantsValue.php';
+    }
+
+    foreach ($wire->pages->find('template=mrc-product, include=all') as $product) {
+        $current = $product->get('mrc_variant_definition');
+        if ($current instanceof \ProcessWire\MercatoVariantsValue && !$current->isEmpty()) continue;
+        $optionsRaw = $product->hasField('mrc_variant_options') ? trim((string) $product->mrc_variant_options) : '';
+        $variantsRaw = $product->hasField('mrc_variants') ? trim((string) $product->mrc_variants) : '';
+        if ($optionsRaw === '' && $variantsRaw === '') continue;
+        $options = $optionsRaw === '' ? [] : json_decode($optionsRaw, true);
+        $variants = $variantsRaw === '' ? [] : json_decode($variantsRaw, true);
+        if (!is_array($options) || !is_array($variants)) {
+            throw new \ProcessWire\WireException("Mercato variant migration stopped: product {$product->id} contains invalid legacy JSON.");
+        }
+        $result = \ProcessWire\MercatoVariantDefinition::validate($options, $variants);
+        if (!$result['valid']) {
+            throw new \ProcessWire\WireException("Mercato variant migration stopped for product {$product->id}: " . implode(' ', $result['errors']));
+        }
+        $product->of(false);
+        $product->set('mrc_variant_definition', new \ProcessWire\MercatoVariantsValue([
+            'options' => $result['options'],
+            'variants' => $result['variants'],
+        ]));
+        $wire->pages->saveField($product, 'mrc_variant_definition');
+    }
+
+    $changed = false;
+    foreach (['mrc_variant_options', 'mrc_variants'] as $legacyName) {
+        $legacy = $wire->fields->get($legacyName);
+        if ($legacy && $productTemplate->fieldgroup->hasField($legacy)) {
+            $productTemplate->fieldgroup->remove($legacy);
+            $changed = true;
+        }
+    }
+    if ($changed) $wire->fieldgroups->save($productTemplate->fieldgroup);
+}
+
 function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void {
     $wire = mercato_wire();
     $orderedFields = [
@@ -1015,8 +1083,7 @@ function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void
         'mrc_stock',
         'mrc_low_stock_threshold',
         'mrc_stock_policy',
-        'mrc_variant_options',
-        'mrc_variants',
+        'mrc_variant_definition',
         'mrc_market_prices',
         'mrc_price',
         'mrc_tax_rate',
@@ -1062,8 +1129,7 @@ function mercato_configure_product_fieldgroup(\ProcessWire\Fieldgroup $fg): void
         'mrc_stock' => ['columnWidth' => 25],
         'mrc_low_stock_threshold' => ['columnWidth' => 25],
         'mrc_stock_policy' => ['columnWidth' => 25],
-        'mrc_variant_options' => ['columnWidth' => 50],
-        'mrc_variants' => ['columnWidth' => 50],
+        'mrc_variant_definition' => ['columnWidth' => 100],
         'mrc_market_prices' => ['columnWidth' => 100],
         'mrc_price' => ['columnWidth' => 25],
         'mrc_tax_rate' => ['columnWidth' => 25],
@@ -1413,6 +1479,10 @@ function mercato_ensure_demo_products(): void {
                 'mrc_product_type' => $data['product_type'],
                 'mrc_product_status' => 'active',
                 'mrc_description' => $data['description'],
+                'mrc_variant_definition' => new \ProcessWire\MercatoVariantsValue([
+                    'options' => $data['variant_options'] ?? [],
+                    'variants' => $data['variants'] ?? [],
+                ]),
                 'mrc_variant_options' => json_encode($data['variant_options'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
                 'mrc_variants' => json_encode($data['variants'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             ] as $fieldName => $value) {
@@ -1441,6 +1511,10 @@ function mercato_ensure_demo_products(): void {
         if ($p->hasField('mrc_stock_policy')) $p->mrc_stock_policy = $data['stock_policy'];
         if ($p->hasField('mrc_product_type')) $p->mrc_product_type = $data['product_type'];
         if ($p->hasField('mrc_product_status')) $p->mrc_product_status = 'active';
+        if ($p->hasField('mrc_variant_definition')) $p->mrc_variant_definition = new \ProcessWire\MercatoVariantsValue([
+            'options' => $data['variant_options'] ?? [],
+            'variants' => $data['variants'] ?? [],
+        ]);
         if ($p->hasField('mrc_variant_options')) $p->mrc_variant_options = json_encode($data['variant_options'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         if ($p->hasField('mrc_variants')) $p->mrc_variants = json_encode($data['variants'] ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $p->mrc_description = $data['description'];

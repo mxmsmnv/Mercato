@@ -93,7 +93,10 @@ test.describe('Mercato admin visual/state breadth', () => {
         await assertAccessible(settingsPage, 'module settings', '#ModuleEditForm');
         await capture(settingsPage, testInfo, `${state.dataset}-1440-module-settings`);
         const collapsed = settingsPage.locator('#ModuleEditForm .InputfieldStateCollapsed > .InputfieldHeader');
-        for (let attempt = 0; attempt < 80 && await collapsed.count() > 0; attempt++) await collapsed.first().click();
+        for (let attempt = 0; attempt < 10 && await collapsed.count() > 0; attempt++) {
+          await collapsed.evaluateAll(headers => headers.forEach(header => header.click()));
+          await settingsPage.waitForTimeout(100);
+        }
         expect(await collapsed.count(), 'all module-settings fieldsets should expand within the bounded loop').toBe(0);
         const readiness = settingsPage.getByText('Production mode is disabled.', { exact: false }).first();
         await expect(readiness).toBeVisible();

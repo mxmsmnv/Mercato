@@ -39,7 +39,7 @@ A generic client accepts an HTTPS shop origin, removes any path/query/fragment, 
   "schema_version": 1,
   "platform": "mercato",
   "store_id": "mrc_opaqueInstallationIdentity",
-  "module_version": "1.8.0",
+  "module_version": "1.9.0",
   "origin": "https://shop.example",
   "api": {"version": "v1", "base_url": "https://shop.example/api/mercato/v1"},
   "capabilities": {

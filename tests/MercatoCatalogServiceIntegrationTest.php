@@ -120,6 +120,13 @@ $created = $service->upsert($productInput, ['source' => 'integration_test', 'rea
 $base = $trackProduct($created);
 $expect(($created['action'] ?? '') === 'created' && ($base['external_id'] ?? '') === 'base', 'Catalog product create failed.');
 $expect(count((array) ($base['variants'] ?? [])) === 1 && ($base['variants'][0]['options']['finish'] ?? '') === 'oak', 'Variant option map did not persist.');
+$storedProduct = $wire->pages->getById((int) $base['id'], ['cache' => false])->first();
+$expect($storedProduct && $storedProduct->id && $storedProduct->hasField('mrc_variant_definition'), 'Atomic variant field is not attached to catalog products.');
+$expect($storedProduct->mrc_variant_definition instanceof MercatoVariantsValue, 'Atomic variant field did not wake into its typed value.');
+$expect(count($storedProduct->mrc_variant_definition) === 1, 'Atomic variant field did not persist the created variant.');
+$variantField = $wire->fields->get('mrc_variant_definition');
+$variantRow = $wire->database->query('SELECT variant_count, active_count, definition_hash FROM `' . $variantField->getTable() . '` WHERE pages_id=' . (int) $storedProduct->id)->fetch(\PDO::FETCH_ASSOC);
+$expect((int) ($variantRow['variant_count'] ?? 0) === 1 && (int) ($variantRow['active_count'] ?? 0) === 1 && strlen((string) ($variantRow['definition_hash'] ?? '')) === 40, 'Atomic variant indexes are incomplete.');
 $catalogProperty = new \ReflectionProperty($commerce, 'catalogService');
 $originalCatalogService = $catalogProperty->getValue($commerce);
 try {

@@ -7,6 +7,24 @@ ProcessWire module version integer: `100` = `1.0.0`, `110` = `1.1.0`, etc.
 
 ---
 
+## [1.9.0] - 2026-11-16
+
+### Added
+
+- A first-class `FieldtypeMercatoVariants` and `InputfieldMercatoVariants` pair that stores option groups and purchasable combinations atomically and exposes a structured, responsive ProcessWire editor instead of raw JSON textareas.
+- Safe option-group/value controls, additive combination generation, variant-level SKU, price, stock, status, policy, shipping, dimensions, and image references with client feedback and authoritative server validation.
+- An idempotent schema-15 migration that validates and copies legacy `mrc_variant_options` / `mrc_variants` data before detaching the old editor fields, while preserving their database tables for rollback.
+
+### Changed
+
+- Product, catalog, storefront, headless API, inventory, import/export, MCP, and order snapshot behavior continue to use the existing normalized variant contract while persistence now prefers the atomic variant field and falls back to legacy JSON on older installations.
+
+### Fixed
+
+- Fieldtype persistence now enforces the complete variant invariant even when callers bypass the structured UI and service layer; malformed numeric values no longer become zero silently.
+- Generated option/value API keys remain visible and synchronized when renamed, including existing variant selections.
+- The structured editor now contains its wide combination table on narrow admin screens instead of widening the whole product page.
+
 ## [1.8.0] - 2026-10-27
 
 ### Added

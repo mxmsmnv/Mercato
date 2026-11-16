@@ -15,13 +15,12 @@ trait ProcessMercatoProductActions {
         if (!$product || !$product->id || $product->template->name !== 'mrc-product') {
             return ['summary' => $this->_('Variant update failed.'), 'errors' => [$this->_('Product not found.')]];
         }
-        $options = json_decode((string) $this->wire('input')->post('variant_options_json'), true);
-        $variants = json_decode((string) $this->wire('input')->post('variants_json'), true);
-        if (!is_array($options) || !is_array($variants)) {
-            return ['summary' => $this->_('Variant update failed.'), 'errors' => [$this->_('Options and variants must be valid JSON arrays.')]];
+        $definition = json_decode((string) $this->wire('input')->post('variant_definition_json'), true);
+        if (!is_array($definition) || !is_array($definition['options'] ?? null) || !is_array($definition['variants'] ?? null)) {
+            return ['summary' => $this->_('Variant update failed.'), 'errors' => [$this->_('The structured variant definition could not be read. Reload the page and try again.')]];
         }
         try {
-            $result = $commerce->variantService()->saveDefinition($product, $options, $variants);
+            $result = $commerce->variantService()->saveDefinition($product, $definition['options'], $definition['variants']);
             $summary = sprintf($this->_('Saved %d option group(s) and %d variant(s).'), count($result['options']), count($result['variants']));
             $this->recordProductEvent('product_variants_updated', $product, [
                 'option_groups' => count($result['options']), 'variants' => count($result['variants']),
